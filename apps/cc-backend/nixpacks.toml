@@ -8,7 +8,7 @@ cmds = ["npm install"]
 cmds = [
   "npm run build --workspace=packages/core || true",
   "npm run build --workspace=packages/adapters || true",
-  "npm run build --workspace=apps/cc-backend"
+  "cd apps/cc-backend && npm run build"
 ]
 
 [start]
