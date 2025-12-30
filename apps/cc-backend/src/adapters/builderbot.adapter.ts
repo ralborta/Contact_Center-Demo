@@ -76,7 +76,7 @@ export class BuilderBotAdapter {
         success: true,
         messageId: data.message_id || data.id,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Failed to send message via BuilderBot: ${error.message}`);
     }
   }

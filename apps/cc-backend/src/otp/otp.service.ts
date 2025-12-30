@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, TooManyRequestsException } from '@nestjs/common';
+import { Injectable, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,8 +37,9 @@ export class OtpService {
     });
 
     if (recentChallenges >= this.RATE_LIMIT_MAX) {
-      throw new TooManyRequestsException(
+      throw new HttpException(
         `Rate limit exceeded. Maximum ${this.RATE_LIMIT_MAX} OTP requests per ${this.RATE_LIMIT_WINDOW_SECONDS} seconds.`,
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 

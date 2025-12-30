@@ -4,9 +4,9 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Channel, Direction, InteractionStatus, Provider } from '@prisma/client';
 import * as crypto from 'crypto';
-import { ElevenLabsAdapter } from '../../../packages/adapters/src/elevenlabs.adapter';
-import { BuilderBotAdapter } from '../../../packages/adapters/src/builderbot.adapter';
-import { TwilioAdapter } from '../../../packages/adapters/src/twilio.adapter';
+import { ElevenLabsAdapter } from '../adapters/elevenlabs.adapter';
+import { BuilderBotAdapter } from '../adapters/builderbot.adapter';
+import { TwilioAdapter } from '../adapters/twilio.adapter';
 
 @Injectable()
 export class WebhooksService {

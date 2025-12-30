@@ -2,7 +2,7 @@ import { Controller, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InteractionsService } from '../interactions/interactions.service';
 import { AuditService } from '../audit/audit.service';
-import { BuilderBotAdapter } from '../../../packages/adapters/src/builderbot.adapter';
+import { BuilderBotAdapter } from '../adapters/builderbot.adapter';
 import { Channel, Direction, InteractionStatus, Provider } from '@prisma/client';
 
 @ApiTags('WhatsApp')

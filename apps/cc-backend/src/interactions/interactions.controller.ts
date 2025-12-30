@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiHeader } from '@nestjs/swagger';
 import { InteractionsService } from './interactions.service';
-import { PiiMasker } from '../../../packages/core/src/pii-masker';
+import { PiiMasker } from '../adapters/pii-masker';
 import { Channel, Direction, InteractionStatus } from '@prisma/client';
 
 @ApiTags('Interactions')
