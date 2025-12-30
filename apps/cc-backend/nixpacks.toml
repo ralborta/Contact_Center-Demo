@@ -8,6 +8,7 @@ cmds = ["npm install"]
 cmds = [
   "npm run build --workspace=packages/core || true",
   "npm run build --workspace=packages/adapters || true",
+  "cd apps/cc-backend && npm run prisma:generate",
   "cd apps/cc-backend && npm run build"
 ]
 
