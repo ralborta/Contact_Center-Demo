@@ -5,7 +5,10 @@ nixPkgs = ["nodejs-18_x", "npm-9_x"]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = ["npm run build --workspace=apps/cc-worker"]
+cmds = [
+  "npm run build --workspace=packages/adapters || true",
+  "npm run build --workspace=apps/cc-worker"
+]
 
 [start]
 cmd = "cd apps/cc-worker && node dist/worker.js"
