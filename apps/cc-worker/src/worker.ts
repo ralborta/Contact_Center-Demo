@@ -2,7 +2,7 @@ import { Worker, Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import * as winston from 'winston';
 import Redis from 'ioredis';
-import * as twilio from 'twilio';
+import twilio from 'twilio';
 
 // TwilioAdapter inline para evitar problemas de paths en build
 class TwilioAdapter {

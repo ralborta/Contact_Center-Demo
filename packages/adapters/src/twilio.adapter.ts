@@ -1,4 +1,4 @@
-import * as twilio from 'twilio';
+import twilio from 'twilio';
 
 export class TwilioAdapter {
   private readonly accountSid: string;
