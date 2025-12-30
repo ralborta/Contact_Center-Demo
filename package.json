@@ -1,0 +1,21 @@
+{
+  "name": "contact-center-demo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:backend": "npm run dev --workspace=apps/cc-backend",
+    "dev:worker": "npm run dev --workspace=apps/cc-worker",
+    "prisma:generate": "npm run prisma:generate --workspace=apps/cc-backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace=apps/cc-backend",
+    "prisma:studio": "npm run prisma:studio --workspace=apps/cc-backend"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,55 @@
+export enum Channel {
+  CALL = 'CALL',
+  WHATSAPP = 'WHATSAPP',
+  SMS = 'SMS',
+}
+
+export enum Direction {
+  INBOUND = 'INBOUND',
+  OUTBOUND = 'OUTBOUND',
+}
+
+export enum InteractionStatus {
+  NEW = 'NEW',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  ABANDONED = 'ABANDONED',
+  FAILED = 'FAILED',
+}
+
+export enum Outcome {
+  RESOLVED = 'RESOLVED',
+  ESCALATED = 'ESCALATED',
+  TICKETED = 'TICKETED',
+  TRANSFERRED = 'TRANSFERRED',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export enum Provider {
+  ELEVENLABS = 'ELEVENLABS',
+  BUILDERBOT = 'BUILDERBOT',
+  TWILIO = 'TWILIO',
+  GENERIC = 'GENERIC',
+}
+
+export enum OtpPurpose {
+  PASSWORD_RESET = 'PASSWORD_RESET',
+  TX_CONFIRMATION = 'TX_CONFIRMATION',
+  IDENTITY_VERIFICATION = 'IDENTITY_VERIFICATION',
+  LOGIN_2FA = 'LOGIN_2FA',
+}
+
+export enum OtpStatus {
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  VERIFIED = 'VERIFIED',
+  EXPIRED = 'EXPIRED',
+  LOCKED = 'LOCKED',
+  FAILED = 'FAILED',
+}
+
+export enum ActorType {
+  USER = 'USER',
+  SYSTEM = 'SYSTEM',
+  AGENT = 'AGENT',
+}

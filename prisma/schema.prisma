@@ -1,0 +1,197 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Channel {
+  CALL
+  WHATSAPP
+  SMS
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum InteractionStatus {
+  NEW
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  FAILED
+}
+
+enum Outcome {
+  RESOLVED
+  ESCALATED
+  TICKETED
+  TRANSFERRED
+  UNKNOWN
+}
+
+enum Provider {
+  ELEVENLABS
+  BUILDERBOT
+  TWILIO
+  GENERIC
+}
+
+enum OtpPurpose {
+  PASSWORD_RESET
+  TX_CONFIRMATION
+  IDENTITY_VERIFICATION
+  LOGIN_2FA
+}
+
+enum OtpStatus {
+  PENDING
+  SENT
+  VERIFIED
+  EXPIRED
+  LOCKED
+  FAILED
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+  AGENT
+}
+
+model Interaction {
+  id                        String            @id @default(uuid())
+  channel                   Channel
+  direction                 Direction
+  status                    InteractionStatus @default(NEW)
+  startedAt                 DateTime?
+  endedAt                   DateTime?
+  from                      String
+  to                        String
+  customerRef               String?
+  queue                     String?
+  assignedAgent             String?
+  aiHandled                 Boolean           @default(false)
+  outcome                   Outcome?
+  intent                    String?
+  provider                  Provider
+  providerConversationId   String?
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+
+  events                    InteractionEvent[]
+  messages                  Message[]
+  callDetail                CallDetail?
+  otpChallenges             OtpChallenge[]
+
+  @@index([channel, startedAt])
+  @@index([status, startedAt])
+  @@index([from])
+  @@index([to])
+  @@index([providerConversationId])
+  @@map("interactions")
+}
+
+model InteractionEvent {
+  id                String    @id @default(uuid())
+  interactionId     String
+  ts                DateTime  @default(now())
+  type              String
+  provider          Provider
+  providerEventId   String?
+  idempotencyKey    String?   @unique
+  payload           Json
+  createdAt         DateTime  @default(now())
+
+  interaction       Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+
+  @@index([interactionId, ts])
+  @@index([idempotencyKey])
+  @@map("interaction_events")
+}
+
+model Message {
+  id                String      @id @default(uuid())
+  interactionId     String
+  channel           Channel
+  direction         Direction
+  providerMessageId String?
+  text              String?
+  mediaUrl          String?
+  providerStatus    String?
+  sentAt            DateTime?
+  deliveredAt      DateTime?
+  readAt            DateTime?
+  createdAt         DateTime    @default(now())
+
+  interaction       Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+
+  @@index([providerMessageId])
+  @@index([interactionId])
+  @@map("messages")
+}
+
+model CallDetail {
+  id                String      @id @default(uuid())
+  interactionId     String      @unique
+  elevenCallId      String?
+  recordingUrl      String?
+  transcriptText    String?     @db.Text
+  transcriptId      String?
+  durationSec       Int?
+  hangupReason      String?
+  createdAt         DateTime    @default(now())
+
+  interaction       Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+
+  @@map("call_details")
+}
+
+model OtpChallenge {
+  id                String      @id @default(uuid())
+  phone             String
+  purpose           OtpPurpose
+  otpHash           String
+  expiresAt         DateTime
+  maxAttempts       Int         @default(5)
+  attempts          Int         @default(0)
+  status            OtpStatus   @default(PENDING)
+  correlationId     String      @unique
+  interactionId     String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  verifiedAt        DateTime?
+
+  interaction       Interaction? @relation(fields: [interactionId], references: [id], onDelete: SetNull)
+
+  @@index([phone, purpose, createdAt])
+  @@index([correlationId])
+  @@index([status, expiresAt])
+  @@map("otp_challenges")
+}
+
+model AuditLog {
+  id                String      @id @default(uuid())
+  ts                DateTime    @default(now())
+  actorType         ActorType
+  actorId           String?
+  action            String
+  entityType        String
+  entityId          String
+  ip                String?
+  userAgent         String?
+  metadata          Json?
+  createdAt         DateTime    @default(now())
+
+  @@index([ts])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
