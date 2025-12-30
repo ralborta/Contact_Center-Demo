@@ -6,6 +6,7 @@
     "deleteOutDir": true,
     "webpack": false,
     "tsConfigPath": "tsconfig.json",
-    "assets": []
+    "builder": "tsc",
+    "typeCheck": true
   }
 }
