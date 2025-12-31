@@ -199,7 +199,6 @@ export class ElevenLabsAdapter {
             'xi-api-key': apiKey,
             'Content-Type': 'application/json',
           },
-          cache: 'no-store',
         }
       );
 
@@ -336,8 +335,7 @@ export class ElevenLabsAdapter {
           'xi-api-key': apiKey,
           'Content-Type': 'application/json',
         },
-        cache: 'no-store',
-      });
+      } as RequestInit);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -382,6 +380,11 @@ export class ElevenLabsAdapter {
   }> {
     const details = await this.fetchCallDetails(conversationId);
     
+    // Crear objeto de retorno con todos los campos
+    const result: any = {
+      ...details,
+    };
+    
     // Obtener información adicional de la conversación
     const apiKey = process.env.ELEVENLABS_API_KEY;
     const apiUrl = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io';
@@ -394,8 +397,7 @@ export class ElevenLabsAdapter {
             'xi-api-key': apiKey,
             'Content-Type': 'application/json',
           },
-          cache: 'no-store',
-        }
+        } as RequestInit
       );
 
       if (conversationResponse.ok) {
@@ -403,10 +405,10 @@ export class ElevenLabsAdapter {
         
         // Agregar timestamps si están disponibles
         if (conversationData.start_time_unix_secs) {
-          details.startedAt = new Date(conversationData.start_time_unix_secs * 1000);
+          result.startedAt = new Date(conversationData.start_time_unix_secs * 1000);
         }
         if (conversationData.end_time_unix_secs) {
-          details.endedAt = new Date(conversationData.end_time_unix_secs * 1000);
+          result.endedAt = new Date(conversationData.end_time_unix_secs * 1000);
         }
         
         // Agregar status si está disponible
@@ -420,7 +422,7 @@ export class ElevenLabsAdapter {
             'in_progress': 'IN_PROGRESS',
             'active': 'IN_PROGRESS',
           };
-          details.status = statusMap[conversationData.status.toLowerCase()] || conversationData.status;
+          result.status = statusMap[conversationData.status.toLowerCase()] || conversationData.status;
         }
       }
     } catch (error) {
@@ -428,6 +430,6 @@ export class ElevenLabsAdapter {
       // Continuar con los datos que ya tenemos
     }
 
-    return details;
+    return result;
   }
 }

@@ -32,6 +32,10 @@ export class WebhooksService {
 
     // Normalizar payload
     const normalized = this.elevenLabsAdapter.normalizePayload(payload);
+    const eventType = normalized.eventType || 'call.event';
+    const conversationId = normalized.conversationId || normalized.callId || normalized.sessionId;
+
+    console.log(`[Webhook ElevenLabs] Evento recibido: ${eventType}, ConversationId: ${conversationId}`);
 
     // Generar idempotency key
     const idempotencyKey = `elevenlabs:${normalized.eventId || crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`;
@@ -42,15 +46,16 @@ export class WebhooksService {
     });
 
     if (existingEvent) {
+      console.log(`[Webhook ElevenLabs] Evento ya procesado: ${idempotencyKey}`);
       return { message: 'Event already processed', id: existingEvent.id };
     }
 
-    // Upsert Interaction
+    // Upsert Interaction - respuesta rápida para tiempo real
     const interaction = await this.interactionsService.upsertInteraction({
       channel: Channel.CALL,
       direction: Direction.INBOUND,
       provider: Provider.ELEVENLABS,
-      providerConversationId: normalized.conversationId || normalized.callId || normalized.sessionId,
+      providerConversationId: conversationId,
       from: normalized.from || 'unknown',
       to: normalized.to || 'unknown',
       status: normalized.status,
@@ -63,21 +68,23 @@ export class WebhooksService {
       queue: normalized.queue,
     });
 
+    console.log(`[Webhook ElevenLabs] Interaction ${interaction.id} creada/actualizada`);
+
     // Crear evento
     await this.interactionsService.createEvent({
       interactionId: interaction.id,
-      type: normalized.eventType || 'call.event',
+      type: eventType,
       provider: Provider.ELEVENLABS,
       providerEventId: normalized.eventId,
       idempotencyKey,
       payload: { raw: payload, normalized },
     });
 
-    // Actualizar CallDetail si hay información
+    // Actualizar CallDetail si hay información básica del webhook
     if (normalized.recordingUrl || normalized.transcriptText || normalized.summary || normalized.durationSec) {
       await this.interactionsService.upsertCallDetail({
         interactionId: interaction.id,
-        elevenCallId: normalized.conversationId || normalized.callId,
+        elevenCallId: conversationId,
         recordingUrl: normalized.recordingUrl,
         transcriptText: normalized.transcriptText,
         transcriptId: normalized.transcriptId,
@@ -87,67 +94,98 @@ export class WebhooksService {
       });
     }
 
-    // Siempre intentar obtener detalles completos desde la API si tenemos conversationId
-    const conversationId = normalized.conversationId || normalized.callId || normalized.sessionId;
+    // Procesar detalles completos de forma asíncrona para no bloquear la respuesta
+    // Esto es crítico para tiempo real - respondemos rápido y luego obtenemos detalles
     if (conversationId) {
-      try {
-        // Usar syncConversation para obtener todos los detalles
-        const callDetails = await this.elevenLabsAdapter.syncConversation(conversationId);
-        
-        // Actualizar CallDetail con todos los datos disponibles
-        await this.interactionsService.upsertCallDetail({
-          interactionId: interaction.id,
-          elevenCallId: conversationId,
-          recordingUrl: callDetails.recordingUrl || normalized.recordingUrl,
-          transcriptText: callDetails.transcriptText || normalized.transcriptText,
-          summary: callDetails.summary || normalized.summary,
-          durationSec: callDetails.durationSec || normalized.durationSec,
-          hangupReason: normalized.hangupReason,
-        });
-
-        // Actualizar interaction con datos adicionales si están disponibles
-        const updateData: any = {};
-        if (callDetails.customerRef || normalized.customerRef) {
-          updateData.customerRef = callDetails.customerRef || normalized.customerRef;
-        }
-        if (callDetails.queue || normalized.queue) {
-          updateData.queue = callDetails.queue || normalized.queue;
-        }
-        if (callDetails.agentName || callDetails.agentId || normalized.assignedAgent) {
-          updateData.assignedAgent = callDetails.agentName || callDetails.agentId || normalized.assignedAgent;
-        }
-        if (callDetails.status) {
-          updateData.status = callDetails.status as any;
-        }
-        if (callDetails.startedAt) {
-          updateData.startedAt = callDetails.startedAt;
-        }
-        if (callDetails.endedAt) {
-          updateData.endedAt = callDetails.endedAt;
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          await this.prisma.interaction.update({
-            where: { id: interaction.id },
-            data: updateData,
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching call details from ElevenLabs API:', error);
-        // No fallar el webhook si no podemos obtener los detalles, usar los datos del webhook
-      }
+      // No esperamos esta promesa - se ejecuta en background
+      this.fetchAndUpdateCallDetails(interaction.id, conversationId, normalized).catch((error) => {
+        console.error(`[Webhook ElevenLabs] Error en procesamiento asíncrono para ${conversationId}:`, error);
+      });
     }
 
-    // Audit log
-    await this.auditService.log({
+    // Audit log (también asíncrono para no bloquear)
+    this.auditService.log({
       actorType: 'SYSTEM',
       action: 'webhook.elevenlabs',
       entityType: 'Interaction',
       entityId: interaction.id,
-      metadata: { eventType: normalized.eventType },
+      metadata: { eventType, conversationId },
+    }).catch((error) => {
+      console.error(`[Webhook ElevenLabs] Error en audit log:`, error);
     });
 
-    return { success: true, interactionId: interaction.id };
+    // Responder inmediatamente para tiempo real
+    return { 
+      success: true, 
+      interactionId: interaction.id,
+      eventType,
+      conversationId,
+      message: 'Event processed, details will be updated asynchronously'
+    };
+  }
+
+  /**
+   * Procesar detalles completos de la llamada de forma asíncrona
+   * Esto permite que el webhook responda rápido mientras obtenemos todos los datos
+   */
+  private async fetchAndUpdateCallDetails(
+    interactionId: string,
+    conversationId: string,
+    normalized: any
+  ): Promise<void> {
+    try {
+      console.log(`[Webhook ElevenLabs] Obteniendo detalles completos para ${conversationId}`);
+      
+      // Usar syncConversation para obtener todos los detalles
+      const callDetails = await this.elevenLabsAdapter.syncConversation(conversationId);
+      
+      console.log(`[Webhook ElevenLabs] Detalles obtenidos para ${conversationId}, actualizando...`);
+      
+      // Actualizar CallDetail con todos los datos disponibles
+      await this.interactionsService.upsertCallDetail({
+        interactionId,
+        elevenCallId: conversationId,
+        recordingUrl: callDetails.recordingUrl || normalized.recordingUrl,
+        transcriptText: callDetails.transcriptText || normalized.transcriptText,
+        transcriptId: normalized.transcriptId,
+        summary: callDetails.summary || normalized.summary,
+        durationSec: callDetails.durationSec || normalized.durationSec,
+        hangupReason: normalized.hangupReason,
+      });
+
+      // Actualizar interaction con datos adicionales si están disponibles
+      const updateData: any = {};
+      if (callDetails.customerRef || normalized.customerRef) {
+        updateData.customerRef = callDetails.customerRef || normalized.customerRef;
+      }
+      if (callDetails.queue || normalized.queue) {
+        updateData.queue = callDetails.queue || normalized.queue;
+      }
+      if (callDetails.agentName || callDetails.agentId || normalized.assignedAgent) {
+        updateData.assignedAgent = callDetails.agentName || callDetails.agentId || normalized.assignedAgent;
+      }
+      if (callDetails.status) {
+        updateData.status = callDetails.status as any;
+      }
+      if (callDetails.startedAt) {
+        updateData.startedAt = callDetails.startedAt;
+      }
+      if (callDetails.endedAt) {
+        updateData.endedAt = callDetails.endedAt;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await this.prisma.interaction.update({
+          where: { id: interactionId },
+          data: updateData,
+        });
+      }
+
+      console.log(`[Webhook ElevenLabs] Detalles actualizados exitosamente para ${conversationId}`);
+    } catch (error: any) {
+      console.error(`[Webhook ElevenLabs] Error obteniendo detalles para ${conversationId}:`, error.message);
+      // No lanzar error - ya tenemos los datos básicos del webhook
+    }
   }
 
   async handleBuilderBot(payload: any, token: string) {
@@ -260,5 +298,329 @@ export class WebhooksService {
     });
 
     return { success: true };
+  }
+
+  /**
+   * Maneja el webhook de inicio de llamada de ElevenLabs
+   * ElevenLabs consulta este endpoint cuando recibe una llamada entrante
+   * Podemos responder con variables dinámicas para personalizar el agente
+   */
+  async handleCallInit(payload: any, token: string) {
+    // Validar token
+    if (!this.elevenLabsAdapter.verifyToken(token)) {
+      throw new UnauthorizedException('Invalid webhook token');
+    }
+
+    console.log('[Webhook ElevenLabs Call Init] Solicitud recibida:', JSON.stringify(payload, null, 2));
+
+    // Extraer información de la llamada entrante
+    const callerId = payload.caller_id || payload.callerId || payload.phone_number || payload.phone;
+    const calledNumber = payload.called_number || payload.calledNumber || payload.destination;
+    const agentId = payload.agent_id || payload.agentId;
+    const callSid = payload.call_sid || payload.callSid;
+
+    console.log(`[Webhook ElevenLabs Call Init] Llamada desde ${callerId} a ${calledNumber}, Agent: ${agentId}`);
+
+    // Buscar información del cliente en la base de datos
+    const customerInfo = await this.getCustomerInfo(callerId);
+
+    // Buscar historial de interacciones previas
+    const interactionHistory = await this.getInteractionHistory(callerId);
+
+    // Preparar variables dinámicas para el agente (CONTEXTO COMPLETO)
+    const dynamicVariables: Record<string, any> = {
+      // Información básica del cliente
+      ...(customerInfo.name && { nombre_paciente: customerInfo.name }),
+      ...(customerInfo.name && { nombre_contacto: customerInfo.name }),
+      ...(customerInfo.name && { customer_name: customerInfo.name }),
+      ...(customerInfo.phone && { customer_phone: customerInfo.phone }),
+      
+      // Información de contexto del cliente
+      ...(customerInfo.queue && { queue: customerInfo.queue }),
+      ...(customerInfo.queue && { cola: customerInfo.queue }),
+      ...(customerInfo.queue && { department: customerInfo.queue }),
+      ...(customerInfo.preferredChannel && { canal_preferido: customerInfo.preferredChannel }),
+      ...(customerInfo.lastIntent && { ultimo_tema: customerInfo.lastIntent }),
+      ...(customerInfo.lastOutcome && { ultimo_resultado: customerInfo.lastOutcome }),
+      
+      // Historial completo (TODOS los canales)
+      ...(interactionHistory.totalInteractions > 0 && { 
+        total_interacciones_previas: interactionHistory.totalInteractions.toString(),
+        total_llamadas_previas: interactionHistory.totalCalls.toString(),
+        total_whatsapp_previos: interactionHistory.totalWhatsApp.toString(),
+        total_sms_previos: interactionHistory.totalSms.toString(),
+        ultima_interaccion: interactionHistory.lastInteractionDate || 'Nunca',
+        ultima_llamada: interactionHistory.lastCallDate || 'Nunca',
+        resumen_historial: interactionHistory.summary || 'Sin historial previo',
+        ...(interactionHistory.contextSummary && { 
+          contexto_historial: interactionHistory.contextSummary 
+        }),
+      }),
+
+      // Mensajes recientes de WhatsApp/SMS (contexto adicional)
+      ...(customerInfo.recentMessages && customerInfo.recentMessages.length > 0 && {
+        mensajes_recientes: customerInfo.recentMessages.slice(0, 2).join(' | ')
+      }),
+
+      // Información de la llamada actual
+      ...(callerId && { system__called_number: callerId }),
+      ...(calledNumber && { system__internal_number: calledNumber }),
+      ...(callSid && { system__call_sid: callSid }),
+    };
+
+    // Construir respuesta para ElevenLabs
+    const response = {
+      conversation_initiation_client_data: {
+        dynamic_variables: dynamicVariables,
+      },
+      // Puedes agregar más configuraciones aquí según la documentación de ElevenLabs
+      // Por ejemplo: agent_config, custom_prompts, etc.
+    };
+
+    console.log(`[Webhook ElevenLabs Call Init] Respondiendo con variables dinámicas para ${callerId}`);
+    console.log('[Webhook ElevenLabs Call Init] Variables:', JSON.stringify(dynamicVariables, null, 2));
+
+    // Audit log
+    this.auditService.log({
+      actorType: 'SYSTEM',
+      action: 'webhook.elevenlabs.call-init',
+      entityType: 'Call',
+      entityId: callSid || callerId || 'unknown',
+      metadata: { 
+        callerId, 
+        calledNumber, 
+        agentId,
+        hasCustomerInfo: !!customerInfo.name,
+        variablesCount: Object.keys(dynamicVariables).length
+      },
+    }).catch((error) => {
+      console.error('[Webhook ElevenLabs Call Init] Error en audit log:', error);
+    });
+
+    return response;
+  }
+
+  /**
+   * Obtener información del cliente desde la base de datos
+   * Busca en TODOS los canales (CALL, WHATSAPP, SMS) para obtener contexto completo
+   */
+  private async getCustomerInfo(phone: string): Promise<{
+    name?: string;
+    phone?: string;
+    queue?: string;
+    preferredChannel?: string;
+    lastIntent?: string;
+    lastOutcome?: string;
+    [key: string]: any;
+  }> {
+    if (!phone || phone === 'unknown') {
+      return {};
+    }
+
+    try {
+      // Buscar en TODAS las interacciones previas (todos los canales)
+      const previousInteractions = await this.prisma.interaction.findMany({
+        where: {
+          from: phone,
+          OR: [
+            { customerRef: { not: null } },
+            { intent: { not: null } },
+            { outcome: { not: null } },
+          ],
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 20, // Buscar en las últimas 20 interacciones
+        include: {
+          messages: {
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+          },
+          callDetail: {
+            select: { summary: true },
+          },
+        },
+      });
+
+      if (previousInteractions.length === 0) {
+        return { phone };
+      }
+
+      // Obtener información más reciente y relevante
+      const mostRecent = previousInteractions[0];
+      
+      // Buscar nombre del cliente (customerRef) en cualquier interacción
+      const interactionWithName = previousInteractions.find(i => i.customerRef);
+      const customerName = interactionWithName?.customerRef || mostRecent.customerRef;
+
+      // Determinar canal preferido (el más usado)
+      const channelCounts = previousInteractions.reduce((acc, i) => {
+        acc[i.channel] = (acc[i.channel] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      const preferredChannel = Object.entries(channelCounts)
+        .sort(([, a], [, b]) => b - a)[0]?.[0];
+
+      // Obtener último intent y outcome
+      const lastIntent = mostRecent.intent;
+      const lastOutcome = mostRecent.outcome;
+
+      // Obtener cola más frecuente
+      const queueCounts = previousInteractions
+        .filter(i => i.queue)
+        .reduce((acc, i) => {
+          acc[i.queue!] = (acc[i.queue!] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+      const preferredQueue = Object.entries(queueCounts)
+        .sort(([, a], [, b]) => b - a)[0]?.[0] || mostRecent.queue;
+
+      // Extraer contexto de mensajes recientes (WhatsApp/SMS)
+      const recentMessages = previousInteractions
+        .flatMap(i => i.messages || [])
+        .filter(m => m.text)
+        .slice(0, 3)
+        .map(m => m.text)
+        .filter(Boolean);
+
+      return {
+        name: customerName || undefined,
+        phone: phone,
+        queue: preferredQueue || undefined,
+        preferredChannel: preferredChannel || undefined,
+        lastIntent: lastIntent || undefined,
+        lastOutcome: lastOutcome || undefined,
+        recentMessages: recentMessages.length > 0 ? recentMessages : undefined,
+      };
+    } catch (error) {
+      console.error(`[Webhook ElevenLabs] Error obteniendo info del cliente ${phone}:`, error);
+      return { phone };
+    }
+  }
+
+  /**
+   * Obtener historial completo de interacciones del cliente
+   * Incluye TODOS los canales: llamadas, WhatsApp, SMS
+   */
+  private async getInteractionHistory(phone: string): Promise<{
+    totalInteractions: number;
+    totalCalls: number;
+    totalWhatsApp: number;
+    totalSms: number;
+    lastInteractionDate?: string;
+    lastCallDate?: string;
+    summary?: string;
+    contextSummary?: string;
+  }> {
+    if (!phone || phone === 'unknown') {
+      return { totalInteractions: 0, totalCalls: 0, totalWhatsApp: 0, totalSms: 0 };
+    }
+
+    try {
+      // Obtener TODAS las interacciones de TODOS los canales
+      const allInteractions = await this.prisma.interaction.findMany({
+        where: {
+          from: phone,
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 30, // Últimas 30 interacciones para contexto
+        include: {
+          callDetail: {
+            select: { summary: true, transcriptText: true },
+          },
+          messages: {
+            take: 10,
+            orderBy: { createdAt: 'desc' },
+            select: { text: true, channel: true, direction: true },
+          },
+        },
+      });
+
+      if (allInteractions.length === 0) {
+        return { 
+          totalInteractions: 0, 
+          totalCalls: 0, 
+          totalWhatsApp: 0, 
+          totalSms: 0,
+          summary: 'Primera interacción de este cliente.'
+        };
+      }
+
+      // Contar por canal
+      const totalInteractions = allInteractions.length;
+      const totalCalls = allInteractions.filter(i => i.channel === Channel.CALL).length;
+      const totalWhatsApp = allInteractions.filter(i => i.channel === Channel.WHATSAPP).length;
+      const totalSms = allInteractions.filter(i => i.channel === Channel.SMS).length;
+
+      // Fechas
+      const lastInteraction = allInteractions[0];
+      const lastInteractionDate = lastInteraction?.startedAt 
+        ? new Date(lastInteraction.startedAt).toLocaleDateString('es-AR')
+        : undefined;
+
+      const lastCall = allInteractions.find(i => i.channel === Channel.CALL);
+      const lastCallDate = lastCall?.startedAt 
+        ? new Date(lastCall.startedAt).toLocaleDateString('es-AR')
+        : undefined;
+
+      // Estadísticas
+      const completed = allInteractions.filter(i => i.status === InteractionStatus.COMPLETED).length;
+      const resolved = allInteractions.filter(i => i.outcome === 'RESOLVED').length;
+      const escalated = allInteractions.filter(i => i.outcome === 'ESCALATED').length;
+
+      // Crear resumen del historial
+      const summaryParts = [];
+      if (totalInteractions > 0) {
+        summaryParts.push(`${totalInteractions} interacción${totalInteractions > 1 ? 'es' : ''} previa${totalInteractions > 1 ? 's' : ''}`);
+        if (totalCalls > 0) summaryParts.push(`${totalCalls} llamada${totalCalls > 1 ? 's' : ''}`);
+        if (totalWhatsApp > 0) summaryParts.push(`${totalWhatsApp} WhatsApp`);
+        if (totalSms > 0) summaryParts.push(`${totalSms} SMS`);
+        if (completed > 0) summaryParts.push(`${completed} completada${completed > 1 ? 's' : ''}`);
+        if (resolved > 0) summaryParts.push(`${resolved} resuelta${resolved > 1 ? 's' : ''}`);
+        if (escalated > 0) summaryParts.push(`${escalated} escalada${escalated > 1 ? 's' : ''}`);
+      }
+
+      const summary = summaryParts.length > 0
+        ? `Cliente con ${summaryParts.join(', ')}.`
+        : 'Primera interacción de este cliente.';
+
+      // Crear resumen de contexto (últimos temas/intents)
+      const recentIntents = allInteractions
+        .filter(i => i.intent)
+        .slice(0, 3)
+        .map(i => i.intent)
+        .filter(Boolean);
+
+      const recentSummaries = allInteractions
+        .filter(i => i.callDetail?.summary)
+        .slice(0, 2)
+        .map(i => i.callDetail!.summary)
+        .filter(Boolean);
+
+      const contextParts = [];
+      if (recentIntents.length > 0) {
+        contextParts.push(`Últimos temas: ${recentIntents.join(', ')}`);
+      }
+      if (recentSummaries.length > 0) {
+        contextParts.push(`Resúmenes recientes: ${recentSummaries.slice(0, 1).join('; ')}`);
+      }
+
+      const contextSummary = contextParts.length > 0
+        ? contextParts.join('. ')
+        : undefined;
+
+      return {
+        totalInteractions,
+        totalCalls,
+        totalWhatsApp,
+        totalSms,
+        lastInteractionDate,
+        lastCallDate,
+        summary,
+        contextSummary,
+      };
+    } catch (error) {
+      console.error(`[Webhook ElevenLabs] Error obteniendo historial para ${phone}:`, error);
+      return { totalInteractions: 0, totalCalls: 0, totalWhatsApp: 0, totalSms: 0 };
+    }
   }
 }
