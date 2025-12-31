@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
     "declaration": true,
@@ -12,16 +11,18 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": "./",
-    "incremental": false,
     "skipLibCheck": true,
     "strictNullChecks": false,
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
     "paths": {
-      "@core/*": ["../../packages/core/src/*"],
-      "@adapters/*": ["../../packages/adapters/src/*"]
+      "@core/*": ["../../packages/core/dist/*"],
+      "@adapters/*": ["../../packages/adapters/dist/*"]
     }
   },
   "include": ["src/**/*"],
