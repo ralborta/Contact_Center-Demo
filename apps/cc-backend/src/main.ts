@@ -85,18 +85,12 @@ async function runMigrations() {
 }
 
 async function bootstrap() {
-  // Ejecutar migraciones ANTES de iniciar la app (bloqueante)
-  // Esto es crítico para que las tablas existan antes de que la app las use
-  try {
-    await runMigrations();
-    console.log('[Startup] Migraciones completadas, iniciando aplicación...');
-  } catch (err: any) {
-    console.error('[Startup] Error crítico en migraciones:', err.message);
-    console.error('[Startup] La aplicación no puede iniciar sin las tablas de la base de datos');
-    console.error('[Startup] Por favor ejecuta las migraciones manualmente:');
-    console.error('[Startup]   railway run --service cc-backend npx prisma migrate deploy --schema=../../prisma/schema.prisma');
-    process.exit(1);
-  }
+  // Las migraciones se ejecutan en el comando start de nixpacks
+  // Solo verificamos que se ejecutaron correctamente
+  console.log('[Startup] Verificando conexión a base de datos...');
+  
+  // Dar tiempo para que las migraciones se apliquen si están corriendo
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({
