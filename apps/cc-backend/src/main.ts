@@ -8,6 +8,14 @@ import { exec } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { promisify } from 'util';
+// Asegurar que crypto esté disponible globalmente para @nestjs/schedule
+// Node.js 18+ tiene crypto global, pero @nestjs/schedule puede necesitarlo antes
+if (typeof globalThis.crypto === 'undefined') {
+  const crypto = require('crypto');
+  (globalThis as any).crypto = {
+    randomUUID: () => crypto.randomUUID(),
+  };
+}
 
 const execAsync = promisify(exec);
 
