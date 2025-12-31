@@ -103,8 +103,9 @@ export class ElevenLabsAdapter {
 
   /**
    * Obtener resumen, transcripción y grabación de una llamada desde la API de ElevenLabs
+   * Basado en la implementación de NutryHome
    */
-  async fetchCallDetails(callId: string): Promise<{
+  async fetchCallDetails(conversationId: string): Promise<{
     recordingUrl?: string;
     transcriptText?: string;
     summary?: string;
@@ -118,65 +119,82 @@ export class ElevenLabsAdapter {
     }
 
     try {
-      // Obtener información de la llamada
-      const callResponse = await fetch(`${apiUrl}/v1/calls/${callId}`, {
-        headers: {
-          'xi-api-key': apiKey,
-        },
-      });
+      // Obtener detalle completo de la conversación (usando convai API)
+      const conversationResponse = await fetch(
+        `${apiUrl}/v1/convai/conversations/${conversationId}`,
+        {
+          headers: {
+            'xi-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        }
+      );
 
-      if (!callResponse.ok) {
-        throw new Error(`ElevenLabs API error: ${callResponse.statusText}`);
+      if (!conversationResponse.ok) {
+        throw new Error(`ElevenLabs API error: ${conversationResponse.statusText}`);
       }
 
-      const callData: any = await callResponse.json();
+      const conversationData: any = await conversationResponse.json();
 
       const details: any = {};
 
-      // Obtener transcripción si está disponible
-      if (callData.transcript_id) {
-        try {
-          const transcriptResponse = await fetch(`${apiUrl}/v1/calls/${callId}/transcript`, {
-            headers: {
-              'xi-api-key': apiKey,
-            },
-          });
+      // Obtener resumen desde analysis.transcript_summary
+      if (conversationData.analysis?.transcript_summary) {
+        details.summary = conversationData.analysis.transcript_summary;
+      }
 
-          if (transcriptResponse.ok) {
-            const transcriptData: any = await transcriptResponse.json();
-            details.transcriptText = transcriptData.text || transcriptData.transcript;
-          }
-        } catch (error) {
-          console.error('Error fetching transcript:', error);
+      // Obtener transcripción
+      if (conversationData.transcript) {
+        if (Array.isArray(conversationData.transcript)) {
+          // Si es un array de mensajes, convertir a texto
+          details.transcriptText = conversationData.transcript
+            .filter((msg: any) => msg.message && msg.message.trim())
+            .map((msg: any) => {
+              const role = msg.role === 'agent' ? 'Agente' : 'Cliente';
+              const message = msg.message || msg.content || '';
+              return `${role}: ${message}`;
+            })
+            .join('\n\n');
+        } else if (typeof conversationData.transcript === 'string') {
+          // Si ya es string, usar directamente
+          details.transcriptText = conversationData.transcript;
         }
       }
 
-      // Obtener resumen si está disponible
-      if (callData.summary_id) {
+      // Obtener URL de grabación/audio
+      if (conversationData.recording_url) {
+        details.recordingUrl = conversationData.recording_url;
+      } else if (conversationData.audio_url) {
+        details.recordingUrl = conversationData.audio_url;
+      } else {
+        // Intentar obtener audio desde el endpoint de audio
         try {
-          const summaryResponse = await fetch(`${apiUrl}/v1/calls/${callId}/summary`, {
-            headers: {
-              'xi-api-key': apiKey,
-            },
-          });
+          const audioResponse = await fetch(
+            `${apiUrl}/v1/convai/conversations/${conversationId}/audio`,
+            {
+              headers: {
+                'xi-api-key': apiKey,
+                'Accept': 'audio/mpeg',
+              },
+            }
+          );
 
-          if (summaryResponse.ok) {
-            const summaryData: any = await summaryResponse.json();
-            details.summary = summaryData.text || summaryData.summary;
+          if (audioResponse.ok) {
+            // Si el audio está disponible, crear una URL temporal o guardar referencia
+            // Por ahora, usamos el conversationId para construir la URL
+            details.recordingUrl = `${apiUrl}/v1/convai/conversations/${conversationId}/audio`;
           }
         } catch (error) {
-          console.error('Error fetching summary:', error);
+          console.error('Error fetching audio URL:', error);
         }
-      }
-
-      // Obtener URL de grabación
-      if (callData.recording_url) {
-        details.recordingUrl = callData.recording_url;
       }
 
       // Duración
-      if (callData.duration_seconds) {
-        details.durationSec = callData.duration_seconds;
+      if (conversationData.call_duration_secs) {
+        details.durationSec = conversationData.call_duration_secs;
+      } else if (conversationData.duration_seconds) {
+        details.durationSec = conversationData.duration_seconds;
       }
 
       return details;

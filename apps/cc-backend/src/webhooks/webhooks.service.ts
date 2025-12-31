@@ -85,14 +85,15 @@ export class WebhooksService {
       });
     }
 
-    // Si tenemos callId pero no tenemos todos los detalles, intentar obtenerlos de la API
-    if (normalized.callId && (!normalized.recordingUrl || !normalized.transcriptText || !normalized.summary)) {
+    // Si tenemos callId/conversationId pero no tenemos todos los detalles, intentar obtenerlos de la API
+    const conversationId = normalized.callId || normalized.sessionId;
+    if (conversationId && (!normalized.recordingUrl || !normalized.transcriptText || !normalized.summary)) {
       try {
-        const callDetails = await this.elevenLabsAdapter.fetchCallDetails(normalized.callId);
+        const callDetails = await this.elevenLabsAdapter.fetchCallDetails(conversationId);
         if (callDetails.recordingUrl || callDetails.transcriptText || callDetails.summary) {
           await this.interactionsService.upsertCallDetail({
             interactionId: interaction.id,
-            elevenCallId: normalized.callId,
+            elevenCallId: conversationId,
             recordingUrl: callDetails.recordingUrl || normalized.recordingUrl,
             transcriptText: callDetails.transcriptText || normalized.transcriptText,
             summary: callDetails.summary || normalized.summary,
