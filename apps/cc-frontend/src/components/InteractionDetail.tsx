@@ -144,6 +144,44 @@ export default function InteractionDetail({
         </div>
       </div>
 
+      {/* Mensajes (WhatsApp/SMS) */}
+      {interaction.messages && interaction.messages.length > 0 && (
+        <div className="border-t pt-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">
+            {interaction.channel === 'WHATSAPP' ? 'Mensajes de WhatsApp' : 'Mensajes SMS'}
+          </h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {interaction.messages.map((message) => (
+              <div
+                key={message.id}
+                className={`p-3 rounded-lg ${
+                  message.direction === 'INBOUND'
+                    ? 'bg-blue-50 border-l-4 border-blue-500'
+                    : 'bg-gray-50 border-l-4 border-gray-500'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-sm font-medium">
+                    {message.direction === 'INBOUND' ? '📥 Recibido' : '📤 Enviado'}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {message.sentAt
+                      ? new Date(message.sentAt).toLocaleString('es-AR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'N/A'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">{message.text || 'Sin texto'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Historial de Eventos */}
       {interaction.events && interaction.events.length > 0 && (
         <div className="border-t pt-6 mb-6">

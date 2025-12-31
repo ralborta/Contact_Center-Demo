@@ -1,5 +1,10 @@
 import './globals.css'
 
+export const metadata = {
+  title: 'Contact Center - Dashboard',
+  description: 'Centro de Gestión del Contact Center',
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -7,7 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body className="bg-gray-50">{children}</body>
     </html>
   )
 }
