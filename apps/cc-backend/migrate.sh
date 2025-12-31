@@ -7,7 +7,7 @@ echo "DATABASE_URL configurada: ${DATABASE_URL:+Sí}"
 
 cd /app/apps/cc-backend || cd apps/cc-backend || true
 
-echo "Ejecutando prisma db push..."
-npx prisma db push --schema=../../prisma/schema.prisma --accept-data-loss --skip-generate
+echo "Ejecutando prisma migrate deploy..."
+npx prisma migrate deploy --schema=../../prisma/schema.prisma
 
 echo "=== Migraciones completadas exitosamente ==="
