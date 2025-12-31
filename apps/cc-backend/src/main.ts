@@ -41,10 +41,11 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.APP_PORT || 3000;
-  await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger docs available at: http://localhost:${port}/api/docs`);
+  // Railway asigna PORT automáticamente, usar APP_PORT como fallback
+  const port = process.env.PORT || process.env.APP_PORT || 3000;
+  await app.listen(port, '0.0.0.0'); // Escuchar en todas las interfaces para Railway
+  console.log(`Application is running on: http://0.0.0.0:${port}`);
+  console.log(`Swagger docs available at: http://0.0.0.0:${port}/api/docs`);
 }
 
 bootstrap();
