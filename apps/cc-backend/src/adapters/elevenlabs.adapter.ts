@@ -32,10 +32,10 @@ export class ElevenLabsAdapter {
     // Normalizador tolerante - adaptarse a diferentes formatos de payload
     const normalized: any = {};
 
-    // IDs
+    // IDs - también buscar conversation_id para convai API
     normalized.eventId = payload.event_id || payload.id || payload.eventId;
-    normalized.callId = payload.call_id || payload.callId || payload.session?.id;
-    normalized.sessionId = payload.session_id || payload.sessionId || payload.session?.id;
+    normalized.callId = payload.call_id || payload.callId || payload.conversation_id || payload.session?.id;
+    normalized.sessionId = payload.session_id || payload.sessionId || payload.conversation_id || payload.session?.id;
 
     // Event type
     normalized.eventType = payload.event_type || payload.type || payload.event || 'call.event';
@@ -87,8 +87,14 @@ export class ElevenLabsAdapter {
     normalized.transcriptText = payload.transcript_text || payload.transcript || payload.transcription?.text;
     normalized.transcriptId = payload.transcript_id || payload.transcription?.id;
 
-    // Summary
-    normalized.summary = payload.summary || payload.summary_text || payload.ai_summary || payload.call_summary;
+    // Summary - buscar en diferentes lugares según el formato del payload
+    normalized.summary = 
+      payload.analysis?.transcript_summary ||  // Formato de convai API
+      payload.summary || 
+      payload.summary_text || 
+      payload.ai_summary || 
+      payload.call_summary ||
+      payload.transcript_summary;
 
     // Duration
     if (payload.duration || payload.duration_seconds) {
