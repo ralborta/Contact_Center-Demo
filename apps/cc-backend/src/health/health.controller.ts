@@ -26,4 +26,27 @@ export class HealthController {
       };
     }
   }
+
+  @Get('tables')
+  @ApiOperation({ summary: 'List all database tables' })
+  async listTables() {
+    try {
+      const tables = await this.prisma.$queryRaw<Array<{ tablename: string }>>`
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public'
+        ORDER BY tablename;
+      `;
+      return {
+        status: 'ok',
+        count: tables.length,
+        tables: tables.map(t => t.tablename),
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
