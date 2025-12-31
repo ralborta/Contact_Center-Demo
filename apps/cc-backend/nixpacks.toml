@@ -18,4 +18,4 @@ cmds = [
 ]
 
 [start]
-cmd = "bash apps/cc-backend/migrate.sh && cd apps/cc-backend && node dist/main.js"
+cmd = "cd apps/cc-backend && echo '=== Iniciando migraciones ===' && npx prisma migrate deploy --schema=../../prisma/schema.prisma && echo '=== Migraciones completadas ===' && echo '=== Iniciando aplicación ===' && node dist/main.js"
