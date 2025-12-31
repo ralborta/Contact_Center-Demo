@@ -10,6 +10,7 @@
     "build": "npm run build --workspaces",
     "dev:backend": "npm run dev --workspace=apps/cc-backend",
     "dev:worker": "npm run dev --workspace=apps/cc-worker",
+    "dev:frontend": "npm run dev --workspace=apps/cc-frontend",
     "prisma:generate": "npm run prisma:generate --workspace=apps/cc-backend",
     "prisma:migrate": "npm run prisma:migrate --workspace=apps/cc-backend",
     "prisma:studio": "npm run prisma:studio --workspace=apps/cc-backend"
