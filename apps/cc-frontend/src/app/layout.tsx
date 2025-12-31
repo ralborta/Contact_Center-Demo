@@ -1,10 +1,6 @@
-import type { Metadata } from 'next'
-import './globals.css'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Contact Center - Dashboard',
-  description: 'Centro de Gestión del Contact Center',
-}
+import './globals.css'
 
 export default function RootLayout({
   children,
@@ -13,6 +9,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
+      <head>
+        <title>Contact Center - Dashboard</title>
+        <meta name="description" content="Centro de Gestión del Contact Center" />
+      </head>
       <body className="bg-gray-50">{children}</body>
     </html>
   )
