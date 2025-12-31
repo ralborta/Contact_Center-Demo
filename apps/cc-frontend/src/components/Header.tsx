@@ -30,12 +30,28 @@ export default function Header() {
               Dashboard
             </Link>
             <Link
-              href="/interactions"
+              href="/calls"
               className={`px-3 py-2 rounded ${
-                pathname === '/interactions' ? 'bg-blue-700' : 'hover:bg-blue-700'
+                pathname === '/calls' ? 'bg-blue-700' : 'hover:bg-blue-700'
               }`}
             >
-              Interacciones
+              📞 Llamadas
+            </Link>
+            <Link
+              href="/whatsapp"
+              className={`px-3 py-2 rounded ${
+                pathname === '/whatsapp' ? 'bg-blue-700' : 'hover:bg-blue-700'
+              }`}
+            >
+              💬 WhatsApp
+            </Link>
+            <Link
+              href="/sms"
+              className={`px-3 py-2 rounded ${
+                pathname === '/sms' ? 'bg-blue-700' : 'hover:bg-blue-700'
+              }`}
+            >
+              💌 SMS
             </Link>
             <button className="p-2 hover:bg-blue-700 rounded-full">
               <svg
