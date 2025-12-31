@@ -22,7 +22,9 @@ async function runMigrations() {
   console.log('==========================================');
   
   try {
-    const projectRoot = path.join(__dirname, '../..');
+    // En Railway, __dirname = /app/apps/cc-backend/dist
+    // Necesitamos ir a /app (3 niveles arriba)
+    const projectRoot = path.join(__dirname, '../../..');
     const schemaPath = path.join(projectRoot, 'prisma/schema.prisma');
 
     console.log(`Working directory: ${process.cwd()}`);
