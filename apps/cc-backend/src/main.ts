@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 
 async function runMigrations() {
   try {
-    console.log('[Startup] Ejecutando migraciones de Prisma...');
+    console.log('[Startup] Intentando ejecutar migraciones de Prisma...');
     // En producción, __dirname apunta a dist/, así que subimos dos niveles
     const schemaPath = path.join(__dirname, '../../prisma/schema.prisma');
     const projectRoot = path.join(__dirname, '../..');
@@ -24,16 +24,37 @@ async function runMigrations() {
       return;
     }
 
+    // Verificar que DATABASE_URL está configurada
+    if (!process.env.DATABASE_URL) {
+      console.warn('[Startup] DATABASE_URL no configurada, saltando migraciones');
+      return;
+    }
+
     console.log(`[Startup] Ejecutando migraciones desde ${projectRoot} con schema ${schemaPath}`);
-    await execAsync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-      cwd: projectRoot,
-      env: { ...process.env },
-    });
+    
+    // Ejecutar con timeout de 30 segundos
+    const { stdout, stderr } = await Promise.race([
+      execAsync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+        cwd: projectRoot,
+        env: { ...process.env },
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 30000)
+      ) as Promise<{ stdout: string; stderr: string }>,
+    ]);
+
+    if (stdout) console.log('[Startup] Migraciones:', stdout);
+    if (stderr && !stderr.includes('already applied')) console.warn('[Startup] Migraciones stderr:', stderr);
     console.log('[Startup] Migraciones ejecutadas exitosamente');
   } catch (error: any) {
-    console.error('[Startup] Error ejecutando migraciones:', error.message);
-    // No fallar el inicio si las migraciones fallan (puede ser que ya estén aplicadas)
-    console.log('[Startup] Continuando con el inicio de la aplicación...');
+    // Si el error es que las migraciones ya están aplicadas, es OK
+    if (error.message?.includes('already applied') || error.stderr?.includes('already applied')) {
+      console.log('[Startup] Migraciones ya aplicadas, continuando...');
+      return;
+    }
+    console.error('[Startup] Error ejecutando migraciones:', error.message || error);
+    // No fallar el inicio si las migraciones fallan
+    console.log('[Startup] Continuando con el inicio de la aplicación (migraciones pueden ejecutarse manualmente)...');
   }
 }
 
