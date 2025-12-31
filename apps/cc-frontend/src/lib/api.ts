@@ -52,6 +52,8 @@ export interface Interaction {
   intent: string | null
   provider: string
   createdAt: string
+  customerRef?: string | null
+  queue?: string | null
   events?: InteractionEvent[]
   messages?: Message[]
   callDetail?: CallDetail
