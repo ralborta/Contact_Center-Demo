@@ -57,7 +57,7 @@ export default function CallsPage() {
     })
   }
 
-  const formatDuration = (seconds: number | null) => {
+  const formatDuration = (seconds: number | null | undefined) => {
     if (!seconds) return 'N/A'
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
