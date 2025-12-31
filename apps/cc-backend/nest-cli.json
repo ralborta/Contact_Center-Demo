@@ -7,6 +7,6 @@
     "webpack": false,
     "tsConfigPath": "tsconfig.json",
     "builder": "tsc",
-    "typeCheck": true
+    "typeCheck": false
   }
 }
