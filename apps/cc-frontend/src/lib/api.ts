@@ -75,6 +75,7 @@ export interface Message {
 
 export interface CallDetail {
   id: string
+  elevenCallId: string | null
   recordingUrl: string | null
   transcriptText: string | null
   summary: string | null

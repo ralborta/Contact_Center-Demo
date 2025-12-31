@@ -227,12 +227,10 @@ export default function InteractionDetail({
       }
     }
     // Si tenemos un conversationId (elevenCallId), usar el endpoint del backend
-    if (interaction.callDetail?.id && interaction.channel === 'CALL') {
+    if (interaction.callDetail?.elevenCallId && interaction.channel === 'CALL') {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
       const baseUrl = apiUrl.startsWith('http') ? apiUrl : `https://${apiUrl}`
-      // Necesitamos el conversationId, pero por ahora usamos el interactionId
-      // TODO: Guardar el conversationId en CallDetail
-      return `${baseUrl}/api/elevenlabs/audio/${interaction.id}`
+      return `${baseUrl}/api/elevenlabs/audio/${interaction.callDetail.elevenCallId}`
     }
     return null
   }
