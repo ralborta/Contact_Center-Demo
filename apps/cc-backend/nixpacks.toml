@@ -9,13 +9,8 @@ cmds = [
   "npm run build --workspace=packages/core",
   "npm run build --workspace=packages/adapters",
   "cd apps/cc-backend && npm run prisma:generate",
-  "cd apps/cc-backend && rm -rf dist",
-  "cd apps/cc-backend && npm run build",
-  "cd apps/cc-backend && echo '=== Verificando archivos generados ===' && ls -la dist/ || echo 'ERROR: dist/ no existe'",
-  "cd apps/cc-backend && test -f dist/main.js || (echo 'ERROR: dist/main.js not found!' && ls -la dist/ && exit 1)",
-  "cd apps/cc-backend && test -f dist/app.module.js || (echo 'ERROR: dist/app.module.js not found!' && find dist -name '*.js' && exit 1)",
-  "cd apps/cc-backend && echo '=== Build exitoso ===' && find dist -name '*.js' | head -10"
+  "cd apps/cc-backend && npm run build"
 ]
 
 [start]
-cmd = "cd apps/cc-backend && echo '=== Iniciando migraciones ===' && npx prisma migrate deploy --schema=../../prisma/schema.prisma && echo '=== Migraciones completadas ===' && echo '=== Iniciando aplicación ===' && node dist/main.js"
+cmd = "cd apps/cc-backend && npx prisma migrate deploy --schema=../../prisma/schema.prisma && node dist/main.js"

@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc --project tsconfig.json && test -f dist/main.js || (echo 'ERROR: main.js not generated' && exit 1)",
+    "build": "nest build",
     "build:tsc": "tsc",
-    "build:nest": "nest build --builder tsc",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
