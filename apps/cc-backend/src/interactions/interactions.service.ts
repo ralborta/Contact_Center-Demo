@@ -16,6 +16,10 @@ export class InteractionsService {
     dateTo?: string;
     agent?: string;
     provider?: string;
+    limit?: number;
+    skip?: number;
+    includeAllEvents?: boolean;
+    includeAllMessages?: boolean;
   }) {
     const where: any = {};
 
@@ -33,25 +37,59 @@ export class InteractionsService {
       if (filters.dateTo) where.startedAt.lte = new Date(filters.dateTo);
     }
 
+    const limit = filters.limit || 100;
+    const skip = filters.skip || 0;
+
     return this.prisma.interaction.findMany({
       where,
       include: {
         events: {
           orderBy: { ts: 'asc' },
-          take: 10,
+          ...(filters.includeAllEvents ? {} : { take: 10 }),
         },
         messages: {
           orderBy: { createdAt: 'asc' },
-          take: 10,
+          ...(filters.includeAllMessages ? {} : { take: 10 }),
         },
         callDetail: true,
       },
       orderBy: { startedAt: 'desc' },
-      take: 100,
+      take: limit,
+      skip: skip,
     });
   }
 
-  async findOne(id: string) {
+  async count(filters: {
+    channel?: Channel;
+    direction?: Direction;
+    status?: InteractionStatus;
+    from?: string;
+    to?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    agent?: string;
+    provider?: string;
+  }) {
+    const where: any = {};
+
+    if (filters.channel) where.channel = filters.channel;
+    if (filters.direction) where.direction = filters.direction;
+    if (filters.status) where.status = filters.status;
+    if (filters.from) where.from = { contains: filters.from };
+    if (filters.to) where.to = { contains: filters.to };
+    if (filters.agent) where.assignedAgent = filters.agent;
+    if (filters.provider) where.provider = filters.provider;
+
+    if (filters.dateFrom || filters.dateTo) {
+      where.startedAt = {};
+      if (filters.dateFrom) where.startedAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.startedAt.lte = new Date(filters.dateTo);
+    }
+
+    return this.prisma.interaction.count({ where });
+  }
+
+  async findOne(id: string, includeAllEvents: boolean = true, includeAllMessages: boolean = true) {
     return this.prisma.interaction.findUnique({
       where: { id },
       include: {
@@ -65,6 +103,61 @@ export class InteractionsService {
         otpChallenges: true,
       },
     });
+  }
+
+  /**
+   * Obtener o actualizar detalles completos de una llamada desde ElevenLabs
+   */
+  async refreshCallDetails(interactionId: string, conversationId: string) {
+    const { ElevenLabsAdapter } = await import('../adapters/elevenlabs.adapter');
+    const adapter = new ElevenLabsAdapter();
+
+    try {
+      const callDetails = await adapter.syncConversation(conversationId);
+
+      // Actualizar CallDetail
+      await this.upsertCallDetail({
+        interactionId,
+        elevenCallId: conversationId,
+        recordingUrl: callDetails.recordingUrl,
+        transcriptText: callDetails.transcriptText,
+        summary: callDetails.summary,
+        durationSec: callDetails.durationSec,
+      });
+
+      // Actualizar Interaction si hay datos adicionales
+      const updateData: any = {};
+      if (callDetails.agentName || callDetails.agentId) {
+        updateData.assignedAgent = callDetails.agentName || callDetails.agentId;
+      }
+      if (callDetails.customerRef) {
+        updateData.customerRef = callDetails.customerRef;
+      }
+      if (callDetails.queue) {
+        updateData.queue = callDetails.queue;
+      }
+      if (callDetails.status) {
+        updateData.status = callDetails.status as any;
+      }
+      if (callDetails.startedAt) {
+        updateData.startedAt = callDetails.startedAt;
+      }
+      if (callDetails.endedAt) {
+        updateData.endedAt = callDetails.endedAt;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await this.prisma.interaction.update({
+          where: { id: interactionId },
+          data: updateData,
+        });
+      }
+
+      return callDetails;
+    } catch (error: any) {
+      console.error(`Error refreshing call details for ${conversationId}:`, error);
+      throw error;
+    }
   }
 
   async upsertInteraction(data: {

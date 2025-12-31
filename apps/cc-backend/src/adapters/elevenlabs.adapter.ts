@@ -281,4 +281,153 @@ export class ElevenLabsAdapter {
       throw new Error(`Failed to fetch call details from ElevenLabs: ${error.message}`);
     }
   }
+
+  /**
+   * Obtener todas las conversaciones desde la API de ElevenLabs
+   * Permite filtrar por agente y rango de fechas
+   */
+  async fetchAllConversations(options?: {
+    agentId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    conversations: any[];
+    total?: number;
+    hasMore?: boolean;
+  }> {
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const apiUrl = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io';
+    const defaultAgentId = process.env.ELEVENLABS_AGENT_ID;
+
+    if (!apiKey) {
+      throw new Error('ELEVENLABS_API_KEY not configured');
+    }
+
+    try {
+      // Construir query params
+      const params = new URLSearchParams();
+      
+      if (options?.agentId || defaultAgentId) {
+        params.append('agent_id', options?.agentId || defaultAgentId || '');
+      }
+      
+      if (options?.startDate) {
+        params.append('start_date', Math.floor(options.startDate.getTime() / 1000).toString());
+      }
+      
+      if (options?.endDate) {
+        params.append('end_date', Math.floor(options.endDate.getTime() / 1000).toString());
+      }
+      
+      if (options?.limit) {
+        params.append('limit', options.limit.toString());
+      }
+      
+      if (options?.offset) {
+        params.append('offset', options.offset.toString());
+      }
+
+      const url = `${apiUrl}/v1/convai/conversations${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const response = await fetch(url, {
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`ElevenLabs API error: ${response.status} ${errorText}`);
+      }
+
+      const data: any = await response.json();
+
+      // La API puede devolver un array o un objeto con conversations
+      const conversations = Array.isArray(data) ? data : (data.conversations || data.items || []);
+      const total = data.total || data.count || conversations.length;
+      const hasMore = data.has_more !== undefined ? data.has_more : (options?.limit ? conversations.length >= (options.limit || 0) : false);
+
+      return {
+        conversations,
+        total,
+        hasMore,
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to fetch conversations from ElevenLabs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Sincronizar una conversación completa desde ElevenLabs
+   * Obtiene todos los detalles: transcripción, grabación, resumen, etc.
+   */
+  async syncConversation(conversationId: string): Promise<{
+    recordingUrl?: string;
+    transcriptText?: string;
+    summary?: string;
+    durationSec?: number;
+    agentId?: string;
+    agentName?: string;
+    from?: string;
+    to?: string;
+    customerRef?: string;
+    queue?: string;
+    startedAt?: Date;
+    endedAt?: Date;
+    status?: string;
+  }> {
+    const details = await this.fetchCallDetails(conversationId);
+    
+    // Obtener información adicional de la conversación
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const apiUrl = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io';
+
+    try {
+      const conversationResponse = await fetch(
+        `${apiUrl}/v1/convai/conversations/${conversationId}`,
+        {
+          headers: {
+            'xi-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        }
+      );
+
+      if (conversationResponse.ok) {
+        const conversationData: any = await conversationResponse.json();
+        
+        // Agregar timestamps si están disponibles
+        if (conversationData.start_time_unix_secs) {
+          details.startedAt = new Date(conversationData.start_time_unix_secs * 1000);
+        }
+        if (conversationData.end_time_unix_secs) {
+          details.endedAt = new Date(conversationData.end_time_unix_secs * 1000);
+        }
+        
+        // Agregar status si está disponible
+        if (conversationData.status) {
+          const statusMap: Record<string, string> = {
+            'done': 'COMPLETED',
+            'completed': 'COMPLETED',
+            'ended': 'COMPLETED',
+            'abandoned': 'ABANDONED',
+            'failed': 'FAILED',
+            'in_progress': 'IN_PROGRESS',
+            'active': 'IN_PROGRESS',
+          };
+          details.status = statusMap[conversationData.status.toLowerCase()] || conversationData.status;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching additional conversation data:', error);
+      // Continuar con los datos que ya tenemos
+    }
+
+    return details;
+  }
 }

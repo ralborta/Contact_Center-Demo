@@ -87,37 +87,54 @@ export class WebhooksService {
       });
     }
 
-    // Si tenemos conversationId pero no tenemos todos los detalles, intentar obtenerlos de la API
+    // Siempre intentar obtener detalles completos desde la API si tenemos conversationId
     const conversationId = normalized.conversationId || normalized.callId || normalized.sessionId;
-    if (conversationId && (!normalized.recordingUrl || !normalized.transcriptText || !normalized.summary)) {
+    if (conversationId) {
       try {
-        const callDetails = await this.elevenLabsAdapter.fetchCallDetails(conversationId);
-        if (callDetails.recordingUrl || callDetails.transcriptText || callDetails.summary) {
-          await this.interactionsService.upsertCallDetail({
-            interactionId: interaction.id,
-            elevenCallId: conversationId,
-            recordingUrl: callDetails.recordingUrl || normalized.recordingUrl,
-            transcriptText: callDetails.transcriptText || normalized.transcriptText,
-            summary: callDetails.summary || normalized.summary,
-            durationSec: callDetails.durationSec || normalized.durationSec,
-            hangupReason: normalized.hangupReason,
-          });
+        // Usar syncConversation para obtener todos los detalles
+        const callDetails = await this.elevenLabsAdapter.syncConversation(conversationId);
+        
+        // Actualizar CallDetail con todos los datos disponibles
+        await this.interactionsService.upsertCallDetail({
+          interactionId: interaction.id,
+          elevenCallId: conversationId,
+          recordingUrl: callDetails.recordingUrl || normalized.recordingUrl,
+          transcriptText: callDetails.transcriptText || normalized.transcriptText,
+          summary: callDetails.summary || normalized.summary,
+          durationSec: callDetails.durationSec || normalized.durationSec,
+          hangupReason: normalized.hangupReason,
+        });
 
-          // Actualizar interaction con datos adicionales si están disponibles
-          if (callDetails.customerRef || callDetails.queue || callDetails.agentName) {
-            await this.prisma.interaction.update({
-              where: { id: interaction.id },
-              data: {
-                ...(callDetails.customerRef && { customerRef: callDetails.customerRef }),
-                ...(callDetails.queue && { queue: callDetails.queue }),
-                ...(callDetails.agentName && { assignedAgent: callDetails.agentName }),
-              },
-            });
-          }
+        // Actualizar interaction con datos adicionales si están disponibles
+        const updateData: any = {};
+        if (callDetails.customerRef || normalized.customerRef) {
+          updateData.customerRef = callDetails.customerRef || normalized.customerRef;
+        }
+        if (callDetails.queue || normalized.queue) {
+          updateData.queue = callDetails.queue || normalized.queue;
+        }
+        if (callDetails.agentName || callDetails.agentId || normalized.assignedAgent) {
+          updateData.assignedAgent = callDetails.agentName || callDetails.agentId || normalized.assignedAgent;
+        }
+        if (callDetails.status) {
+          updateData.status = callDetails.status as any;
+        }
+        if (callDetails.startedAt) {
+          updateData.startedAt = callDetails.startedAt;
+        }
+        if (callDetails.endedAt) {
+          updateData.endedAt = callDetails.endedAt;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await this.prisma.interaction.update({
+            where: { id: interaction.id },
+            data: updateData,
+          });
         }
       } catch (error) {
         console.error('Error fetching call details from ElevenLabs API:', error);
-        // No fallar el webhook si no podemos obtener los detalles
+        // No fallar el webhook si no podemos obtener los detalles, usar los datos del webhook
       }
     }
 
