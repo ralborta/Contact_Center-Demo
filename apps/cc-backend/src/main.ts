@@ -19,7 +19,43 @@ if (typeof globalThis.crypto === 'undefined') {
 
 const execAsync = promisify(exec);
 
-async function runMigrations() {
+async function runMigrationsSync() {
+  const { execSync } = require('child_process');
+  
+  console.log('==========================================');
+  console.log('EJECUTANDO MIGRACIONES DE PRISMA');
+  console.log('==========================================');
+  console.log('Working directory:', process.cwd());
+  console.log('__dirname:', __dirname);
+  console.log('DATABASE_URL configurada:', process.env.DATABASE_URL ? 'SÍ' : 'NO');
+  
+  try {
+    const schemaPath = path.join(__dirname, '../../prisma/schema.prisma');
+    console.log('Schema path:', schemaPath);
+    console.log('Schema exists:', fs.existsSync(schemaPath) ? 'SÍ' : 'NO');
+    
+    console.log('\nEjecutando: npx prisma migrate deploy...');
+    const output = execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+      cwd: path.join(__dirname, '../..'),
+      env: process.env,
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+    
+    console.log('Migraciones output:', output);
+    console.log('==========================================');
+    console.log('MIGRACIONES COMPLETADAS EXITOSAMENTE');
+    console.log('==========================================');
+  } catch (error: any) {
+    console.error('==========================================');
+    console.error('ERROR EN MIGRACIONES');
+    console.error('==========================================');
+    console.error('Error:', error.message);
+    if (error.stdout) console.error('stdout:', error.stdout.toString());
+    if (error.stderr) console.error('stderr:', error.stderr.toString());
+    throw error;
+  }
+}
   try {
     console.log('[Startup] Intentando ejecutar migraciones de Prisma...');
     // En producción, __dirname apunta a dist/, así que subimos dos niveles
