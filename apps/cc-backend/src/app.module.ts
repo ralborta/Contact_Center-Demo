@@ -17,12 +17,29 @@ import { SyncModule } from './sync/sync.module';
       envFilePath: '.env',
     }),
     BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || process.env.REDIS_URL?.split('@')[1]?.split(':')[0] || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || process.env.REDIS_URL?.split(':')[2]?.split('/')[0] || '6379'),
-        password: process.env.REDIS_PASSWORD || process.env.REDIS_URL?.split('@')[0]?.split(':')[2] || undefined,
-        maxRetriesPerRequest: null, // Requerido por BullMQ
-      },
+      connection: (() => {
+        // Si hay REDIS_URL, parsearla
+        if (process.env.REDIS_URL) {
+          try {
+            const url = new URL(process.env.REDIS_URL);
+            return {
+              host: url.hostname,
+              port: parseInt(url.port || '6379'),
+              password: url.password || undefined,
+              maxRetriesPerRequest: null,
+            };
+          } catch (e) {
+            console.warn('Error parsing REDIS_URL, usando valores individuales');
+          }
+        }
+        // Valores individuales
+        return {
+          host: process.env.REDIS_HOST || 'localhost',
+          port: parseInt(process.env.REDIS_PORT || '6379'),
+          password: process.env.REDIS_PASSWORD || undefined,
+          maxRetriesPerRequest: null, // Requerido por BullMQ
+        };
+      })(),
     }),
     BullModule.registerQueue({
       name: 'sms',

@@ -4,15 +4,25 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 import * as path from 'path';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 async function runMigrations() {
   try {
     console.log('[Startup] Ejecutando migraciones de Prisma...');
     const schemaPath = path.join(__dirname, '../../prisma/schema.prisma');
-    execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-      stdio: 'inherit',
+    
+    // Verificar que el schema existe
+    const fs = await import('fs');
+    if (!fs.existsSync(schemaPath)) {
+      console.warn(`[Startup] Schema no encontrado en ${schemaPath}, saltando migraciones`);
+      return;
+    }
+
+    await execAsync(`npx prisma migrate deploy --schema=${schemaPath}`, {
       cwd: __dirname,
     });
     console.log('[Startup] Migraciones ejecutadas exitosamente');
@@ -24,8 +34,11 @@ async function runMigrations() {
 }
 
 async function bootstrap() {
-  // Ejecutar migraciones antes de iniciar la app
-  await runMigrations();
+  // Ejecutar migraciones en background (no bloqueante)
+  // Si fallan, la app continúa (las migraciones pueden ejecutarse manualmente)
+  runMigrations().catch(err => {
+    console.error('[Startup] Error en migraciones (no crítico, continuando):', err.message);
+  });
 
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({
