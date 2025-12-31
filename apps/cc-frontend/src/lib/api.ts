@@ -1,7 +1,15 @@
 import axios from 'axios'
 
+// Get API URL - only available on client side
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+  }
+  return 'http://localhost:3000' // Fallback for SSR (shouldn't happen)
+}
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+  baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
