@@ -11,7 +11,8 @@ cmds = [
   "cd apps/cc-backend && npm run prisma:generate",
   "cd apps/cc-backend && npx nest build --builder tsc",
   "cd apps/cc-backend && test -f dist/main.js || (echo 'ERROR: dist/main.js not found!' && exit 1)",
-  "cd apps/cc-backend && ls -la dist/ || echo 'WARNING: dist directory listing'"
+  "cd apps/cc-backend && test -f dist/app.module.js || (echo 'ERROR: dist/app.module.js not found!' && exit 1)",
+  "cd apps/cc-backend && echo 'Build files:' && ls -la dist/ | head -20"
 ]
 
 [start]
