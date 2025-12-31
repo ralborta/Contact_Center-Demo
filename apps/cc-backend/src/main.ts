@@ -6,6 +6,7 @@ import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import { exec } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -13,17 +14,20 @@ const execAsync = promisify(exec);
 async function runMigrations() {
   try {
     console.log('[Startup] Ejecutando migraciones de Prisma...');
+    // En producción, __dirname apunta a dist/, así que subimos dos niveles
     const schemaPath = path.join(__dirname, '../../prisma/schema.prisma');
+    const projectRoot = path.join(__dirname, '../..');
     
     // Verificar que el schema existe
-    const fs = await import('fs');
     if (!fs.existsSync(schemaPath)) {
       console.warn(`[Startup] Schema no encontrado en ${schemaPath}, saltando migraciones`);
       return;
     }
 
+    console.log(`[Startup] Ejecutando migraciones desde ${projectRoot} con schema ${schemaPath}`);
     await execAsync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-      cwd: __dirname,
+      cwd: projectRoot,
+      env: { ...process.env },
     });
     console.log('[Startup] Migraciones ejecutadas exitosamente');
   } catch (error: any) {
