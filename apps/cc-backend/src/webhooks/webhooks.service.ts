@@ -50,15 +50,17 @@ export class WebhooksService {
       channel: Channel.CALL,
       direction: Direction.INBOUND,
       provider: Provider.ELEVENLABS,
-      providerConversationId: normalized.callId || normalized.sessionId,
+      providerConversationId: normalized.conversationId || normalized.callId || normalized.sessionId,
       from: normalized.from || 'unknown',
       to: normalized.to || 'unknown',
       status: normalized.status,
       startedAt: normalized.startedAt,
       endedAt: normalized.endedAt,
-      assignedAgent: normalized.assignedAgent,
+      assignedAgent: normalized.assignedAgent || normalized.agentName || normalized.agentId,
       intent: normalized.intent,
       outcome: normalized.outcome,
+      customerRef: normalized.customerRef,
+      queue: normalized.queue,
     });
 
     // Crear evento
@@ -75,7 +77,7 @@ export class WebhooksService {
     if (normalized.recordingUrl || normalized.transcriptText || normalized.summary || normalized.durationSec) {
       await this.interactionsService.upsertCallDetail({
         interactionId: interaction.id,
-        elevenCallId: normalized.callId,
+        elevenCallId: normalized.conversationId || normalized.callId,
         recordingUrl: normalized.recordingUrl,
         transcriptText: normalized.transcriptText,
         transcriptId: normalized.transcriptId,
@@ -85,8 +87,8 @@ export class WebhooksService {
       });
     }
 
-    // Si tenemos callId/conversationId pero no tenemos todos los detalles, intentar obtenerlos de la API
-    const conversationId = normalized.callId || normalized.sessionId;
+    // Si tenemos conversationId pero no tenemos todos los detalles, intentar obtenerlos de la API
+    const conversationId = normalized.conversationId || normalized.callId || normalized.sessionId;
     if (conversationId && (!normalized.recordingUrl || !normalized.transcriptText || !normalized.summary)) {
       try {
         const callDetails = await this.elevenLabsAdapter.fetchCallDetails(conversationId);
@@ -100,6 +102,18 @@ export class WebhooksService {
             durationSec: callDetails.durationSec || normalized.durationSec,
             hangupReason: normalized.hangupReason,
           });
+
+          // Actualizar interaction con datos adicionales si están disponibles
+          if (callDetails.customerRef || callDetails.queue || callDetails.agentName) {
+            await this.prisma.interaction.update({
+              where: { id: interaction.id },
+              data: {
+                ...(callDetails.customerRef && { customerRef: callDetails.customerRef }),
+                ...(callDetails.queue && { queue: callDetails.queue }),
+                ...(callDetails.agentName && { assignedAgent: callDetails.agentName }),
+              },
+            });
+          }
         }
       } catch (error) {
         console.error('Error fetching call details from ElevenLabs API:', error);
