@@ -20,9 +20,10 @@ export default function Dashboard() {
         const data = await interactionsApi.getAll({
           dateFrom: today.toISOString(),
         })
-        setInteractions(data)
+        setInteractions(data || [])
       } catch (error) {
         console.error('Error fetching interactions:', error)
+        setInteractions([]) // Set empty array on error
       } finally {
         setLoading(false)
       }

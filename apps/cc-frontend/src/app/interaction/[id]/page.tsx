@@ -19,6 +19,7 @@ export default function InteractionPage() {
         setInteraction(data)
       } catch (error) {
         console.error('Error fetching interaction:', error)
+        setInteraction(null) // Set null on error
       } finally {
         setLoading(false)
       }
@@ -26,6 +27,8 @@ export default function InteractionPage() {
 
     if (id) {
       fetchInteraction()
+    } else {
+      setLoading(false)
     }
   }, [id])
 
