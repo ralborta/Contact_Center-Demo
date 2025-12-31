@@ -80,6 +80,8 @@ export class InteractionsService {
     assignedAgent?: string;
     intent?: string;
     outcome?: string;
+    customerRef?: string;
+    queue?: string;
   }) {
     const where = data.providerConversationId
       ? {
@@ -102,6 +104,8 @@ export class InteractionsService {
         assignedAgent: data.assignedAgent,
         intent: data.intent,
         outcome: data.outcome as any,
+        customerRef: data.customerRef,
+        queue: data.queue,
         updatedAt: new Date(),
       },
       create: {
@@ -117,6 +121,8 @@ export class InteractionsService {
         assignedAgent: data.assignedAgent,
         intent: data.intent,
         outcome: data.outcome as any,
+        customerRef: data.customerRef,
+        queue: data.queue,
       },
     });
   }
