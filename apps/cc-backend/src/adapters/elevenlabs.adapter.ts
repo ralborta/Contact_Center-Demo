@@ -25,6 +25,7 @@ export class ElevenLabsAdapter {
     recordingUrl?: string;
     transcriptText?: string;
     transcriptId?: string;
+    summary?: string;
     durationSec?: number;
     hangupReason?: string;
   } {
@@ -86,6 +87,9 @@ export class ElevenLabsAdapter {
     normalized.transcriptText = payload.transcript_text || payload.transcript || payload.transcription?.text;
     normalized.transcriptId = payload.transcript_id || payload.transcription?.id;
 
+    // Summary
+    normalized.summary = payload.summary || payload.summary_text || payload.ai_summary || payload.call_summary;
+
     // Duration
     if (payload.duration || payload.duration_seconds) {
       normalized.durationSec = parseInt(payload.duration || payload.duration_seconds);
@@ -95,5 +99,89 @@ export class ElevenLabsAdapter {
     normalized.hangupReason = payload.hangup_reason || payload.hangupReason || payload.reason;
 
     return normalized;
+  }
+
+  /**
+   * Obtener resumen, transcripción y grabación de una llamada desde la API de ElevenLabs
+   */
+  async fetchCallDetails(callId: string): Promise<{
+    recordingUrl?: string;
+    transcriptText?: string;
+    summary?: string;
+    durationSec?: number;
+  }> {
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const apiUrl = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io';
+
+    if (!apiKey) {
+      throw new Error('ELEVENLABS_API_KEY not configured');
+    }
+
+    try {
+      // Obtener información de la llamada
+      const callResponse = await fetch(`${apiUrl}/v1/calls/${callId}`, {
+        headers: {
+          'xi-api-key': apiKey,
+        },
+      });
+
+      if (!callResponse.ok) {
+        throw new Error(`ElevenLabs API error: ${callResponse.statusText}`);
+      }
+
+      const callData: any = await callResponse.json();
+
+      const details: any = {};
+
+      // Obtener transcripción si está disponible
+      if (callData.transcript_id) {
+        try {
+          const transcriptResponse = await fetch(`${apiUrl}/v1/calls/${callId}/transcript`, {
+            headers: {
+              'xi-api-key': apiKey,
+            },
+          });
+
+          if (transcriptResponse.ok) {
+            const transcriptData: any = await transcriptResponse.json();
+            details.transcriptText = transcriptData.text || transcriptData.transcript;
+          }
+        } catch (error) {
+          console.error('Error fetching transcript:', error);
+        }
+      }
+
+      // Obtener resumen si está disponible
+      if (callData.summary_id) {
+        try {
+          const summaryResponse = await fetch(`${apiUrl}/v1/calls/${callId}/summary`, {
+            headers: {
+              'xi-api-key': apiKey,
+            },
+          });
+
+          if (summaryResponse.ok) {
+            const summaryData: any = await summaryResponse.json();
+            details.summary = summaryData.text || summaryData.summary;
+          }
+        } catch (error) {
+          console.error('Error fetching summary:', error);
+        }
+      }
+
+      // Obtener URL de grabación
+      if (callData.recording_url) {
+        details.recordingUrl = callData.recording_url;
+      }
+
+      // Duración
+      if (callData.duration_seconds) {
+        details.durationSec = callData.duration_seconds;
+      }
+
+      return details;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch call details from ElevenLabs: ${error.message}`);
+    }
   }
 }

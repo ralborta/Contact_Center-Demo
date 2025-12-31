@@ -175,6 +175,7 @@ export class InteractionsService {
     recordingUrl?: string;
     transcriptText?: string;
     transcriptId?: string;
+    summary?: string;
     durationSec?: number;
     hangupReason?: string;
   }) {
@@ -185,6 +186,7 @@ export class InteractionsService {
         recordingUrl: data.recordingUrl,
         transcriptText: data.transcriptText,
         transcriptId: data.transcriptId,
+        summary: data.summary,
         durationSec: data.durationSec,
         hangupReason: data.hangupReason,
       },
@@ -194,6 +196,7 @@ export class InteractionsService {
         recordingUrl: data.recordingUrl,
         transcriptText: data.transcriptText,
         transcriptId: data.transcriptId,
+        summary: data.summary,
         durationSec: data.durationSec,
         hangupReason: data.hangupReason,
       },

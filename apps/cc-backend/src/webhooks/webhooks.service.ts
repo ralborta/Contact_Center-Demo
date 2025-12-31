@@ -72,16 +72,38 @@ export class WebhooksService {
     });
 
     // Actualizar CallDetail si hay información
-    if (normalized.recordingUrl || normalized.transcriptText || normalized.durationSec) {
+    if (normalized.recordingUrl || normalized.transcriptText || normalized.summary || normalized.durationSec) {
       await this.interactionsService.upsertCallDetail({
         interactionId: interaction.id,
         elevenCallId: normalized.callId,
         recordingUrl: normalized.recordingUrl,
         transcriptText: normalized.transcriptText,
         transcriptId: normalized.transcriptId,
+        summary: normalized.summary,
         durationSec: normalized.durationSec,
         hangupReason: normalized.hangupReason,
       });
+    }
+
+    // Si tenemos callId pero no tenemos todos los detalles, intentar obtenerlos de la API
+    if (normalized.callId && (!normalized.recordingUrl || !normalized.transcriptText || !normalized.summary)) {
+      try {
+        const callDetails = await this.elevenLabsAdapter.fetchCallDetails(normalized.callId);
+        if (callDetails.recordingUrl || callDetails.transcriptText || callDetails.summary) {
+          await this.interactionsService.upsertCallDetail({
+            interactionId: interaction.id,
+            elevenCallId: normalized.callId,
+            recordingUrl: callDetails.recordingUrl || normalized.recordingUrl,
+            transcriptText: callDetails.transcriptText || normalized.transcriptText,
+            summary: callDetails.summary || normalized.summary,
+            durationSec: callDetails.durationSec || normalized.durationSec,
+            hangupReason: normalized.hangupReason,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching call details from ElevenLabs API:', error);
+        // No fallar el webhook si no podemos obtener los detalles
+      }
     }
 
     // Audit log

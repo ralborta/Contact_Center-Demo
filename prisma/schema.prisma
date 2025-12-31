@@ -145,6 +145,7 @@ model CallDetail {
   recordingUrl      String?
   transcriptText    String?     @db.Text
   transcriptId      String?
+  summary           String?     @db.Text
   durationSec       Int?
   hangupReason      String?
   createdAt         DateTime    @default(now())

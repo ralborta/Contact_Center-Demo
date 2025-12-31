@@ -77,6 +77,7 @@ export interface CallDetail {
   id: string
   recordingUrl: string | null
   transcriptText: string | null
+  summary: string | null
   durationSec: number | null
 }
 
