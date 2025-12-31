@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import { interactionsApi, Interaction } from '@/lib/api'
 import Link from 'next/link'
+import { Mail, Filter, ExternalLink } from 'lucide-react'
 
 export default function SMSPage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
@@ -66,11 +67,22 @@ export default function SMSPage() {
       <Header />
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-4">💌 Gestión de SMS</h1>
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-3 bg-purple-100 rounded-xl">
+              <Mail className="w-6 h-6 text-purple-600" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Gestión de SMS</h1>
+              <p className="text-gray-500 text-sm mt-1">Administra y revisa todos los mensajes SMS</p>
+            </div>
+          </div>
           
           {/* Filtros */}
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
-            <h2 className="text-lg font-semibold mb-4">Filtros</h2>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Filter className="w-5 h-5 text-gray-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -117,9 +129,12 @@ export default function SMSPage() {
 
         {/* Tabla de SMS */}
         {loading ? (
-          <div className="text-center py-8">Cargando...</div>
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            <p className="mt-4 text-gray-500">Cargando...</p>
+          </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -190,9 +205,10 @@ export default function SMSPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <Link
                             href={`/interaction/${interaction.id}`}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-blue-600 hover:text-blue-800 flex items-center space-x-1 group"
                           >
-                            Ver mensajes
+                            <span>Ver mensajes</span>
+                            <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                           </Link>
                         </td>
                       </tr>
