@@ -6,12 +6,11 @@ cmds = ["npm install"]
 
 [phases.build]
 cmds = [
-  "npm run build --workspace=packages/core || true",
-  "npm run build --workspace=packages/adapters || true",
+  "npm run build --workspace=packages/core",
+  "npm run build --workspace=packages/adapters",
   "cd apps/cc-backend && npm run prisma:generate",
   "cd apps/cc-backend && npx nest build --builder tsc",
-  "cd apps/cc-backend && ls -la dist/ || echo 'Build failed'",
-  "cd apps/cc-backend && find dist -name '*.js' | head -20 || echo 'No JS files found'"
+  "cd apps/cc-backend && test -f dist/main.js || (echo 'ERROR: dist/main.js not found!' && exit 1)"
 ]
 
 [start]
