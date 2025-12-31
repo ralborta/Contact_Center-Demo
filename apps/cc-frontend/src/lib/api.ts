@@ -1,34 +1,42 @@
-import axios from 'axios'
+import axios, { AxiosInstance } from 'axios'
 
 // Get API URL - only available on client side
 const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-    // Ensure URL has protocol
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      return `https://${url}`
-    }
-    return url
+  if (typeof window === 'undefined') {
+    return 'http://localhost:3000' // Fallback for SSR (shouldn't happen)
   }
-  return 'http://localhost:3000' // Fallback for SSR (shouldn't happen)
+  const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+  // Ensure URL has protocol
+  if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+    return `https://${url}`
+  }
+  return url
 }
 
-const api = axios.create({
-  baseURL: getApiUrl(),
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000, // 10 seconds timeout
-})
+// Create axios instance lazily to avoid SSR issues
+let apiInstance: AxiosInstance | null = null
 
-// Add response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    console.error('API Error:', error.message)
-    return Promise.reject(error)
+const getApi = (): AxiosInstance => {
+  if (!apiInstance) {
+    apiInstance = axios.create({
+      baseURL: getApiUrl(),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000, // 10 seconds timeout
+    })
+
+    // Add response interceptor for error handling
+    apiInstance.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        console.error('API Error:', error.message)
+        return Promise.reject(error)
+      }
+    )
   }
-)
+  return apiInstance
+}
 
 export interface Interaction {
   id: string
@@ -78,7 +86,12 @@ export const interactionsApi = {
     dateFrom?: string
     dateTo?: string
   }): Promise<Interaction[]> => {
+    // Only execute on client side
+    if (typeof window === 'undefined') {
+      return []
+    }
     try {
+      const api = getApi()
       const { data } = await api.get('/api/interactions', { params: filters })
       return Array.isArray(data) ? data : []
     } catch (error) {
@@ -88,7 +101,12 @@ export const interactionsApi = {
   },
 
   getById: async (id: string): Promise<Interaction | null> => {
+    // Only execute on client side
+    if (typeof window === 'undefined') {
+      return null
+    }
     try {
+      const api = getApi()
       const { data } = await api.get(`/api/interactions/${id}`)
       return data
     } catch (error) {
@@ -98,4 +116,4 @@ export const interactionsApi = {
   },
 }
 
-export default api
+export default getApi

@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Remove env config - use environment variables directly
-  output: 'standalone',
+  // Disable server-side rendering for all pages
+  experimental: {
+    serverActions: false,
+  },
 }
 
 module.exports = nextConfig
