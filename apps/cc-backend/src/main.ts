@@ -38,20 +38,48 @@ async function runMigrations() {
       return;
     }
 
-    console.log(`[Startup] Ejecutando migraciones desde ${projectRoot} con schema ${schemaPath}`);
+    console.log(`[Startup] Sincronizando schema de Prisma desde ${projectRoot} con schema ${schemaPath}`);
     console.log(`[Startup] DATABASE_URL configurada: ${process.env.DATABASE_URL ? 'Sí' : 'No'}`);
     
-    // Ejecutar con timeout de 60 segundos (más tiempo para Railway)
-    const { stdout, stderr } = await Promise.race([
-      execAsync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-        cwd: projectRoot,
-        env: { ...process.env },
-        maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout después de 60 segundos')), 60000)
-      ) as Promise<{ stdout: string; stderr: string }>,
-    ]);
+    // Primero intentar migrate deploy (si hay migraciones)
+    // Si no hay migraciones, usar db push para sincronizar el schema
+    let migrationResult;
+    try {
+      console.log('[Startup] Intentando aplicar migraciones...');
+      migrationResult = await Promise.race([
+        execAsync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+          cwd: projectRoot,
+          env: { ...process.env },
+          maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 30000)
+        ) as Promise<{ stdout: string; stderr: string }>,
+      ]);
+      console.log('[Startup] Migraciones aplicadas exitosamente');
+    } catch (migrateError: any) {
+      // Si no hay migraciones, usar db push
+      if (migrateError.message?.includes('No migration found') || 
+          migrateError.stderr?.includes('No migration found') ||
+          migrateError.message?.includes('Timeout')) {
+        console.log('[Startup] No hay migraciones, usando db push para sincronizar schema...');
+        migrationResult = await Promise.race([
+          execAsync(`npx prisma db push --schema=${schemaPath} --accept-data-loss`, {
+            cwd: projectRoot,
+            env: { ...process.env },
+            maxBuffer: 1024 * 1024 * 10,
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout después de 60 segundos')), 60000)
+          ) as Promise<{ stdout: string; stderr: string }>,
+        ]);
+        console.log('[Startup] Schema sincronizado exitosamente con db push');
+      } else {
+        throw migrateError;
+      }
+    }
+    
+    const { stdout, stderr } = migrationResult;
 
     if (stdout) {
       console.log('[Startup] Migraciones stdout:', stdout);
