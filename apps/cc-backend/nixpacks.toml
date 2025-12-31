@@ -9,11 +9,12 @@ cmds = [
   "npm run build --workspace=packages/core",
   "npm run build --workspace=packages/adapters",
   "cd apps/cc-backend && npm run prisma:generate",
-  "cd apps/cc-backend && rm -rf dist tsconfig.tsbuildinfo .nest",
-  "cd apps/cc-backend && npx tsc --project tsconfig.json --build --force",
-  "cd apps/cc-backend && test -f dist/main.js || (echo 'ERROR: dist/main.js not found!' && exit 1)",
-  "cd apps/cc-backend && test -f dist/app.module.js || (echo 'ERROR: dist/app.module.js not found! Listing files:' && ls -la dist/ && exit 1)",
-  "cd apps/cc-backend && echo 'Build successful! Files in dist:' && find dist -name '*.js' | head -20"
+  "cd apps/cc-backend && rm -rf dist",
+  "cd apps/cc-backend && npm run build",
+  "cd apps/cc-backend && echo '=== Verificando archivos generados ===' && ls -la dist/ || echo 'ERROR: dist/ no existe'",
+  "cd apps/cc-backend && test -f dist/main.js || (echo 'ERROR: dist/main.js not found!' && ls -la dist/ && exit 1)",
+  "cd apps/cc-backend && test -f dist/app.module.js || (echo 'ERROR: dist/app.module.js not found!' && find dist -name '*.js' && exit 1)",
+  "cd apps/cc-backend && echo '=== Build exitoso ===' && find dist -name '*.js' | head -10"
 ]
 
 [start]
