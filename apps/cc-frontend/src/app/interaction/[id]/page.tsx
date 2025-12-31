@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import Header from '@/components/Header'
 import InteractionDetail from '@/components/InteractionDetail'
 import { interactionsApi, Interaction } from '@/lib/api'
@@ -14,22 +15,23 @@ export default function InteractionPage() {
 
   useEffect(() => {
     const fetchInteraction = async () => {
+      if (!id) {
+        setLoading(false)
+        return
+      }
+
       try {
         const data = await interactionsApi.getById(id)
         setInteraction(data)
       } catch (error) {
         console.error('Error fetching interaction:', error)
-        setInteraction(null) // Set null on error
+        setInteraction(null)
       } finally {
         setLoading(false)
       }
     }
 
-    if (id) {
-      fetchInteraction()
-    } else {
-      setLoading(false)
-    }
+    fetchInteraction()
   }, [id])
 
   if (loading) {

@@ -65,13 +65,23 @@ export const interactionsApi = {
     dateFrom?: string
     dateTo?: string
   }): Promise<Interaction[]> => {
-    const { data } = await api.get('/api/interactions', { params: filters })
-    return data
+    try {
+      const { data } = await api.get('/api/interactions', { params: filters })
+      return Array.isArray(data) ? data : []
+    } catch (error) {
+      console.error('Error fetching interactions:', error)
+      return [] // Return empty array on error
+    }
   },
 
-  getById: async (id: string): Promise<Interaction> => {
-    const { data } = await api.get(`/api/interactions/${id}`)
-    return data
+  getById: async (id: string): Promise<Interaction | null> => {
+    try {
+      const { data } = await api.get(`/api/interactions/${id}`)
+      return data
+    } catch (error) {
+      console.error('Error fetching interaction:', error)
+      return null // Return null on error
+    }
   },
 }
 
