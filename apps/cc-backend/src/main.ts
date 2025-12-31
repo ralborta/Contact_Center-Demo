@@ -4,8 +4,29 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
+import { execSync } from 'child_process';
+import * as path from 'path';
+
+async function runMigrations() {
+  try {
+    console.log('[Startup] Ejecutando migraciones de Prisma...');
+    const schemaPath = path.join(__dirname, '../../prisma/schema.prisma');
+    execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+      stdio: 'inherit',
+      cwd: __dirname,
+    });
+    console.log('[Startup] Migraciones ejecutadas exitosamente');
+  } catch (error: any) {
+    console.error('[Startup] Error ejecutando migraciones:', error.message);
+    // No fallar el inicio si las migraciones fallan (puede ser que ya estén aplicadas)
+    console.log('[Startup] Continuando con el inicio de la aplicación...');
+  }
+}
 
 async function bootstrap() {
+  // Ejecutar migraciones antes de iniciar la app
+  await runMigrations();
+
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({
       transports: [

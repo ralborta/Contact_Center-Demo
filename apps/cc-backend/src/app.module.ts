@@ -8,6 +8,7 @@ import { OtpModule } from './otp/otp.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AuditModule } from './audit/audit.module';
 import { PiiModule } from './pii/pii.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
@@ -17,9 +18,9 @@ import { PiiModule } from './pii/pii.module';
     }),
     BullModule.forRoot({
       connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD,
+        host: process.env.REDIS_HOST || process.env.REDIS_URL?.split('@')[1]?.split(':')[0] || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || process.env.REDIS_URL?.split(':')[2]?.split('/')[0] || '6379'),
+        password: process.env.REDIS_PASSWORD || process.env.REDIS_URL?.split('@')[0]?.split(':')[2] || undefined,
         maxRetriesPerRequest: null, // Requerido por BullMQ
       },
     }),
@@ -33,6 +34,7 @@ import { PiiModule } from './pii/pii.module';
     WebhooksModule,
     AuditModule,
     PiiModule,
+    SyncModule,
   ],
 })
 export class AppModule {}

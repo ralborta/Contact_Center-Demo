@@ -13,5 +13,8 @@ cmds = [
   "cd apps/cc-backend && test -f dist/main.js || (echo 'ERROR: dist/main.js not found!' && exit 1)"
 ]
 
+[phases.setup]
+nixPkgs = ["nodejs-18_x", "npm-9_x", "postgresql"]
+
 [start]
 cmd = "cd apps/cc-backend && node dist/main.js"
