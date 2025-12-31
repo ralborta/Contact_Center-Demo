@@ -1,6 +1,23 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import { Interaction } from '@/lib/api'
+import {
+  Play,
+  Pause,
+  Square,
+  Volume2,
+  Edit2,
+  Bell,
+  User,
+  Phone,
+  Calendar,
+  CheckCircle,
+  Clock,
+  MessageSquare,
+  FileText,
+  StickyNote,
+} from 'lucide-react'
 
 interface InteractionDetailProps {
   interaction: Interaction
@@ -9,6 +26,36 @@ interface InteractionDetailProps {
 export default function InteractionDetail({
   interaction,
 }: InteractionDetailProps) {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(1)
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const updateTime = () => setCurrentTime(audio.currentTime)
+    const updateDuration = () => setDuration(audio.duration)
+    const handleEnded = () => {
+      setIsPlaying(false)
+      setIsPaused(false)
+      setCurrentTime(0)
+    }
+
+    audio.addEventListener('timeupdate', updateTime)
+    audio.addEventListener('loadedmetadata', updateDuration)
+    audio.addEventListener('ended', handleEnded)
+
+    return () => {
+      audio.removeEventListener('timeupdate', updateTime)
+      audio.removeEventListener('loadedmetadata', updateDuration)
+      audio.removeEventListener('ended', handleEnded)
+    }
+  }, [])
+
   const formatDate = (date: string | null) => {
     if (!date) return 'N/A'
     return new Date(date).toLocaleString('es-AR', {
@@ -18,6 +65,27 @@ export default function InteractionDetail({
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  const formatTime = (date: string | null) => {
+    if (!date) return 'N/A'
+    return new Date(date).toLocaleTimeString('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return 'N/A'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${String(secs).padStart(2, '0')}`
+  }
+
+  const formatAudioTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${String(secs).padStart(2, '0')}`
   }
 
   const getStatusLabel = (status: string) => {
@@ -56,269 +124,401 @@ export default function InteractionDetail({
     }
   }
 
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-2xl font-bold mb-6">{getTitle()}</h2>
+  const handlePlay = () => {
+    const audio = audioRef.current
+    if (!audio) return
 
-      {/* Información Principal */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-          <label className="text-sm font-medium text-gray-600 block mb-1">
-            Número del Cliente
-          </label>
-          <p className="text-lg font-semibold">{interaction.from}</p>
+    if (isPaused) {
+      audio.play()
+      setIsPlaying(true)
+      setIsPaused(false)
+    } else {
+      audio.play()
+      setIsPlaying(true)
+    }
+  }
+
+  const handlePause = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.pause()
+    setIsPlaying(false)
+    setIsPaused(true)
+  }
+
+  const handleStop = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.pause()
+    audio.currentTime = 0
+    setIsPlaying(false)
+    setIsPaused(false)
+    setCurrentTime(0)
+  }
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    if (!audio) return
+    const newTime = parseFloat(e.target.value)
+    audio.currentTime = newTime
+    setCurrentTime(newTime)
+  }
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    if (!audio) return
+    const newVolume = parseFloat(e.target.value)
+    audio.volume = newVolume
+    setVolume(newVolume)
+  }
+
+  // Parsear transcripción para mostrar como diálogo
+  const parseTranscript = (transcript: string | null) => {
+    if (!transcript) return []
+    
+    // Intentar parsear como formato de diálogo
+    const lines = transcript.split('\n')
+    const messages: Array<{ time: string; speaker: string; text: string }> = []
+    
+    lines.forEach((line) => {
+      // Buscar patrones como "14:31 MARTÍN GÓMEZ: texto" o "Agente: texto"
+      const timeMatch = line.match(/^(\d{1,2}:\d{2})\s+([^:]+):\s*(.+)$/)
+      if (timeMatch) {
+        messages.push({
+          time: timeMatch[1],
+          speaker: timeMatch[2].trim(),
+          text: timeMatch[3].trim(),
+        })
+      } else {
+        // Buscar patrones sin tiempo: "AGENTE: texto" o "Cliente: texto"
+            const speakerMatch = line.match(/^([^:]+):\s*(.+)$/)
+            if (speakerMatch) {
+              messages.push({
+                time: '',
+                speaker: speakerMatch[1].trim(),
+                text: speakerMatch[2].trim(),
+              })
+            } else if (line.trim()) {
+              // Si no hay formato, agregar como mensaje genérico
+              if (messages.length > 0) {
+                messages[messages.length - 1].text += ' ' + line.trim()
+              } else {
+                messages.push({
+                  time: '',
+                  speaker: 'Sistema',
+                  text: line.trim(),
+                })
+              }
+            }
+          }
+        })
+    
+    return messages
+  }
+
+  const transcriptMessages = parseTranscript(interaction.callDetail?.transcriptText || null)
+
+  // Obtener URL del audio desde el backend
+  const getAudioUrl = () => {
+    if (interaction.callDetail?.recordingUrl) {
+      // Si es una URL directa, usarla
+      if (interaction.callDetail.recordingUrl.startsWith('http')) {
+        return interaction.callDetail.recordingUrl
+      }
+    }
+    // Si tenemos un conversationId (elevenCallId), usar el endpoint del backend
+    if (interaction.callDetail?.id && interaction.channel === 'CALL') {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+      const baseUrl = apiUrl.startsWith('http') ? apiUrl : `https://${apiUrl}`
+      // Necesitamos el conversationId, pero por ahora usamos el interactionId
+      // TODO: Guardar el conversationId en CallDetail
+      return `${baseUrl}/api/elevenlabs/audio/${interaction.id}`
+    }
+    return null
+  }
+
+  const audioUrl = getAudioUrl()
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header Azul */}
+      <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-xl">
+            C
+          </div>
+          <h1 className="text-xl font-semibold">{getTitle()}</h1>
         </div>
-        <div>
-          <label className="text-sm font-medium text-gray-600 block mb-1">
-            Cliente
-          </label>
-          <p className="text-lg">
-            {interaction.customerRef || 'No especificado'}
-          </p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-gray-600 block mb-1">
-            Fecha
-          </label>
-          <p className="text-lg">{formatDate(interaction.startedAt || interaction.createdAt)}</p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-gray-600 block mb-1">
-            Agente
-          </label>
-          <p className="text-lg flex items-center">
-            {interaction.assignedAgent || 'Sin asignar'}
-            {interaction.assignedAgent && (
-              <button className="ml-2 text-blue-600 hover:text-blue-800">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                </svg>
-              </button>
-            )}
-          </p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-gray-600 block mb-1">
-            Resultado
-          </label>
-          <p className={`text-lg font-semibold ${
-            interaction.outcome === 'RESOLVED' ? 'text-green-600' : 'text-gray-700'
-          }`}>
-            {getOutcomeLabel(interaction.outcome)}
-          </p>
+        <div className="flex items-center gap-4">
+          <button className="p-2 hover:bg-blue-700 rounded-full transition-colors">
+            <Bell className="w-5 h-5" />
+          </button>
+          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+            <User className="w-5 h-5" />
+          </div>
         </div>
       </div>
 
-      {/* Información de la Llamada y Historial - Dos columnas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Columna Izquierda: Información de la Llamada */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold mb-4">
-            Información de la Llamada
-          </h3>
-          <div className="space-y-4">
+      {/* Contenido Principal */}
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Información del Cliente */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-600 block mb-1">
-                Estado
+              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                <Phone className="w-4 h-4" />
+                Número del Cliente
               </label>
-              <p className="text-base">{getStatusLabel(interaction.status)}</p>
+              <p className="text-lg font-semibold">{interaction.from}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-600 block mb-1">
-                Cola
+              <label className="text-sm font-medium text-gray-600 mb-1">
+                Cliente
               </label>
-              <p className="text-base">{interaction.queue || 'N/A'}</p>
+              <p className="text-lg">
+                {interaction.customerRef || 'No especificado'}
+                {interaction.customerRef && (
+                  <span className="text-gray-500 text-sm ml-2">
+                    (DNI: {interaction.customerRef.split(' ')[1] || 'N/A'})
+                  </span>
+                )}
+              </p>
             </div>
-            {interaction.callDetail && (
-              <>
+            <div>
+              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                <User className="w-4 h-4" />
+                Agente
+              </label>
+              <p className="text-lg flex items-center">
+                {interaction.assignedAgent || 'Sin asignar'}
+                {interaction.assignedAgent && (
+                  <button className="ml-2 text-blue-600 hover:text-blue-800">
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                <Calendar className="w-4 h-4" />
+                Fecha
+              </label>
+              <p className="text-lg">{formatDate(interaction.startedAt || interaction.createdAt)}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                <CheckCircle className="w-4 h-4" />
+                Resultado
+              </label>
+              <p className={`text-lg font-semibold ${
+                interaction.outcome === 'RESOLVED' ? 'text-green-600' : 'text-gray-700'
+              }`}>
+                {getOutcomeLabel(interaction.outcome)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Dos Columnas: Información y Eventos */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Columna Izquierda: Información de la Llamada */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Información de la Llamada
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-600 block mb-1">
+                  Estado
+                </label>
+                <p className="text-base">{getStatusLabel(interaction.status)}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 block mb-1">
+                  Cola
+                </label>
+                <p className="text-base">{interaction.queue || 'N/A'}</p>
+              </div>
+              
+              {/* Controles de Audio Mejorados */}
+              {interaction.callDetail && (
                 <div>
                   <label className="text-sm font-medium text-gray-600 block mb-2">
                     Grabación
                   </label>
-                  {interaction.callDetail.recordingUrl ? (
-                    <div className="mt-2">
-                      <audio controls className="w-full">
-                        <source
-                          src={interaction.callDetail.recordingUrl}
-                          type="audio/mpeg"
-                        />
-                      </audio>
+                  {audioUrl ? (
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <audio
+                        ref={audioRef}
+                        src={audioUrl}
+                        className="hidden"
+                      />
+                      <div className="space-y-3">
+                        {/* Controles de Play/Pause/Stop */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={isPlaying ? handlePause : handlePlay}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${
+                              isPlaying
+                                ? 'bg-orange-500 hover:bg-orange-600'
+                                : 'bg-green-500 hover:bg-green-600'
+                            }`}
+                          >
+                            {isPlaying ? (
+                              <Pause className="w-5 h-5" />
+                            ) : (
+                              <Play className="w-5 h-5 ml-0.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleStop}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${
+                              isPlaying || isPaused
+                                ? 'bg-red-500 hover:bg-red-600'
+                                : 'bg-gray-400 cursor-not-allowed'
+                            }`}
+                            disabled={!isPlaying && !isPaused}
+                          >
+                            <Square className="w-4 h-4" />
+                          </button>
+                          <div className="flex-1">
+                            <input
+                              type="range"
+                              min="0"
+                              max={duration || 0}
+                              value={currentTime}
+                              onChange={handleSeek}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          <div className="text-xs text-gray-500 min-w-[80px] text-right">
+                            {formatAudioTime(currentTime)} / {formatAudioTime(duration)}
+                          </div>
+                        </div>
+                        {/* Control de Volumen */}
+                        <div className="flex items-center gap-2">
+                          <Volume2 className="w-4 h-4 text-gray-500" />
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={volume}
+                            onChange={handleVolumeChange}
+                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <p className="text-gray-500 text-sm">No disponible</p>
                   )}
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-600 block mb-1">
-                    Duración
-                  </label>
-                  <p className="text-base">
-                    {interaction.callDetail.durationSec
-                      ? `${Math.floor(interaction.callDetail.durationSec / 60)}m ${interaction.callDetail.durationSec % 60}s`
-                      : 'N/A'}
-                  </p>
-                </div>
-              </>
+              )}
+              
+              <div>
+                <label className="text-sm font-medium text-gray-600 block mb-1">
+                  Intención
+                </label>
+                <p className="text-base">{interaction.intent || 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Columna Derecha: Historial de Eventos */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              Historial de Eventos
+            </h3>
+            {interaction.events && interaction.events.length > 0 ? (
+              <ul className="space-y-3">
+                {interaction.events.map((event) => (
+                  <li key={event.id} className="flex items-start gap-2">
+                    <span className="text-blue-600 font-bold mt-0.5">•</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600 text-sm font-medium">
+                          {formatTime(event.ts)}
+                        </span>
+                        <span className="text-sm text-gray-800">{event.type}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500 text-sm">No hay eventos registrados</p>
             )}
-            <div>
-              <label className="text-sm font-medium text-gray-600 block mb-1">
-                Intención
-              </label>
-              <p className="text-base">{interaction.intent || 'N/A'}</p>
-            </div>
           </div>
         </div>
 
-        {/* Columna Derecha: Historial de Eventos */}
-        {interaction.events && interaction.events.length > 0 && (
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold mb-4">Historial de Eventos</h3>
-            <ul className="space-y-2">
-              {interaction.events.map((event) => (
-                <li key={event.id} className="flex items-start">
-                  <span className="text-blue-600 mr-2 font-bold">•</span>
-                  <div className="flex-1">
-                    <span className="text-gray-600 text-sm">
-                      {new Date(event.ts).toLocaleTimeString('es-AR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                    <span className="ml-2 text-sm">{event.type}</span>
+        {/* Dos Columnas: Transcripción y Notas */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Columna Izquierda: Transcripción */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-blue-600" />
+              Transcripción
+            </h3>
+            {transcriptMessages.length > 0 ? (
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {transcriptMessages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-lg ${
+                      msg.speaker.toLowerCase().includes('agente') ||
+                      msg.speaker.toLowerCase().includes('agent') ||
+                      msg.speaker.toLowerCase().includes('vanesa') ||
+                      msg.speaker.toLowerCase().includes('isabela')
+                        ? 'bg-blue-50 border-l-4 border-blue-500'
+                        : 'bg-gray-50 border-l-4 border-gray-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      {msg.time && (
+                        <span className="text-xs font-medium text-gray-600">
+                          {msg.time}
+                        </span>
+                      )}
+                      <span className="text-sm font-semibold text-gray-800 uppercase">
+                        {msg.speaker}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700">{msg.text}</p>
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* Mensajes (WhatsApp/SMS) */}
-      {interaction.messages && interaction.messages.length > 0 && (
-        <div className="border-t pt-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">
-            {interaction.channel === 'WHATSAPP' ? 'Mensajes de WhatsApp' : 'Mensajes SMS'}
-          </h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {interaction.messages.map((message) => (
-              <div
-                key={message.id}
-                className={`p-3 rounded-lg ${
-                  message.direction === 'INBOUND'
-                    ? 'bg-blue-50 border-l-4 border-blue-500'
-                    : 'bg-gray-50 border-l-4 border-gray-500'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-1">
-                  <span className="text-sm font-medium">
-                    {message.direction === 'INBOUND' ? '📥 Recibido' : '📤 Enviado'}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {message.sentAt
-                      ? new Date(message.sentAt).toLocaleString('es-AR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'N/A'}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-700">{message.text || 'Sin texto'}</p>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Historial de Eventos */}
-      {interaction.events && interaction.events.length > 0 && (
-        <div className="border-t pt-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Historial de Eventos</h3>
-          <ul className="space-y-2">
-            {interaction.events.map((event) => (
-              <li key={event.id} className="flex items-start">
-                <span className="text-blue-600 mr-2">•</span>
-                <div>
-                  <span className="text-gray-600">
-                    {new Date(event.ts).toLocaleTimeString('es-AR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                  <span className="ml-2">{event.type}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Resumen, Transcripción y Notas - Tres columnas o dos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Columna Izquierda: Resumen y Transcripción */}
-        <div className="space-y-6 border-t pt-6">
-          {/* Resumen */}
-          {interaction.callDetail?.summary && (
-            <div>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Resumen de la Llamada
-              </h3>
-              <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
-                <p className="text-sm leading-relaxed text-gray-700">
-                  {interaction.callDetail.summary}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Transcripción */}
-          {interaction.callDetail?.transcriptText && (
-            <div>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Transcripción Completa
-              </h3>
+            ) : interaction.callDetail?.transcriptText ? (
               <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                <pre className="whitespace-pre-wrap text-sm leading-relaxed">
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
                   {interaction.callDetail.transcriptText}
                 </pre>
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <p className="text-gray-500 text-sm">No hay transcripción disponible</p>
+            )}
+          </div>
 
-        {/* Columna Derecha: Notas del Agente */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold mb-4">Notas del Agente</h3>
-          <textarea
-            className="w-full border rounded-lg p-4 min-h-32 text-sm"
-            placeholder="Agregar notas sobre esta interacción..."
-            defaultValue={
-              interaction.outcome === 'RESOLVED'
-                ? 'Caso resuelto en primer contacto.'
-                : ''
-            }
-            readOnly
-          />
+          {/* Columna Derecha: Notas del Agente */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <StickyNote className="w-5 h-5 text-blue-600" />
+              Notas del Agente
+            </h3>
+            <textarea
+              className="w-full border border-gray-300 rounded-lg p-4 min-h-64 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Agregar notas sobre esta interacción..."
+              defaultValue={
+                interaction.outcome === 'RESOLVED'
+                  ? 'Caso resuelto en primer contacto.'
+                  : ''
+              }
+            />
+          </div>
         </div>
       </div>
-
     </div>
   )
 }
