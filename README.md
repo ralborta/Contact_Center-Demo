@@ -335,18 +335,63 @@ Los adapters en `packages/adapters` normalizan los payloads de diferentes provee
 - Verifica que el worker esté corriendo
 - Revisa los logs del worker para errores de Twilio
 
-## Despliegue en Vercel (UI - Futuro)
+## Despliegue en Vercel (Frontend)
 
-**Nota**: La UI en Next.js se desplegará en Vercel más adelante. Por ahora solo el backend está listo.
+### 1. Crear Proyecto en Vercel
 
-Cuando implementes la UI:
-1. Crea un proyecto Next.js en Vercel
-2. Configura la variable de entorno `NEXT_PUBLIC_API_URL` apuntando a tu dominio de Railway
-3. La UI consumirá los endpoints de esta API
+1. Ve a [Vercel](https://vercel.com) y crea una cuenta
+2. Haz clic en "Add New" → "Project"
+3. Conecta tu repositorio GitHub: `ralborta/Contact_Center-Demo`
+4. Vercel detectará automáticamente que es un proyecto Next.js
+
+### 2. Configurar el Proyecto
+
+1. **Root Directory**: Selecciona `apps/cc-frontend`
+2. **Framework Preset**: Next.js (debería detectarse automáticamente)
+3. **Build Command**: `npm install && npm run build` (o dejar por defecto)
+4. **Output Directory**: `.next` (por defecto)
+
+### 3. Configurar Variables de Entorno
+
+En Vercel, ve a "Settings" → "Environment Variables" y agrega:
+
+```bash
+NEXT_PUBLIC_API_URL=https://tu-backend-railway.up.railway.app
+```
+
+**Importante**: Reemplaza `https://tu-backend-railway.up.railway.app` con la URL real de tu backend en Railway.
+
+### 4. Deploy
+
+1. Haz clic en "Deploy"
+2. Vercel construirá y desplegará automáticamente
+3. Obtendrás una URL como: `https://tu-proyecto.vercel.app`
+
+### 5. Verificar
+
+1. Abre la URL de Vercel
+2. Deberías ver el dashboard del Contact Center
+3. El dashboard consumirá datos de tu API en Railway
+
+## Desarrollo Local del Frontend
+
+```bash
+# Instalar dependencias
+cd apps/cc-frontend
+npm install
+
+# Configurar .env.local
+echo "NEXT_PUBLIC_API_URL=http://localhost:3000" > .env.local
+
+# Iniciar servidor de desarrollo
+npm run dev
+```
+
+El frontend estará disponible en `http://localhost:3001` (o el puerto que Next.js asigne)
 
 ## Próximos Pasos
 
-- [ ] Implementar UI en Next.js (Vercel) consumiendo esta API
+- [x] Implementar UI en Next.js (Vercel) consumiendo esta API
 - [ ] Agregar autenticación JWT para endpoints de consola
 - [ ] Implementar métricas agregadas (endpoints de dashboard)
 - [ ] Agregar más validaciones y tests
