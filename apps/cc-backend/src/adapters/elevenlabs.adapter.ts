@@ -366,6 +366,7 @@ export class ElevenLabsAdapter {
   async syncConversation(conversationId: string): Promise<{
     recordingUrl?: string;
     transcriptText?: string;
+    transcriptId?: string;
     summary?: string;
     durationSec?: number;
     agentId?: string;
@@ -377,6 +378,7 @@ export class ElevenLabsAdapter {
     startedAt?: Date;
     endedAt?: Date;
     status?: string;
+    hangupReason?: string;
   }> {
     const details = await this.fetchCallDetails(conversationId);
     
