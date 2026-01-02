@@ -69,11 +69,15 @@ const logger = winston.createLogger({
 const prisma = new PrismaClient();
 const twilioAdapter = new TwilioAdapter();
 
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD,
+// Conectar a Redis usando REDIS_URL (formato de Railway/Upstash)
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: null, // Requerido por BullMQ
+  enableReadyCheck: false,
+  retryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
 });
 
 const worker = new Worker(
