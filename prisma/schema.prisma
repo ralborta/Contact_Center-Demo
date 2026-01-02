@@ -91,6 +91,7 @@ model Interaction {
   callDetail                CallDetail?
   otpChallenges             OtpChallenge[]
 
+  @@unique([provider, providerConversationId])
   @@index([channel, startedAt])
   @@index([status, startedAt])
   @@index([from])
