@@ -514,15 +514,21 @@ export default function InteractionDetail({
             {/* Para WhatsApp: Mostrar mensajes en formato de chat */}
             {interaction.channel === 'WHATSAPP' && interaction.messages && interaction.messages.length > 0 ? (
               <div className="space-y-4 max-h-96 overflow-y-auto">
-                {[...interaction.messages]
-                  .sort((a, b) => {
-                    // Ordenar por sentAt (cronológicamente)
-                    // Si sentAt es null, usar 0 como fallback (mensajes sin fecha al final)
-                    const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
-                    const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
-                    return dateA - dateB;
-                  })
-                  .map((message) => {
+                {(() => {
+                  // Debug: Log mensajes para verificar
+                  const inboundCount = interaction.messages.filter(m => m.direction === 'INBOUND').length;
+                  const outboundCount = interaction.messages.filter(m => m.direction === 'OUTBOUND').length;
+                  console.log(`[InteractionDetail] WhatsApp messages: Total=${interaction.messages.length}, INBOUND=${inboundCount}, OUTBOUND=${outboundCount}`, interaction.messages);
+                  
+                  return [...interaction.messages]
+                    .sort((a, b) => {
+                      // Ordenar por sentAt (cronológicamente)
+                      // Si sentAt es null, usar 0 como fallback (mensajes sin fecha al final)
+                      const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+                      const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
+                      return dateA - dateB;
+                    })
+                    .map((message) => {
                   const isInbound = message.direction === 'INBOUND'
                   const senderName = isInbound 
                     ? (interaction.customerRef || 'Cliente')
@@ -567,7 +573,8 @@ export default function InteractionDetail({
                       </div>
                     </div>
                   )
-                })}
+                });
+                })()}
               </div>
             ) : interaction.channel === 'WHATSAPP' ? (
               <p className="text-gray-500 text-sm">No hay mensajes disponibles</p>

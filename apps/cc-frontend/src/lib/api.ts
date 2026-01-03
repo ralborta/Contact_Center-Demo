@@ -113,6 +113,14 @@ export const interactionsApi = {
     try {
       const api = getApi()
       const { data } = await api.get(`/api/interactions/${id}`)
+      
+      // Debug: Log mensajes para verificar qué viene del backend
+      if (data && data.messages) {
+        const inboundCount = data.messages.filter((m: any) => m.direction === 'INBOUND').length;
+        const outboundCount = data.messages.filter((m: any) => m.direction === 'OUTBOUND').length;
+        console.log(`[API] getById: Interaction ${id} - Total messages: ${data.messages.length}, INBOUND: ${inboundCount}, OUTBOUND: ${outboundCount}`, data.messages);
+      }
+      
       return data
     } catch (error) {
       console.error('Error fetching interaction:', error)
