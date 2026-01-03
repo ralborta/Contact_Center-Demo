@@ -15,10 +15,13 @@ interface BuilderBotWebhook {
   data: {
     body?: string;
     name?: string;
-    from: string;
+    from?: string;
+    remoteJid?: string;
+    phone?: string;
     attachment?: any[];
     urlTempFile?: string;
     projectId?: string;
+    [key: string]: any; // Permitir campos adicionales
   };
 }
 
