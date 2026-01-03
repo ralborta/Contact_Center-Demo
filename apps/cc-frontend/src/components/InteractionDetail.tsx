@@ -22,11 +22,19 @@ import {
 
 interface InteractionDetailProps {
   interaction: Interaction
+  onRefresh?: () => void
 }
 
 export default function InteractionDetail({
-  interaction,
+  interaction: initialInteraction,
+  onRefresh,
 }: InteractionDetailProps) {
+  const [interaction, setInteraction] = useState(initialInteraction)
+  
+  // Actualizar cuando cambia la prop
+  useEffect(() => {
+    setInteraction(initialInteraction)
+  }, [initialInteraction])
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -665,18 +673,39 @@ export default function InteractionDetail({
                       
                       setSendingWhatsapp(true)
                       try {
-                        await whatsappApi.send(
+                        console.log('[WhatsApp] Enviando mensaje:', {
+                          providerConversationId: interaction.providerConversationId,
+                          to: interaction.from,
+                          text: whatsappMessage,
+                          interactionId: interaction.id,
+                        })
+                        
+                        const result = await whatsappApi.send(
                           interaction.providerConversationId,
                           interaction.from,
                           whatsappMessage,
                           interaction.assignedAgent || undefined
                         )
+                        
+                        console.log('[WhatsApp] ✅ Mensaje enviado exitosamente:', result)
                         setWhatsappMessage('')
-                        alert('Mensaje enviado exitosamente')
-                        // Recargar la página para ver el nuevo mensaje
-                        window.location.reload()
+                        
+                        // Refrescar la interacción para mostrar el nuevo mensaje
+                        if (onRefresh) {
+                          // Esperar un momento para que el backend procese y guarde el mensaje
+                          console.log('[WhatsApp] Esperando 1.5s antes de refrescar...')
+                          setTimeout(async () => {
+                            console.log('[WhatsApp] Refrescando interacción...')
+                            await onRefresh()
+                            console.log('[WhatsApp] Interacción refrescada')
+                          }, 1500)
+                        } else {
+                          // Fallback: recargar la página
+                          console.log('[WhatsApp] Recargando página (no hay onRefresh)')
+                          window.location.reload()
+                        }
                       } catch (error: any) {
-                        console.error('Error sending WhatsApp message:', error)
+                        console.error('[WhatsApp] ❌ Error sending WhatsApp message:', error)
                         alert(`Error al enviar mensaje: ${error.message || 'Error desconocido'}`)
                       } finally {
                         setSendingWhatsapp(false)

@@ -13,24 +13,24 @@ export default function InteractionPage() {
   const [interaction, setInteraction] = useState<Interaction | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchInteraction = async () => {
-      if (!id) {
-        setLoading(false)
-        return
-      }
-
-      try {
-        const data = await interactionsApi.getById(id)
-        setInteraction(data)
-      } catch (error) {
-        console.error('Error fetching interaction:', error)
-        setInteraction(null)
-      } finally {
-        setLoading(false)
-      }
+  const fetchInteraction = async () => {
+    if (!id) {
+      setLoading(false)
+      return
     }
 
+    try {
+      const data = await interactionsApi.getById(id)
+      setInteraction(data)
+    } catch (error) {
+      console.error('Error fetching interaction:', error)
+      setInteraction(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchInteraction()
   }, [id])
 
@@ -54,7 +54,7 @@ export default function InteractionPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="container mx-auto px-4 py-6">
-        <InteractionDetail interaction={interaction} />
+        <InteractionDetail interaction={interaction} onRefresh={fetchInteraction} />
       </div>
     </div>
   )
