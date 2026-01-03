@@ -106,6 +106,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://0.0.0.0:${port}`);
   console.log(`Swagger docs available at: http://0.0.0.0:${port}/api/docs`);
+  console.log(`[Deploy] Version: 1.0.1 - WhatsApp OUTBOUND support enabled`);
 }
 
 bootstrap();
