@@ -3,12 +3,15 @@ import {
   Post,
   Body,
   Logger,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InteractionsService } from '../interactions/interactions.service';
 import { AuditService } from '../audit/audit.service';
 import { BuilderBotAdapter } from '../adapters/builderbot.adapter';
 import { Channel, Direction, InteractionStatus, Provider } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface BuilderBotWebhook {
   eventName: string;
@@ -34,6 +37,7 @@ export class BuilderBotWebhookController {
   constructor(
     private interactionsService: InteractionsService,
     private auditService: AuditService,
+    private prisma: PrismaService,
   ) {
     this.builderBotAdapter = new BuilderBotAdapter();
   }
@@ -51,9 +55,16 @@ export class BuilderBotWebhookController {
       const { eventName, data } = payload;
 
       // Procesar mensajes entrantes (del cliente) y salientes (del bot/agente)
+      this.logger.log(`🔍 Evento recibido: ${eventName}`);
+      
       if (eventName !== 'message.incoming' && eventName !== 'message.outgoing') {
-        this.logger.log(`ℹ️ Evento ignorado: ${eventName}`);
+        this.logger.log(`ℹ️ Evento ignorado: ${eventName} (solo procesamos message.incoming y message.outgoing)`);
         return { ok: true, message: `Evento ${eventName} recibido pero no procesado` };
+      }
+      
+      // Log importante: si es message.outgoing, es un mensaje del bot automático
+      if (eventName === 'message.outgoing') {
+        this.logger.log(`🤖 IMPORTANTE: Mensaje saliente del BOT AUTOMÁTICO detectado!`);
       }
 
       const isInbound = eventName === 'message.incoming';
@@ -205,7 +216,10 @@ export class BuilderBotWebhookController {
 
       // Crear mensaje (entrante o saliente según corresponda)
       const hasAttachments = attachments.length > 0 || !!urlTempFile;
-      await this.interactionsService.createMessage({
+      
+      this.logger.log(`💾 Guardando mensaje: direction=${direction}, interactionId=${interaction.id}, text="${messageText.substring(0, 50)}..."`);
+      
+      const savedMessage = await this.interactionsService.createMessage({
         interactionId: interaction.id,
         channel: Channel.WHATSAPP,
         direction: direction,
@@ -215,8 +229,8 @@ export class BuilderBotWebhookController {
         sentAt: new Date(),
       });
 
-      this.logger.log(`💬 Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado en Interaction ${interaction.id}`);
-      this.logger.log(`📝 Detalles: direction=${direction}, text="${messageText.substring(0, 50)}...", interactionId=${interaction.id}`);
+      this.logger.log(`✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado: MessageId=${savedMessage.id}, InteractionId=${interaction.id}`);
+      this.logger.log(`📝 Detalles completos: direction=${savedMessage.direction}, text="${savedMessage.text?.substring(0, 50)}...", createdAt=${savedMessage.createdAt}`);
 
       // Crear evento con el tipo correcto
       const eventType = isInbound ? 'message.incoming' : 'message.outgoing';
@@ -280,5 +294,115 @@ export class BuilderBotWebhookController {
       this.logger.error(`❌ Error procesando webhook de BuilderBot:`, error.stack || error);
       throw error;
     }
+  }
+
+  @Get('diagnostic')
+  @ApiOperation({ summary: 'Diagnóstico: Verificar mensajes OUTBOUND del bot' })
+  async diagnostic(@Query('phone') phone?: string) {
+    this.logger.log(`🔬 Ejecutando diagnóstico para mensajes OUTBOUND del bot`);
+    
+    try {
+      // Buscar todas las interacciones de WhatsApp
+      const interactions = await this.prisma.interaction.findMany({
+        where: {
+          channel: Channel.WHATSAPP,
+          provider: Provider.BUILDERBOT,
+          ...(phone ? {
+            OR: [
+              { providerConversationId: { contains: phone } },
+              { from: { contains: phone } },
+              { to: { contains: phone } },
+            ],
+          } : {}),
+        },
+        include: {
+          messages: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      });
+
+      const results = interactions.map(interaction => {
+        const totalMessages = interaction.messages.length;
+        const inboundMessages = interaction.messages.filter(m => m.direction === 'INBOUND');
+        const outboundMessages = interaction.messages.filter(m => m.direction === 'OUTBOUND');
+
+        return {
+          interactionId: interaction.id,
+          providerConversationId: interaction.providerConversationId,
+          from: interaction.from,
+          to: interaction.to,
+          createdAt: interaction.createdAt,
+          totalMessages,
+          inboundCount: inboundMessages.length,
+          outboundCount: outboundMessages.length,
+          messages: interaction.messages.map(m => ({
+            id: m.id,
+            direction: m.direction,
+            text: m.text?.substring(0, 50) + (m.text && m.text.length > 50 ? '...' : ''),
+            sentAt: m.sentAt,
+            createdAt: m.createdAt,
+          })),
+        };
+      });
+
+      // Estadísticas generales
+      const allOutbound = await this.prisma.message.count({
+        where: {
+          direction: Direction.OUTBOUND,
+          interaction: {
+            channel: Channel.WHATSAPP,
+            provider: Provider.BUILDERBOT,
+          },
+        },
+      });
+
+      const allInbound = await this.prisma.message.count({
+        where: {
+          direction: Direction.INBOUND,
+          interaction: {
+            channel: Channel.WHATSAPP,
+            provider: Provider.BUILDERBOT,
+          },
+        },
+      });
+
+      return {
+        summary: {
+          totalOutboundMessages: allOutbound,
+          totalInboundMessages: allInbound,
+          totalInteractions: interactions.length,
+        },
+        interactions: results,
+        message: phone 
+          ? `Diagnóstico para número: ${phone}` 
+          : 'Diagnóstico general - últimas 10 interacciones',
+      };
+    } catch (error) {
+      this.logger.error(`❌ Error en diagnóstico:`, error);
+      throw error;
+    }
+  }
+
+  @Post('test-outgoing')
+  @ApiOperation({ summary: 'TEST: Simular webhook de message.outgoing del bot' })
+  async testOutgoing(
+    @Body() body: { phone: string; message: string },
+  ) {
+    this.logger.log(`🧪 TEST: Simulando webhook message.outgoing para ${body.phone}`);
+    
+    const testPayload: BuilderBotWebhook = {
+      eventName: 'message.outgoing',
+      data: {
+        body: body.message,
+        to: body.phone,
+        remoteJid: `${body.phone.replace('+', '')}@s.whatsapp.net`,
+        phone: body.phone,
+      },
+    };
+
+    return this.handleWhatsAppWebhook(testPayload);
   }
 }
