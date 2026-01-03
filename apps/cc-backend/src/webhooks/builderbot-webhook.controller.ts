@@ -59,15 +59,41 @@ export class BuilderBotWebhookController {
       const isInbound = eventName === 'message.incoming';
       const direction = isInbound ? Direction.INBOUND : Direction.OUTBOUND;
 
-      this.logger.log(`✅ Procesando mensaje ${isInbound ? 'entrante' : 'saliente'}. Data recibida: ${JSON.stringify(data)}`);
+      this.logger.log(`═══════════════════════════════════════════════════════`);
+      this.logger.log(`📩 WEBHOOK BUILDERBOT: ${isInbound ? 'MENSAJE ENTRANTE (cliente)' : 'MENSAJE SALIENTE (bot automático)'}`);
+      this.logger.log(`═══════════════════════════════════════════════════════`);
+      this.logger.log(`EventName: ${eventName}`);
+      this.logger.log(`Data completa: ${JSON.stringify(data, null, 2)}`);
       
       const messageText = data.body || '';
       
       // Para mensajes entrantes: el cliente envía (from = cliente)
-      // Para mensajes salientes: el bot/agente envía (to = cliente)
-      const customerPhone = isInbound 
-        ? (data.from || data.remoteJid?.split('@')[0] || data.phone || 'unknown')
-        : (data.to || data.remoteJid?.split('@')[0] || data.phone || 'unknown');
+      // Para mensajes salientes: el bot/agente envía (to = cliente, o puede venir en remoteJid)
+      let customerPhone: string;
+      
+      if (isInbound) {
+        // Mensaje entrante: el cliente envía
+        customerPhone = data.from || data.remoteJid?.split('@')[0] || data.phone || 'unknown';
+      } else {
+        // Mensaje saliente del bot: el destinatario es el cliente
+        // Puede venir en 'to', 'remoteJid', o necesitamos extraerlo del jid
+        customerPhone = data.to || 
+                       data.remoteJid?.split('@')[0] || 
+                       data.phone || 
+                       (data.remoteJid ? data.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '') : null) ||
+                       'unknown';
+        
+        // Si no encontramos el número, intentar extraer del remoteJid completo
+        if (customerPhone === 'unknown' && data.remoteJid) {
+          const jidParts = data.remoteJid.split('@');
+          if (jidParts.length > 0) {
+            customerPhone = jidParts[0];
+          }
+        }
+      }
+      
+      this.logger.log(`📞 Número extraído: ${customerPhone} (${isInbound ? 'INBOUND - del cliente' : 'OUTBOUND - del bot automático'})`);
+      this.logger.log(`📋 Campos disponibles: from=${data.from}, to=${data.to}, remoteJid=${data.remoteJid}, phone=${data.phone}`);
       
       const customerName = data.name;
       const attachments = data.attachment || [];
@@ -189,21 +215,25 @@ export class BuilderBotWebhookController {
         sentAt: new Date(),
       });
 
-      this.logger.log(`💬 Mensaje guardado en Interaction ${interaction.id}`);
+      this.logger.log(`💬 Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado en Interaction ${interaction.id}`);
+      this.logger.log(`📝 Detalles: direction=${direction}, text="${messageText.substring(0, 50)}...", interactionId=${interaction.id}`);
 
-      // Crear evento
+      // Crear evento con el tipo correcto
+      const eventType = isInbound ? 'message.incoming' : 'message.outgoing';
       await this.interactionsService.createEvent({
         interactionId: interaction.id,
-        type: 'message.incoming',
+        type: eventType,
         provider: Provider.BUILDERBOT,
         idempotencyKey,
         payload: payload as any,
       });
+      
+      this.logger.log(`📌 Evento creado: type=${eventType}`);
 
       // Audit log
       await this.auditService.log({
         actorType: 'SYSTEM',
-        action: 'wa.message.received',
+        action: isInbound ? 'wa.message.received' : 'wa.message.sent',
         entityType: 'Interaction',
         entityId: interaction.id,
         metadata: {
@@ -211,12 +241,35 @@ export class BuilderBotWebhookController {
           customerName,
           hasAttachments,
           messageLength: messageText.length,
+          direction: isInbound ? 'INBOUND' : 'OUTBOUND',
+          isBotMessage: !isInbound,
+        },
+      });
+
+      // Verificar que el mensaje se guardó correctamente
+      const messageCount = await this.interactionsService['prisma'].message.count({
+        where: { interactionId: interaction.id },
+      });
+      
+      const inboundCount = await this.interactionsService['prisma'].message.count({
+        where: { 
+          interactionId: interaction.id,
+          direction: Direction.INBOUND,
+        },
+      });
+      
+      const outboundCount = await this.interactionsService['prisma'].message.count({
+        where: { 
+          interactionId: interaction.id,
+          direction: Direction.OUTBOUND,
         },
       });
 
       this.logger.log(
-        `✅ Mensaje procesado completamente: Interaction ${interaction.id}, Customer: ${customerName || customerPhone}`,
+        `✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} procesado completamente: Interaction ${interaction.id}, Customer: ${customerName || customerPhone}`,
       );
+      this.logger.log(`📊 Estado final: Total=${messageCount}, INBOUND=${inboundCount}, OUTBOUND=${outboundCount}`);
+      this.logger.log(`═══════════════════════════════════════════════════════`);
 
       return {
         ok: true,
