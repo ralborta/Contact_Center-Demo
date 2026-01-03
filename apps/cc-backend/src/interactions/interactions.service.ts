@@ -176,20 +176,66 @@ export class InteractionsService {
     customerRef?: string;
     queue?: string;
   }) {
-    const where = data.providerConversationId
-      ? {
-          provider: data.provider as any,
-          providerConversationId: data.providerConversationId,
-        }
-      : {
+    // Si no hay providerConversationId, usar findFirst + create en lugar de upsert
+    if (!data.providerConversationId) {
+      // Buscar interacción existente por otros campos
+      const existing = await this.prisma.interaction.findFirst({
+        where: {
           provider: data.provider as any,
           from: data.from,
           to: data.to,
           channel: data.channel,
-        };
+          startedAt: data.startedAt,
+        },
+      });
 
+      if (existing) {
+        // Actualizar existente
+        return this.prisma.interaction.update({
+          where: { id: existing.id },
+          data: {
+            status: data.status,
+            startedAt: data.startedAt,
+            endedAt: data.endedAt,
+            assignedAgent: data.assignedAgent,
+            intent: data.intent,
+            outcome: data.outcome as any,
+            customerRef: data.customerRef,
+            queue: data.queue,
+            updatedAt: new Date(),
+          },
+        });
+      } else {
+        // Crear nuevo
+        return this.prisma.interaction.create({
+          data: {
+            channel: data.channel,
+            direction: data.direction,
+            provider: data.provider as any,
+            providerConversationId: data.providerConversationId,
+            from: data.from,
+            to: data.to,
+            status: data.status || InteractionStatus.NEW,
+            startedAt: data.startedAt || new Date(),
+            endedAt: data.endedAt,
+            assignedAgent: data.assignedAgent,
+            intent: data.intent,
+            outcome: data.outcome as any,
+            customerRef: data.customerRef,
+            queue: data.queue,
+          },
+        });
+      }
+    }
+
+    // Si hay providerConversationId, usar upsert con el índice único
     return this.prisma.interaction.upsert({
-      where: where as any,
+      where: {
+        provider_providerConversationId: {
+          provider: data.provider as any,
+          providerConversationId: data.providerConversationId,
+        },
+      },
       update: {
         status: data.status,
         startedAt: data.startedAt,
