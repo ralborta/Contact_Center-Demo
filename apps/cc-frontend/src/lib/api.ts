@@ -119,6 +119,23 @@ export const interactionsApi = {
       return null // Return null on error
     }
   },
+
+  getByPhone: async (phone: string): Promise<Interaction[]> => {
+    // Only execute on client side
+    if (typeof window === 'undefined') {
+      return []
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.get('/api/interactions', { 
+        params: { from: phone } 
+      })
+      return Array.isArray(data) ? data : []
+    } catch (error) {
+      console.error('Error fetching interactions by phone:', error)
+      return [] // Return empty array on error
+    }
+  },
 }
 
 export default getApi

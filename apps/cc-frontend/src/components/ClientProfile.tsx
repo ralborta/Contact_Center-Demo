@@ -1,0 +1,443 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Interaction, interactionsApi } from '@/lib/api'
+import {
+  Phone,
+  MessageSquare,
+  Mail,
+  CheckCircle,
+  Star,
+  MapPin,
+  CreditCard,
+  FileText,
+  Tag,
+  Clock,
+  Search,
+  Settings,
+  ChevronDown,
+} from 'lucide-react'
+import Link from 'next/link'
+
+interface ClientProfileProps {
+  phone: string
+}
+
+export default function ClientProfile({ phone }: ClientProfileProps) {
+  const [interactions, setInteractions] = useState<Interaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await interactionsApi.getByPhone(phone)
+        setInteractions(data || [])
+      } catch (error) {
+        console.error('Error fetching client interactions:', error)
+        setInteractions([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    const interval = setInterval(fetchData, 30000) // Refresh every 30s
+    return () => clearInterval(interval)
+  }, [phone])
+
+  // Extraer información del cliente de la primera interacción
+  const clientInfo = interactions[0]
+  const clientName = clientInfo?.customerRef || 'Cliente'
+  const clientPhone = phone
+
+  // Calcular KPIs
+  const inboundCalls = interactions.filter(
+    (i) => i.channel === 'CALL' && i.direction === 'INBOUND'
+  ).length
+  const whatsappCount = interactions.filter((i) => i.channel === 'WHATSAPP').length
+  const smsOtpCount = interactions.filter(
+    (i) => i.channel === 'SMS' && i.intent?.includes('OTP')
+  ).length
+  const resolvedCount = interactions.filter((i) => i.outcome === 'RESOLVED').length
+  const resolvedPercentage =
+    interactions.length > 0 ? Math.round((resolvedCount / interactions.length) * 100) : 0
+
+  // Última interacción
+  const lastInteraction = interactions[0]
+  const getLastInteractionTime = () => {
+    if (!lastInteraction) return 'N/A'
+    const date = new Date(lastInteraction.startedAt || lastInteraction.createdAt)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 60) return `hace ${diffMins} min`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `hace ${diffHours} h`
+    const diffDays = Math.floor(diffHours / 24)
+    return `hace ${diffDays} días`
+  }
+
+  const formatDate = (date: string | null) => {
+    if (!date) return 'N/A'
+    return new Date(date).toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const formatTime = (date: string | null) => {
+    if (!date) return 'N/A'
+    return new Date(date).toLocaleTimeString('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return 'N/A'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}m ${secs}s`
+  }
+
+  const getChannelIcon = (channel: string) => {
+    switch (channel) {
+      case 'CALL':
+        return <Phone className="w-5 h-5 text-blue-600" />
+      case 'WHATSAPP':
+        return <MessageSquare className="w-5 h-5 text-green-600" />
+      case 'SMS':
+        return <Mail className="w-5 h-5 text-blue-500" />
+      default:
+        return <Phone className="w-5 h-5" />
+    }
+  }
+
+  const getChannelLabel = (interaction: Interaction) => {
+    if (interaction.channel === 'CALL') {
+      return `ElevenLabs Voice ${interaction.callDetail?.durationSec ? formatDuration(interaction.callDetail.durationSec) : ''}`
+    }
+    if (interaction.channel === 'WHATSAPP') {
+      return `WhatsApp ${interaction.intent || 'Consulta'}`
+    }
+    if (interaction.channel === 'SMS') {
+      return `SMS OTP ${interaction.intent || 'Confirmación'}`
+    }
+    return interaction.channel
+  }
+
+  // Filtrar interacciones por búsqueda
+  const filteredInteractions = interactions.filter((interaction) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      interaction.id.toLowerCase().includes(query) ||
+      interaction.intent?.toLowerCase().includes(query) ||
+      interaction.customerRef?.toLowerCase().includes(query) ||
+      interaction.assignedAgent?.toLowerCase().includes(query)
+    )
+  })
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-lg">Cargando perfil del cliente...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Contenido Principal */}
+      <div className="container mx-auto px-6 py-6">
+        {/* Perfil del Cliente - Card Superior */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-6">
+              {/* Avatar */}
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                {clientName.charAt(0).toUpperCase()}
+              </div>
+              
+              {/* Información del Cliente */}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{clientName}</h2>
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <Phone className="w-4 h-4" />
+                    <span>{clientPhone}</span>
+                  </div>
+                  <span>DNI: {clientName.split(' ')[1] || 'N/A'}</span>
+                </div>
+              </div>
+
+              {/* Badge Cliente Preferente */}
+              <div className="flex items-center gap-2 bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                <Star className="w-4 h-4 fill-current" />
+                <span className="text-sm font-medium">Cliente Preferente</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Última Interacción */}
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Clock className="w-4 h-4" />
+                <span>Última interacción: {getLastInteractionTime()}</span>
+              </div>
+
+              {/* Botón Gestionar Cliente */}
+              <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                <Settings className="w-4 h-4" />
+                <span>Gestionar Cliente</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs y Búsqueda */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="grid grid-cols-4 gap-4 flex-1">
+            {/* KPI: Llamadas Inbound */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Llamadas Inbound</p>
+                  <p className="text-2xl font-bold text-gray-900">{inboundCalls}</p>
+                </div>
+                <Phone className="w-8 h-8 text-yellow-500" />
+              </div>
+            </div>
+
+            {/* KPI: WhatsApps */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">WhatsApps</p>
+                  <p className="text-2xl font-bold text-gray-900">{whatsappCount}</p>
+                </div>
+                <MessageSquare className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+
+            {/* KPI: SMS OTP Confirmados */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">SMS OTP Confirmados</p>
+                  <p className="text-2xl font-bold text-gray-900">{smsOtpCount}</p>
+                </div>
+                <Mail className="w-8 h-8 text-blue-500" />
+              </div>
+            </div>
+
+            {/* KPI: Interacciones Resueltas */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Interacciones Resueltas</p>
+                  <p className="text-2xl font-bold text-gray-900">{resolvedPercentage}%</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          {/* Búsqueda */}
+          <div className="ml-6 flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar interacción..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <select className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option>Mostrar</option>
+              <option>Todas</option>
+              <option>Últimas 24h</option>
+              <option>Última semana</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sidebar Izquierdo */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Perfil del Cliente */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4">Perfil del Cliente</h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-700">Sucursal: Centro N°003</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CreditCard className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-700">Cuenta: Caja de Ahorro</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CreditCard className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-700">Productos: Tarjeta de Crédito</span>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
+                  <span className="text-gray-700">
+                    Notas: Cliente preprobado para crédito.
+                  </span>
+                </div>
+                <button className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors mt-4">
+                  <Settings className="w-4 h-4" />
+                  <span>Gestionar Cliente</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Etiquetas */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4">Etiquetas</h3>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
+                  Preferente
+                </span>
+                <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm font-medium">
+                  Posible fraude
+                </span>
+              </div>
+              <button className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                <Tag className="w-4 h-4" />
+                <span>+ Agregar etiqueta</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de Interacciones */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold">Últimas Interacciones</h3>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-500" />
+                  <select className="text-sm text-gray-600 border-none bg-transparent">
+                    <option>Ordenar</option>
+                  </select>
+                  <span className="text-sm text-gray-500">
+                    {new Date().toLocaleDateString('es-AR')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {filteredInteractions.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">
+                    No hay interacciones para este cliente
+                  </p>
+                ) : (
+                  filteredInteractions.map((interaction) => (
+                    <Link
+                      key={interaction.id}
+                      href={`/interaction/${interaction.id}`}
+                      className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Icono del Canal */}
+                        <div className="flex-shrink-0">{getChannelIcon(interaction.channel)}</div>
+
+                        {/* Contenido */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm text-gray-600">
+                              {formatTime(interaction.startedAt || interaction.createdAt)}{' '}
+                              {formatDate(interaction.startedAt || interaction.createdAt)}
+                            </span>
+                            <span className="text-sm font-medium text-gray-800">
+                              {getChannelLabel(interaction)}
+                            </span>
+                          </div>
+
+                          {/* Información del Cliente */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                              {clientName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-medium text-gray-800">
+                              {clientName}
+                            </span>
+                            {interaction.channel === 'CALL' && interaction.callDetail?.durationSec && (
+                              <span className="text-xs text-gray-500">
+                                Duración: {formatDuration(interaction.callDetail.durationSec)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Mensajes/Transcripción Preview */}
+                          {interaction.channel === 'WHATSAPP' && interaction.messages && (
+                            <div className="text-sm text-gray-600 space-y-1 mb-2">
+                              {interaction.messages.slice(0, 2).map((msg) => (
+                                <div key={msg.id}>
+                                  <span className="font-medium">
+                                    {msg.direction === 'INBOUND' ? clientName : interaction.assignedAgent || 'Sistema'}
+                                    :
+                                  </span>{' '}
+                                  {msg.text?.substring(0, 80)}
+                                  {msg.text && msg.text.length > 80 ? '...' : ''}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Tags y Estado */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                interaction.channel === 'CALL'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : interaction.channel === 'WHATSAPP'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {interaction.channel === 'CALL'
+                                ? 'Llamada'
+                                : interaction.channel === 'WHATSAPP'
+                                ? 'WhatsApp'
+                                : 'SMS'}
+                            </span>
+                            {interaction.intent && (
+                              <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
+                                {interaction.intent}
+                              </span>
+                            )}
+                            {interaction.assignedAgent && (
+                              <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
+                                {interaction.assignedAgent}
+                              </span>
+                            )}
+                            {interaction.outcome === 'RESOLVED' && (
+                              <div className="ml-auto flex items-center gap-1 text-green-600">
+                                <CheckCircle className="w-4 h-4" />
+                                <span className="text-sm font-medium">Resuelta</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
