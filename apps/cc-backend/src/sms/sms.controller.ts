@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Logger, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InteractionsService } from '../interactions/interactions.service';
 import { AuditService } from '../audit/audit.service';
@@ -9,6 +9,7 @@ import { Channel, Direction, InteractionStatus, Provider, OtpPurpose } from '@pr
 @ApiTags('SMS')
 @Controller('sms')
 export class SmsController {
+  private readonly logger = new Logger(SmsController.name);
   private readonly twilioAdapter: TwilioAdapter;
 
   constructor(
@@ -24,6 +25,12 @@ export class SmsController {
   async sendSms(
     @Body() body: { to: string; message: string; customerRef?: string },
   ) {
+    if (!body.to || !body.message) {
+      throw new BadRequestException('to y message son requeridos');
+    }
+
+    this.logger.log(`📤 Enviando SMS personalizado a ${body.to}`);
+
     const result = await this.twilioAdapter.sendSms(body.to, body.message);
 
     // Buscar o crear Interaction
@@ -56,6 +63,8 @@ export class SmsController {
       metadata: { messageId: result.providerMessageId, type: 'custom' },
     });
 
+    this.logger.log(`✅ SMS enviado exitosamente: Interaction ${interaction.id}, MessageId: ${result.providerMessageId}`);
+
     return { success: true, messageId: result.providerMessageId, interactionId: interaction.id };
   }
 
@@ -64,6 +73,12 @@ export class SmsController {
   async sendOtp(
     @Body() body: { phone: string; purpose?: OtpPurpose; customerRef?: string },
   ) {
+    if (!body.phone) {
+      throw new BadRequestException('phone es requerido');
+    }
+
+    this.logger.log(`📤 Enviando código OTP a ${body.phone}`);
+
     const correlationId = `otp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const result = await this.otpService.createOtp({
@@ -71,6 +86,8 @@ export class SmsController {
       purpose: body.purpose || OtpPurpose.IDENTITY_VERIFICATION,
       correlationId,
     });
+
+    this.logger.log(`✅ OTP creado y encolado: CorrelationId ${result.correlationId}, InteractionId ${result.interactionId}`);
 
     return {
       success: true,
@@ -84,6 +101,12 @@ export class SmsController {
   async sendVerificationLink(
     @Body() body: { to: string; customerRef?: string },
   ) {
+    if (!body.to) {
+      throw new BadRequestException('to es requerido');
+    }
+
+    this.logger.log(`📤 Enviando link de verificación a ${body.to}`);
+
     const verificationToken = `verify-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const verificationUrl = `${process.env.FRONTEND_URL || 'https://tu-frontend.vercel.app'}/verify/${verificationToken}`;
     
@@ -101,6 +124,12 @@ export class SmsController {
   async sendOnboardingLink(
     @Body() body: { to: string; customerRef?: string },
   ) {
+    if (!body.to) {
+      throw new BadRequestException('to es requerido');
+    }
+
+    this.logger.log(`📤 Enviando link de onboarding a ${body.to}`);
+
     const onboardingToken = `onboard-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const onboardingUrl = `${process.env.FRONTEND_URL || 'https://tu-frontend.vercel.app'}/onboarding/${onboardingToken}`;
     
@@ -118,6 +147,12 @@ export class SmsController {
   async sendActivateCard(
     @Body() body: { to: string; customerRef?: string },
   ) {
+    if (!body.to) {
+      throw new BadRequestException('to es requerido');
+    }
+
+    this.logger.log(`📤 Enviando instructivo de activación de tarjeta a ${body.to}`);
+
     const message = `Para activar tu tarjeta bancaria, llamá al 0800-XXX-XXXX o ingresá a www.tubanco.com.ar/activar-tarjeta`;
 
     return this.sendSms({

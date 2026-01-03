@@ -38,17 +38,44 @@ export class TwilioAdapter {
 
   async sendSms(to: string, body: string): Promise<{ providerMessageId: string }> {
     if (!this.client) {
-      throw new Error('Twilio client not initialized');
+      throw new Error('Twilio client not initialized. Verifica TWILIO_ACCOUNT_SID y TWILIO_AUTH_TOKEN');
     }
 
-    const message = await this.client.messages.create({
-      body,
-      from: this.fromNumber,
-      to,
-    });
+    if (!this.fromNumber) {
+      throw new Error('TWILIO_FROM_NUMBER no configurado');
+    }
 
-    return {
-      providerMessageId: message.sid,
-    };
+    try {
+      console.log('[Twilio] Enviando SMS:', {
+        to,
+        from: this.fromNumber,
+        bodyLength: body.length,
+      });
+
+      const message = await this.client.messages.create({
+        body,
+        from: this.fromNumber,
+        to,
+      });
+
+      console.log('[Twilio] ✅ SMS enviado exitosamente:', {
+        messageSid: message.sid,
+        status: message.status,
+        to,
+      });
+
+      return {
+        providerMessageId: message.sid,
+      };
+    } catch (error: any) {
+      console.error('[Twilio] ❌ Error al enviar SMS:', {
+        to,
+        from: this.fromNumber,
+        error: error.message,
+        code: error.code,
+        status: error.status,
+      });
+      throw new Error(`Error al enviar SMS vía Twilio: ${error.message}`);
+    }
   }
 }
