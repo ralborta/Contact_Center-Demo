@@ -2,11 +2,9 @@ import {
   Controller,
   Post,
   Body,
-  Headers,
-  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiHeader } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InteractionsService } from '../interactions/interactions.service';
 import { AuditService } from '../audit/audit.service';
 import { BuilderBotAdapter } from '../adapters/builderbot.adapter';
@@ -39,21 +37,12 @@ export class BuilderBotWebhookController {
 
   @Post('whatsapp')
   @ApiOperation({ summary: 'Webhook para mensajes entrantes de BuilderBot' })
-  @ApiHeader({ name: 'X-Webhook-Token', required: false })
   async handleWhatsAppWebhook(
     @Body() payload: BuilderBotWebhook,
-    @Headers('x-webhook-token') token?: string,
   ) {
     this.logger.log(
       `📩 Webhook recibido de BuilderBot: ${JSON.stringify(payload)}`,
     );
-
-    // Validar token si está configurado
-    const expectedToken = process.env.BUILDERBOT_WEBHOOK_TOKEN;
-    if (expectedToken && token !== expectedToken) {
-      this.logger.warn('❌ Token de webhook inválido');
-      throw new UnauthorizedException('Token inválido');
-    }
 
     const { eventName, data } = payload;
 

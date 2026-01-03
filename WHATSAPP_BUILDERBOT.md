@@ -15,7 +15,6 @@ Agrega estas variables en Railway (servicio `cc-backend`):
 BUILDERBOT_BOT_ID=tu_bot_id           # ID del bot en BuilderBot.cloud
 BUILDERBOT_API_KEY=tu_api_key         # API Key de tu cuenta
 BUILDERBOT_BASE_URL=https://app.builderbot.cloud  # URL base (opcional, este es el default)
-BUILDERBOT_WEBHOOK_TOKEN=tu_token_secreto  # Token para validar webhooks (elige uno)
 ```
 
 ### ¿Dónde encontrar estos valores?
@@ -25,9 +24,9 @@ BUILDERBOT_WEBHOOK_TOKEN=tu_token_secreto  # Token para validar webhooks (elige 
    - Settings → API Keys
    - Copia el Bot ID y crea/copia un API Key
 
-2. **BUILDERBOT_WEBHOOK_TOKEN**:
-   - Genera un token aleatorio fuerte (ej: `openssl rand -hex 32`)
-   - Este mismo token lo configurarás en BuilderBot.cloud
+2. **BUILDERBOT_BASE_URL** (opcional):
+   - Solo si BuilderBot.cloud cambió su dominio
+   - Default: `https://app.builderbot.cloud`
 
 ---
 
@@ -37,8 +36,9 @@ BUILDERBOT_WEBHOOK_TOKEN=tu_token_secreto  # Token para validar webhooks (elige 
 2. **Settings → Webhooks**
 3. **Configura:**
    - **URL:** `https://tu-backend-railway.up.railway.app/api/webhooks/builderbot/whatsapp`
-   - **Header:** `X-Webhook-Token: tu_token_secreto` (el mismo que pusiste en Railway)
    - **Events:** Selecciona `message.incoming`
+
+**Nota:** BuilderBot.cloud NO requiere autenticación especial para webhooks, solo la URL.
 
 ---
 
@@ -131,7 +131,6 @@ Abre el dashboard y busca la interacción de WhatsApp en la tabla.
 ### Webhook (Recibir)
 ```
 POST /api/webhooks/builderbot/whatsapp
-Header: X-Webhook-Token: <tu_token>
 Body: (payload de BuilderBot.cloud)
 ```
 
@@ -221,7 +220,10 @@ apps/cc-backend/src/
 
 ## ✅ Checklist de Deployment
 
-- [ ] Variables de entorno configuradas en Railway
+- [ ] Variables de entorno configuradas en Railway:
+  - [ ] `BUILDERBOT_BOT_ID`
+  - [ ] `BUILDERBOT_API_KEY`
+  - [ ] `BUILDERBOT_BASE_URL` (opcional)
 - [ ] Webhook configurado en BuilderBot.cloud
 - [ ] Deploy realizado en Railway
 - [ ] Mensaje de prueba enviado por WhatsApp

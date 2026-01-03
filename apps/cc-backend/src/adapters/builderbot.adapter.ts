@@ -1,18 +1,12 @@
 export class BuilderBotAdapter {
-  private readonly webhookToken: string;
   private readonly apiBaseUrl: string;
   private readonly apiKey: string;
   private readonly botId: string;
 
   constructor() {
-    this.webhookToken = process.env.BUILDERBOT_WEBHOOK_TOKEN || '';
     this.apiBaseUrl = process.env.BUILDERBOT_BASE_URL || 'https://app.builderbot.cloud';
     this.apiKey = process.env.BUILDERBOT_API_KEY || '';
     this.botId = process.env.BUILDERBOT_BOT_ID || '';
-  }
-
-  verifyToken(token: string): boolean {
-    return token === this.webhookToken;
   }
 
   normalizePayload(payload: any): {
