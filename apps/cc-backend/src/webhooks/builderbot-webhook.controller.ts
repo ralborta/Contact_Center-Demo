@@ -53,18 +53,27 @@ export class BuilderBotWebhookController {
         return { ok: true, message: `Evento ${eventName} recibido pero no procesado` };
       }
 
-      this.logger.log(`✅ Procesando mensaje entrante de ${data.from}`);
+      this.logger.log(`✅ Procesando mensaje entrante. Data recibida: ${JSON.stringify(data)}`);
       
       const messageText = data.body || '';
-      const customerPhone = data.from;
+      // Extraer número de teléfono - puede venir en diferentes campos
+      const customerPhone = data.from || data.remoteJid?.split('@')[0] || data.phone || 'unknown';
       const customerName = data.name;
       const attachments = data.attachment || [];
       const urlTempFile = data.urlTempFile;
+
+      // Validar que tenemos un número de teléfono válido
+      if (!customerPhone || customerPhone === 'unknown') {
+        this.logger.error(`❌ No se pudo extraer número de teléfono del payload: ${JSON.stringify(data)}`);
+        return { ok: false, error: 'Número de teléfono no encontrado en el payload' };
+      }
 
       if (!messageText && attachments.length === 0 && !urlTempFile) {
         this.logger.warn('⚠️ Mensaje sin contenido, ignorado');
         return { ok: true, message: 'Mensaje vacío ignorado' };
       }
+
+      this.logger.log(`📞 Teléfono extraído: ${customerPhone}`);
 
       // Generar messageId único (idempotencia)
       const messageId = `${customerPhone}-${Date.now()}`;
@@ -91,13 +100,14 @@ export class BuilderBotWebhookController {
       const providerConversationId = customerPhone;
 
       this.logger.log(`💾 Creando/actualizando interacción para ${customerPhone}`);
+      this.logger.log(`📋 Datos para upsert: from=${customerPhone}, to=system, providerConversationId=${providerConversationId}`);
 
       const interaction = await this.interactionsService.upsertInteraction({
         channel: Channel.WHATSAPP,
         direction: Direction.INBOUND,
         provider: Provider.BUILDERBOT,
-        providerConversationId,
-        from: customerPhone,
+        providerConversationId: providerConversationId, // Asegurar que no sea undefined
+        from: customerPhone, // Asegurar que no sea undefined
         to: 'system', // El número del negocio (podría venir en process.env)
         status: InteractionStatus.IN_PROGRESS,
         customerRef: customerName,
