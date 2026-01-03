@@ -514,7 +514,14 @@ export default function InteractionDetail({
             {/* Para WhatsApp: Mostrar mensajes en formato de chat */}
             {interaction.channel === 'WHATSAPP' && interaction.messages && interaction.messages.length > 0 ? (
               <div className="space-y-4 max-h-96 overflow-y-auto">
-                {interaction.messages.map((message) => {
+                {[...interaction.messages]
+                  .sort((a, b) => {
+                    // Ordenar por sentAt o createdAt (cronológicamente)
+                    const dateA = a.sentAt ? new Date(a.sentAt).getTime() : new Date(a.createdAt).getTime();
+                    const dateB = b.sentAt ? new Date(b.sentAt).getTime() : new Date(b.createdAt).getTime();
+                    return dateA - dateB;
+                  })
+                  .map((message) => {
                   const isInbound = message.direction === 'INBOUND'
                   const senderName = isInbound 
                     ? (interaction.customerRef || 'Cliente')

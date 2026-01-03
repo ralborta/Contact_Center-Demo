@@ -50,17 +50,25 @@ export class BuilderBotWebhookController {
 
       const { eventName, data } = payload;
 
-      // Solo procesar mensajes entrantes
-      if (eventName !== 'message.incoming') {
+      // Procesar mensajes entrantes (del cliente) y salientes (del bot/agente)
+      if (eventName !== 'message.incoming' && eventName !== 'message.outgoing') {
         this.logger.log(`ℹ️ Evento ignorado: ${eventName}`);
         return { ok: true, message: `Evento ${eventName} recibido pero no procesado` };
       }
 
-      this.logger.log(`✅ Procesando mensaje entrante. Data recibida: ${JSON.stringify(data)}`);
+      const isInbound = eventName === 'message.incoming';
+      const direction = isInbound ? Direction.INBOUND : Direction.OUTBOUND;
+
+      this.logger.log(`✅ Procesando mensaje ${isInbound ? 'entrante' : 'saliente'}. Data recibida: ${JSON.stringify(data)}`);
       
       const messageText = data.body || '';
-      // Extraer número de teléfono - puede venir en diferentes campos
-      const customerPhone = data.from || data.remoteJid?.split('@')[0] || data.phone || 'unknown';
+      
+      // Para mensajes entrantes: el cliente envía (from = cliente)
+      // Para mensajes salientes: el bot/agente envía (to = cliente)
+      const customerPhone = isInbound 
+        ? (data.from || data.remoteJid?.split('@')[0] || data.phone || 'unknown')
+        : (data.to || data.remoteJid?.split('@')[0] || data.phone || 'unknown');
+      
       const customerName = data.name;
       const attachments = data.attachment || [];
       const urlTempFile = data.urlTempFile;
@@ -76,10 +84,10 @@ export class BuilderBotWebhookController {
         return { ok: true, message: 'Mensaje vacío ignorado' };
       }
 
-      this.logger.log(`📞 Teléfono extraído: ${customerPhone}`);
+      this.logger.log(`📞 Teléfono extraído: ${customerPhone} (${isInbound ? 'INBOUND' : 'OUTBOUND'})`);
 
       // Generar messageId único (idempotencia)
-      const messageId = `${customerPhone}-${Date.now()}`;
+      const messageId = data.id || `${customerPhone}-${Date.now()}-${isInbound ? 'in' : 'out'}`;
       const idempotencyKey = `builderbot-${messageId}`;
 
       this.logger.log(`🔑 idempotencyKey: ${idempotencyKey}`);
@@ -103,27 +111,40 @@ export class BuilderBotWebhookController {
       const providerConversationId = customerPhone;
 
       this.logger.log(`💾 Creando/actualizando interacción para ${customerPhone}`);
-      this.logger.log(`📋 Datos para upsert: from=${customerPhone}, to=system, providerConversationId=${providerConversationId}`);
+      this.logger.log(`📋 Datos para upsert: from=${isInbound ? customerPhone : 'system'}, to=${isInbound ? 'system' : customerPhone}, providerConversationId=${providerConversationId}`);
 
-      const interaction = await this.interactionsService.upsertInteraction({
-        channel: Channel.WHATSAPP,
-        direction: Direction.INBOUND,
-        provider: Provider.BUILDERBOT,
-        providerConversationId: providerConversationId, // Asegurar que no sea undefined
-        from: customerPhone, // Asegurar que no sea undefined
-        to: 'system', // El número del negocio (podría venir en process.env)
-        status: InteractionStatus.IN_PROGRESS,
-        customerRef: customerName,
+      // Buscar interacción existente primero
+      let interaction = await this.interactionsService['prisma'].interaction.findUnique({
+        where: {
+          provider_providerConversationId: {
+            provider: Provider.BUILDERBOT,
+            providerConversationId: providerConversationId,
+          },
+        },
       });
+
+      // Si no existe, crear una nueva
+      if (!interaction) {
+        interaction = await this.interactionsService.upsertInteraction({
+          channel: Channel.WHATSAPP,
+          direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
+          provider: Provider.BUILDERBOT,
+          providerConversationId: providerConversationId,
+          from: isInbound ? customerPhone : 'system',
+          to: isInbound ? 'system' : customerPhone,
+          status: InteractionStatus.IN_PROGRESS,
+          customerRef: customerName,
+        });
+      }
 
       this.logger.log(`✅ Interaction creada/actualizada: ${interaction.id}`);
 
-      // Crear mensaje entrante
+      // Crear mensaje (entrante o saliente según corresponda)
       const hasAttachments = attachments.length > 0 || !!urlTempFile;
       await this.interactionsService.createMessage({
         interactionId: interaction.id,
         channel: Channel.WHATSAPP,
-        direction: Direction.INBOUND,
+        direction: direction,
         providerMessageId: messageId,
         text: messageText || (hasAttachments ? '[Archivo adjunto]' : null),
         mediaUrl: urlTempFile || (attachments[0]?.url),
