@@ -1,24 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Phone, MessageSquare, Mail, Bell, User, Users } from 'lucide-react'
 
 export default function Header() {
   const pathname = usePathname()
-  const router = useRouter()
-  const [showClientSearch, setShowClientSearch] = useState(false)
-  const [clientPhone, setClientPhone] = useState('')
-
-  const handleClientSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (clientPhone.trim()) {
-      router.push(`/cliente/${encodeURIComponent(clientPhone.trim())}`)
-      setShowClientSearch(false)
-      setClientPhone('')
-    }
-  }
 
   return (
     <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-xl">
@@ -82,8 +69,8 @@ export default function Header() {
               <Mail className="w-4 h-4" />
               <span className="text-sm font-medium">SMS</span>
             </Link>
-            <button
-              onClick={() => setShowClientSearch(true)}
+            <Link
+              href="/cliente"
               className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all ${
                 pathname?.startsWith('/cliente')
                   ? 'bg-white/20 backdrop-blur-sm shadow-md'
@@ -92,7 +79,7 @@ export default function Header() {
             >
               <Users className="w-4 h-4" />
               <span className="text-sm font-medium">Cliente</span>
-            </button>
+            </Link>
             <div className="h-6 w-px bg-white/30 mx-2" />
             <button className="p-2 hover:bg-white/10 rounded-lg transition-all relative">
               <Bell className="w-5 h-5" />
@@ -104,48 +91,6 @@ export default function Header() {
           </nav>
         </div>
       </div>
-
-      {/* Modal de Búsqueda de Cliente */}
-      {showClientSearch && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-semibold mb-4">Buscar Cliente</h2>
-            <form onSubmit={handleClientSearch}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Número de Teléfono
-                </label>
-                <input
-                  type="tel"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="+54 11 1234 5678"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Buscar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowClientSearch(false)
-                    setClientPhone('')
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </header>
   )
 }
