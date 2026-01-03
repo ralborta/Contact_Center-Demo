@@ -516,9 +516,10 @@ export default function InteractionDetail({
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {[...interaction.messages]
                   .sort((a, b) => {
-                    // Ordenar por sentAt o createdAt (cronológicamente)
-                    const dateA = a.sentAt ? new Date(a.sentAt).getTime() : new Date(a.createdAt).getTime();
-                    const dateB = b.sentAt ? new Date(b.sentAt).getTime() : new Date(b.createdAt).getTime();
+                    // Ordenar por sentAt (cronológicamente)
+                    // Si sentAt es null, usar 0 como fallback (mensajes sin fecha al final)
+                    const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+                    const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
                     return dateA - dateB;
                   })
                   .map((message) => {
