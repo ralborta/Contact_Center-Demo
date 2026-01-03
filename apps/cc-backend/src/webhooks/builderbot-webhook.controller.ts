@@ -79,7 +79,11 @@ export class BuilderBotWebhookController {
       const messageText = data.body || '';
       
       // Para mensajes entrantes: el cliente envía (from = cliente)
-      // Para mensajes salientes: el bot/agente envía (to = cliente, o puede venir en remoteJid)
+      // Para mensajes salientes: el bot/agente envía
+      // IMPORTANTE: En message.outgoing, el número del cliente puede estar en:
+      // - data.from (el cliente es el destinatario)
+      // - data.respMessage.key.remoteJid (dentro de la respuesta)
+      // - data.to (menos común)
       let customerPhone: string;
       
       if (isInbound) {
@@ -87,24 +91,57 @@ export class BuilderBotWebhookController {
         customerPhone = data.from || data.remoteJid?.split('@')[0] || data.phone || 'unknown';
       } else {
         // Mensaje saliente del bot: el destinatario es el cliente
-        // Puede venir en 'to', 'remoteJid', o necesitamos extraerlo del jid
-        customerPhone = data.to || 
-                       data.remoteJid?.split('@')[0] || 
-                       data.phone || 
-                       (data.remoteJid ? data.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '') : null) ||
-                       'unknown';
+        // IMPORTANTE: En BuilderBot, para message.outgoing, el número puede estar en:
+        // 1. data.from (el cliente que recibe el mensaje)
+        // 2. data.respMessage.key.remoteJid (dentro de la estructura de respuesta)
+        // 3. data.to (menos común)
+        // 4. data.remoteJid (nivel raíz, menos común)
         
-        // Si no encontramos el número, intentar extraer del remoteJid completo
-        if (customerPhone === 'unknown' && data.remoteJid) {
-          const jidParts = data.remoteJid.split('@');
-          if (jidParts.length > 0) {
-            customerPhone = jidParts[0];
+        // Primero intentar desde respMessage.key.remoteJid (estructura anidada de BuilderBot)
+        if (data.respMessage?.key?.remoteJid) {
+          const remoteJid = data.respMessage.key.remoteJid;
+          customerPhone = remoteJid.split('@')[0];
+          this.logger.log(`📞 Número extraído desde respMessage.key.remoteJid: ${customerPhone}`);
+        }
+        
+        // Si no se encontró, intentar desde from (para message.outgoing, from es el destinatario)
+        if (!customerPhone || customerPhone === 'unknown') {
+          customerPhone = data.from || 'unknown';
+          if (customerPhone !== 'unknown') {
+            this.logger.log(`📞 Número extraído desde from: ${customerPhone}`);
+          }
+        }
+        
+        // Si aún no se encontró, intentar desde to
+        if (!customerPhone || customerPhone === 'unknown') {
+          customerPhone = data.to || 'unknown';
+          if (customerPhone !== 'unknown') {
+            this.logger.log(`📞 Número extraído desde to: ${customerPhone}`);
+          }
+        }
+        
+        // Si aún no se encontró, intentar desde remoteJid (nivel raíz)
+        if (!customerPhone || customerPhone === 'unknown') {
+          if (data.remoteJid) {
+            customerPhone = data.remoteJid.split('@')[0];
+            this.logger.log(`📞 Número extraído desde remoteJid: ${customerPhone}`);
+          }
+        }
+        
+        // Si aún no se encontró, intentar desde phone
+        if (!customerPhone || customerPhone === 'unknown') {
+          customerPhone = data.phone || 'unknown';
+          if (customerPhone !== 'unknown') {
+            this.logger.log(`📞 Número extraído desde phone: ${customerPhone}`);
           }
         }
       }
       
       this.logger.log(`📞 Número extraído: ${customerPhone} (${isInbound ? 'INBOUND - del cliente' : 'OUTBOUND - del bot automático'})`);
       this.logger.log(`📋 Campos disponibles: from=${data.from}, to=${data.to}, remoteJid=${data.remoteJid}, phone=${data.phone}`);
+      if (data.respMessage?.key?.remoteJid) {
+        this.logger.log(`📋 respMessage.key.remoteJid=${data.respMessage.key.remoteJid}`);
+      }
       
       const customerName = data.name;
       const attachments = data.attachment || [];
