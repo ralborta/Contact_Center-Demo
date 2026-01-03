@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Interaction } from '@/lib/api'
+import { Interaction, whatsappApi } from '@/lib/api'
 import {
   Play,
   Pause,
@@ -17,6 +17,7 @@ import {
   MessageSquare,
   FileText,
   StickyNote,
+  Send,
 } from 'lucide-react'
 
 interface InteractionDetailProps {
@@ -32,6 +33,10 @@ export default function InteractionDetail({
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const audioRef = useRef<HTMLAudioElement>(null)
+  
+  // Estado para enviar mensajes WhatsApp
+  const [whatsappMessage, setWhatsappMessage] = useState('')
+  const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
 
   useEffect(() => {
     const audio = audioRef.current
@@ -637,24 +642,73 @@ export default function InteractionDetail({
             </div>
           )}
           
-          {/* Para WhatsApp: Mostrar solo el historial de mensajes en toda la columna */}
+          {/* Para WhatsApp: Formulario para enviar mensajes y detalles */}
           {interaction.channel === 'WHATSAPP' && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                Detalles de la Sesión
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-600">ID:</span>
-                  <span className="font-mono text-gray-800">{interaction.id.slice(0, 8)}</span>
+            <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
+              {/* Formulario para enviar mensaje */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-green-600" />
+                  Enviar Mensaje
+                </h3>
+                <div className="space-y-3">
+                  <textarea
+                    value={whatsappMessage}
+                    onChange={(e) => setWhatsappMessage(e.target.value)}
+                    placeholder="Escribí tu mensaje..."
+                    className="w-full border border-gray-300 rounded-lg p-3 min-h-24 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                    disabled={sendingWhatsapp}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!whatsappMessage.trim() || !interaction.providerConversationId) return
+                      
+                      setSendingWhatsapp(true)
+                      try {
+                        await whatsappApi.send(
+                          interaction.providerConversationId,
+                          interaction.from,
+                          whatsappMessage,
+                          interaction.assignedAgent || undefined
+                        )
+                        setWhatsappMessage('')
+                        alert('Mensaje enviado exitosamente')
+                        // Recargar la página para ver el nuevo mensaje
+                        window.location.reload()
+                      } catch (error: any) {
+                        console.error('Error sending WhatsApp message:', error)
+                        alert(`Error al enviar mensaje: ${error.message || 'Error desconocido'}`)
+                      } finally {
+                        setSendingWhatsapp(false)
+                      }
+                    }}
+                    disabled={sendingWhatsapp || !whatsappMessage.trim() || !interaction.providerConversationId}
+                    className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    {sendingWhatsapp ? 'Enviando...' : 'Enviar Mensaje'}
+                  </button>
                 </div>
-                {interaction.providerConversationId && (
+              </div>
+              
+              {/* Detalles de la Sesión */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Detalles de la Sesión
+                </h3>
+                <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-600">Conversación:</span>
-                    <span className="font-mono text-gray-800">{interaction.providerConversationId.slice(0, 20)}...</span>
+                    <span className="text-gray-600">ID:</span>
+                    <span className="font-mono text-gray-800">{interaction.id.slice(0, 8)}</span>
                   </div>
-                )}
+                  {interaction.providerConversationId && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Conversación:</span>
+                      <span className="font-mono text-gray-800">{interaction.providerConversationId.slice(0, 20)}...</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

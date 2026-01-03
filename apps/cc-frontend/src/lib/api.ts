@@ -218,4 +218,30 @@ export const smsApi = {
   },
 }
 
+export const whatsappApi = {
+  send: async (
+    providerConversationId: string,
+    to: string,
+    text: string,
+    assignedAgent?: string
+  ): Promise<{ success: boolean; messageId?: string; interactionId?: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('WhatsApp API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post('/api/whatsapp/send', {
+        providerConversationId,
+        to,
+        text,
+        assignedAgent,
+      })
+      return data
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error)
+      throw error
+    }
+  },
+}
+
 export default getApi
