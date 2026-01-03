@@ -20,41 +20,92 @@ export class WhatsAppController {
     this.builderBotAdapter = new BuilderBotAdapter();
   }
 
+  /**
+   * Normaliza un número de teléfono al formato usado en providerConversationId
+   * Remueve espacios, guiones, paréntesis, etc.
+   */
+  private normalizePhoneNumber(phone: string): string {
+    // Remover todos los espacios, guiones, paréntesis y otros caracteres
+    let normalized = phone.replace(/[\s\-\(\)\.]/g, '');
+    
+    // Si no tiene +, agregarlo (asumiendo que es un número internacional)
+    if (!normalized.startsWith('+')) {
+      // Si empieza con 54 (Argentina), agregar +
+      if (normalized.startsWith('54')) {
+        normalized = '+' + normalized;
+      } else {
+        // Por defecto, agregar +54 para Argentina
+        normalized = '+54' + normalized;
+      }
+    }
+    
+    return normalized;
+  }
+
   @Post('send')
   @ApiOperation({ summary: 'Enviar mensaje WhatsApp vía builderbot' })
   async sendMessage(
-    @Body() body: { providerConversationId: string; to: string; text: string; assignedAgent?: string },
+    @Body() body: { providerConversationId?: string; to: string; text: string; assignedAgent?: string },
   ) {
-    this.logger.log(`📤 Enviando mensaje WhatsApp a ${body.to} (conversationId: ${body.providerConversationId})`);
+    // Normalizar el número de teléfono para que coincida con el formato usado en los mensajes entrantes
+    const normalizedTo = this.normalizePhoneNumber(body.to);
+    // Si no se proporciona providerConversationId, usar el número normalizado
+    const providerConversationId = body.providerConversationId || normalizedTo;
+
+    this.logger.log(`📤 Enviando mensaje WhatsApp a ${body.to} (normalized: ${normalizedTo}, conversationId: ${providerConversationId})`);
 
     // Enviar mensaje vía BuilderBot
     const result = await this.builderBotAdapter.sendMessage(
-      body.providerConversationId,
-      body.to,
+      providerConversationId,
+      normalizedTo,
       body.text,
     );
 
-    // Buscar interacción existente usando providerConversationId
+    // Buscar interacción existente usando providerConversationId normalizado
     // Esto agrupa todos los mensajes (INBOUND y OUTBOUND) en la misma conversación
     let interaction = await this.prisma.interaction.findUnique({
       where: {
         provider_providerConversationId: {
           provider: Provider.BUILDERBOT,
-          providerConversationId: body.providerConversationId,
+          providerConversationId: providerConversationId,
         },
       },
     });
 
+    // Si no se encuentra, intentar buscar por el número normalizado sin el +
+    if (!interaction && providerConversationId.startsWith('+')) {
+      const withoutPlus = providerConversationId.substring(1);
+      interaction = await this.prisma.interaction.findUnique({
+        where: {
+          provider_providerConversationId: {
+            provider: Provider.BUILDERBOT,
+            providerConversationId: withoutPlus,
+          },
+        },
+      });
+      
+      // Si se encuentra con el formato sin +, actualizar para usar el formato con +
+      if (interaction) {
+        this.logger.log(`⚠️ Encontrada interacción con formato sin +, actualizando providerConversationId`);
+        interaction = await this.prisma.interaction.update({
+          where: { id: interaction.id },
+          data: {
+            providerConversationId: providerConversationId,
+          },
+        });
+      }
+    }
+
     // Si no existe, crear una nueva interacción
     if (!interaction) {
-      this.logger.log(`📝 Creando nueva interacción para ${body.providerConversationId}`);
+      this.logger.log(`📝 Creando nueva interacción para ${providerConversationId}`);
       interaction = await this.interactionsService.upsertInteraction({
         channel: Channel.WHATSAPP,
         direction: Direction.OUTBOUND, // Primera interacción es OUTBOUND si no hay historial
         provider: Provider.BUILDERBOT,
-        providerConversationId: body.providerConversationId,
+        providerConversationId: providerConversationId,
         from: 'system',
-        to: body.to,
+        to: normalizedTo,
         status: InteractionStatus.IN_PROGRESS,
         assignedAgent: body.assignedAgent,
       });

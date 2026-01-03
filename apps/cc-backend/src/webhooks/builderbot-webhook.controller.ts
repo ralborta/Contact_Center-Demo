@@ -106,12 +106,25 @@ export class BuilderBotWebhookController {
         };
       }
 
-      // Buscar o crear interacción
-      // Usar el customerPhone como providerConversationId para agrupar mensajes del mismo número
-      const providerConversationId = customerPhone;
+      // Normalizar el número de teléfono para que coincida con el formato usado en los mensajes salientes
+      const normalizePhoneNumber = (phone: string): string => {
+        let normalized = phone.replace(/[\s\-\(\)\.]/g, '');
+        if (!normalized.startsWith('+')) {
+          if (normalized.startsWith('54')) {
+            normalized = '+' + normalized;
+          } else {
+            normalized = '+54' + normalized;
+          }
+        }
+        return normalized;
+      };
 
-      this.logger.log(`💾 Creando/actualizando interacción para ${customerPhone}`);
-      this.logger.log(`📋 Datos para upsert: from=${isInbound ? customerPhone : 'system'}, to=${isInbound ? 'system' : customerPhone}, providerConversationId=${providerConversationId}`);
+      // Buscar o crear interacción
+      // Usar el customerPhone normalizado como providerConversationId para agrupar mensajes del mismo número
+      const providerConversationId = normalizePhoneNumber(customerPhone);
+
+      this.logger.log(`💾 Creando/actualizando interacción para ${customerPhone} (normalized: ${providerConversationId})`);
+      this.logger.log(`📋 Datos para upsert: from=${isInbound ? providerConversationId : 'system'}, to=${isInbound ? 'system' : providerConversationId}, providerConversationId=${providerConversationId}`);
 
       // Buscar interacción existente primero
       let interaction = await this.interactionsService['prisma'].interaction.findUnique({
@@ -123,6 +136,31 @@ export class BuilderBotWebhookController {
         },
       });
 
+      // Si no se encuentra, intentar buscar por el número sin normalizar (para migrar datos existentes)
+      if (!interaction) {
+        interaction = await this.interactionsService['prisma'].interaction.findUnique({
+          where: {
+            provider_providerConversationId: {
+              provider: Provider.BUILDERBOT,
+              providerConversationId: customerPhone,
+            },
+          },
+        });
+        
+        // Si se encuentra con el formato sin normalizar, actualizar para usar el formato normalizado
+        if (interaction) {
+          this.logger.log(`⚠️ Encontrada interacción con formato sin normalizar, actualizando providerConversationId`);
+          interaction = await this.interactionsService['prisma'].interaction.update({
+            where: { id: interaction.id },
+            data: {
+              providerConversationId: providerConversationId,
+              from: isInbound ? providerConversationId : interaction.from,
+              to: isInbound ? interaction.to : providerConversationId,
+            },
+          });
+        }
+      }
+
       // Si no existe, crear una nueva
       if (!interaction) {
         interaction = await this.interactionsService.upsertInteraction({
@@ -130,8 +168,8 @@ export class BuilderBotWebhookController {
           direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
           provider: Provider.BUILDERBOT,
           providerConversationId: providerConversationId,
-          from: isInbound ? customerPhone : 'system',
-          to: isInbound ? 'system' : customerPhone,
+          from: isInbound ? providerConversationId : 'system',
+          to: isInbound ? 'system' : providerConversationId,
           status: InteractionStatus.IN_PROGRESS,
           customerRef: customerName,
         });
