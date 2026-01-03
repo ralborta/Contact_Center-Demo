@@ -317,6 +317,56 @@ export default function InteractionDetail({
           </div>
         </div>
 
+        {/* Para WhatsApp: Detalles de la Conversación */}
+        {interaction.channel === 'WHATSAPP' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Detalles de la Conversación */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-green-600" />
+                Detalles de la Conversación
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Play className="w-4 h-4 text-green-600" />
+                  <span className="text-sm text-gray-700">
+                    {interaction.intent || 'Consulta General'}
+                  </span>
+                </div>
+                {interaction.callDetail?.durationSec && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-700">
+                      Duración: {formatDuration(interaction.callDetail.durationSec)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-green-600" />
+                  <span className="text-sm text-gray-700">Canal: WhatsApp</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Notas del Agente (mover aquí para WhatsApp) */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <StickyNote className="w-5 h-5 text-blue-600" />
+                Notas del Agente
+              </h3>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg p-4 min-h-32 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                placeholder="Agregar notas sobre esta interacción..."
+                defaultValue={
+                  interaction.outcome === 'RESOLVED'
+                    ? 'Cliente consultó por saldo de su cuenta. Se informó el saldo actual disponible.'
+                    : ''
+                }
+              />
+            </div>
+          </div>
+        )}
+
         {/* Dos Columnas: Información y Eventos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Columna Izquierda: Información de la Llamada */}
@@ -452,15 +502,69 @@ export default function InteractionDetail({
           </div>
         </div>
 
-        {/* Dos Columnas: Transcripción y Notas */}
+        {/* Dos Columnas: Historial de Mensajes/Transcripción y Notas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Columna Izquierda: Transcripción */}
+          {/* Columna Izquierda: Historial de Mensajes (WhatsApp) o Transcripción (Llamadas) */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
-              Transcripción
+              {interaction.channel === 'WHATSAPP' ? 'Historial de Mensajes' : 'Transcripción'}
             </h3>
-            {transcriptMessages.length > 0 ? (
+            
+            {/* Para WhatsApp: Mostrar mensajes en formato de chat */}
+            {interaction.channel === 'WHATSAPP' && interaction.messages && interaction.messages.length > 0 ? (
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {interaction.messages.map((message) => {
+                  const isInbound = message.direction === 'INBOUND'
+                  const senderName = isInbound 
+                    ? (interaction.customerRef || 'Cliente')
+                    : (interaction.assignedAgent || 'Sistema')
+                  
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex items-start gap-3 ${
+                        isInbound ? 'flex-row' : 'flex-row-reverse'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${
+                        isInbound ? 'bg-gray-400' : 'bg-blue-500'
+                      }`}>
+                        {senderName.charAt(0).toUpperCase()}
+                      </div>
+                      
+                      {/* Contenido del mensaje */}
+                      <div className={`flex-1 ${isInbound ? '' : 'text-right'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-gray-800">
+                            {senderName}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatTime(message.sentAt || message.createdAt)}
+                          </span>
+                        </div>
+                        <div className={`inline-block rounded-lg px-4 py-2 ${
+                          isInbound 
+                            ? 'bg-gray-100 text-gray-800' 
+                            : 'bg-blue-500 text-white'
+                        }`}>
+                          <p className="text-sm">{message.text || '[Archivo adjunto]'}</p>
+                        </div>
+                        {message.sentAt && (
+                          <div className={`text-xs text-gray-400 mt-1 ${isInbound ? '' : 'text-right'}`}>
+                            {formatTime(message.sentAt)} ✓✓
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : interaction.channel === 'WHATSAPP' ? (
+              <p className="text-gray-500 text-sm">No hay mensajes disponibles</p>
+            ) : transcriptMessages.length > 0 ? (
+              // Para llamadas: Mostrar transcripción parseada
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {transcriptMessages.map((msg, idx) => (
                   <div
@@ -499,22 +603,46 @@ export default function InteractionDetail({
             )}
           </div>
 
-          {/* Columna Derecha: Notas del Agente */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <StickyNote className="w-5 h-5 text-blue-600" />
-              Notas del Agente
-            </h3>
-            <textarea
-              className="w-full border border-gray-300 rounded-lg p-4 min-h-64 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              placeholder="Agregar notas sobre esta interacción..."
-              defaultValue={
-                interaction.outcome === 'RESOLVED'
-                  ? 'Caso resuelto en primer contacto.'
-                  : ''
-              }
-            />
-          </div>
+          {/* Columna Derecha: Notas del Agente (solo para llamadas, WhatsApp ya lo tiene arriba) */}
+          {interaction.channel !== 'WHATSAPP' && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <StickyNote className="w-5 h-5 text-blue-600" />
+                Notas del Agente
+              </h3>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg p-4 min-h-64 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                placeholder="Agregar notas sobre esta interacción..."
+                defaultValue={
+                  interaction.outcome === 'RESOLVED'
+                    ? 'Caso resuelto en primer contacto.'
+                    : ''
+                }
+              />
+            </div>
+          )}
+          
+          {/* Para WhatsApp: Mostrar solo el historial de mensajes en toda la columna */}
+          {interaction.channel === 'WHATSAPP' && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Detalles de la Sesión
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">ID:</span>
+                  <span className="font-mono text-gray-800">{interaction.id.slice(0, 8)}</span>
+                </div>
+                {interaction.providerConversationId && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">Conversación:</span>
+                    <span className="font-mono text-gray-800">{interaction.providerConversationId.slice(0, 20)}...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
