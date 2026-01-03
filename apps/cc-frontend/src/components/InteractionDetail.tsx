@@ -382,11 +382,11 @@ export default function InteractionDetail({
 
         {/* Dos Columnas: Información y Eventos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Columna Izquierda: Información de la Llamada */}
+          {/* Columna Izquierda: Información de la Llamada/SMS */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />
-              Información de la Llamada
+              {interaction.channel === 'SMS' ? 'Información del SMS' : 'Información de la Llamada'}
             </h3>
             <div className="space-y-4">
               <div>
@@ -521,7 +521,11 @@ export default function InteractionDetail({
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
-              {interaction.channel === 'WHATSAPP' ? 'Historial de Mensajes' : 'Transcripción'}
+              {interaction.channel === 'WHATSAPP' 
+                ? 'Historial de Mensajes' 
+                : interaction.channel === 'SMS'
+                ? 'Mensajes SMS'
+                : 'Transcripción'}
             </h3>
             
             {/* Para WhatsApp: Mostrar mensajes en formato de chat */}
@@ -591,6 +595,63 @@ export default function InteractionDetail({
               </div>
             ) : interaction.channel === 'WHATSAPP' ? (
               <p className="text-gray-500 text-sm">No hay mensajes disponibles</p>
+            ) : interaction.channel === 'SMS' && interaction.messages && interaction.messages.length > 0 ? (
+              // Para SMS: Mostrar mensajes en formato de lista
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {[...interaction.messages]
+                  .sort((a, b) => {
+                    const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+                    const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
+                    return dateA - dateB;
+                  })
+                  .map((message) => {
+                    const isInbound = message.direction === 'INBOUND'
+                    const senderName = isInbound 
+                      ? (interaction.customerRef || 'Cliente')
+                      : (interaction.assignedAgent || 'Sistema')
+                    
+                    return (
+                      <div
+                        key={message.id}
+                        className={`p-4 rounded-lg border-l-4 ${
+                          isInbound 
+                            ? 'bg-blue-50 border-blue-500' 
+                            : 'bg-green-50 border-green-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
+                              isInbound ? 'bg-blue-500' : 'bg-green-500'
+                            }`}>
+                              {senderName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-semibold text-gray-800">
+                              {senderName}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              isInbound 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : 'bg-green-100 text-green-700'
+                            }`}>
+                              {isInbound ? 'Recibido' : 'Enviado'}
+                            </span>
+                          </div>
+                          {message.sentAt && (
+                            <span className="text-xs text-gray-500">
+                              {formatDate(message.sentAt)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {message.text || '[Sin contenido]'}
+                        </p>
+                      </div>
+                    )
+                  })}
+              </div>
+            ) : interaction.channel === 'SMS' ? (
+              <p className="text-gray-500 text-sm">No hay mensajes SMS disponibles</p>
             ) : transcriptMessages.length > 0 ? (
               // Para llamadas: Mostrar transcripción parseada
               <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -631,23 +692,23 @@ export default function InteractionDetail({
             )}
           </div>
 
-          {/* Columna Derecha: Notas del Agente (solo para llamadas, WhatsApp ya lo tiene arriba) */}
+          {/* Columna Derecha: Notas del Agente (solo para llamadas y SMS, WhatsApp ya lo tiene arriba) */}
           {interaction.channel !== 'WHATSAPP' && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <StickyNote className="w-5 h-5 text-blue-600" />
-                Notas del Agente
-              </h3>
-              <textarea
-                className="w-full border border-gray-300 rounded-lg p-4 min-h-64 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                placeholder="Agregar notas sobre esta interacción..."
-                defaultValue={
-                  interaction.outcome === 'RESOLVED'
-                    ? 'Caso resuelto en primer contacto.'
-                    : ''
-                }
-              />
-            </div>
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <StickyNote className="w-5 h-5 text-blue-600" />
+              Notas del Agente
+            </h3>
+            <textarea
+              className="w-full border border-gray-300 rounded-lg p-4 min-h-64 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Agregar notas sobre esta interacción..."
+              defaultValue={
+                interaction.outcome === 'RESOLVED'
+                  ? 'Caso resuelto en primer contacto.'
+                  : ''
+              }
+            />
+          </div>
           )}
           
           {/* Para WhatsApp: Formulario para enviar mensajes y detalles */}
