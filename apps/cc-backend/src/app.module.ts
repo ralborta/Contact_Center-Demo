@@ -9,6 +9,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { AuditModule } from './audit/audit.module';
 import { PiiModule } from './pii/pii.module';
 import { SyncModule } from './sync/sync.module';
+import { SmsModule } from './sms/sms.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { SyncModule } from './sync/sync.module';
     AuditModule,
     PiiModule,
     SyncModule,
+    SmsModule,
   ],
 })
 export class AppModule {}

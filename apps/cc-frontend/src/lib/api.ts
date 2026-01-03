@@ -138,4 +138,76 @@ export const interactionsApi = {
   },
 }
 
+export const smsApi = {
+  send: async (to: string, message: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('SMS API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post('/api/sms/send', { to, message, customerRef })
+      return data
+    } catch (error) {
+      console.error('Error sending SMS:', error)
+      throw error
+    }
+  },
+
+  sendOtp: async (phone: string, purpose?: string, customerRef?: string): Promise<{ success: boolean; correlationId?: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('SMS API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post('/api/sms/otp', { phone, purpose, customerRef })
+      return data
+    } catch (error) {
+      console.error('Error sending OTP:', error)
+      throw error
+    }
+  },
+
+  sendVerificationLink: async (to: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('SMS API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post('/api/sms/verification-link', { to, customerRef })
+      return data
+    } catch (error) {
+      console.error('Error sending verification link:', error)
+      throw error
+    }
+  },
+
+  sendOnboarding: async (to: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('SMS API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post('/api/sms/onboarding', { to, customerRef })
+      return data
+    } catch (error) {
+      console.error('Error sending onboarding link:', error)
+      throw error
+    }
+  },
+
+  sendActivateCard: async (to: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('SMS API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post('/api/sms/activate-card', { to, customerRef })
+      return data
+    } catch (error) {
+      console.error('Error sending activate card SMS:', error)
+      throw error
+    }
+  },
+}
+
 export default getApi

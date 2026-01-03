@@ -101,6 +101,7 @@ export class OtpService {
 
     return {
       correlationId: data.correlationId,
+      interactionId: interaction.id,
       expiresAt,
       message: 'OTP created and queued for sending',
     };
