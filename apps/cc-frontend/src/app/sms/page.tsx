@@ -112,7 +112,24 @@ export default function SMSPage() {
       setRecentInteractions(data || [])
     } catch (error: any) {
       console.error('Error sending SMS:', error)
-      alert(`Error al enviar SMS: ${error.message}`)
+      
+      // Extraer el mensaje de error correctamente
+      let errorMessage = 'Error desconocido al enviar SMS'
+      
+      if (error.response?.data?.message) {
+        // Error del backend (NestJS)
+        errorMessage = error.response.data.message
+      } else if (error.response?.data?.error) {
+        // Error del backend (formato alternativo)
+        errorMessage = error.response.data.error
+      } else if (error.message) {
+        // Error de la red o axios
+        errorMessage = error.message
+      } else if (typeof error === 'string') {
+        errorMessage = error
+      }
+      
+      alert(`Error al enviar SMS: ${errorMessage}`)
     } finally {
       setLoading(false)
     }
