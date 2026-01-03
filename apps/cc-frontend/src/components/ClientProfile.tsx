@@ -148,25 +148,14 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
       return `ElevenLabs Voice ${interaction.callDetail?.durationSec ? formatDuration(interaction.callDetail.durationSec) : ''}`
     }
     if (interaction.channel === 'WHATSAPP') {
-      return `WhatsApp ${interaction.intent || 'Consulta'}`
+      const messageCount = interaction.messages?.length || 0
+      return `WhatsApp (${messageCount} mensajes)`
     }
     if (interaction.channel === 'SMS') {
-      return `SMS OTP ${interaction.intent || 'Confirmación'}`
+      return `SMS ${interaction.intent || 'Confirmación'}`
     }
     return interaction.channel
   }
-
-  // Filtrar interacciones por búsqueda
-  const filteredInteractions = interactions.filter((interaction) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      interaction.id.toLowerCase().includes(query) ||
-      interaction.intent?.toLowerCase().includes(query) ||
-      interaction.customerRef?.toLowerCase().includes(query) ||
-      interaction.assignedAgent?.toLowerCase().includes(query)
-    )
-  })
 
   if (loading) {
     return (
