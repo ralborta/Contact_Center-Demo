@@ -123,6 +123,17 @@ export class TwilioAdapter {
         throw new Error(`El número ${to} no es un número móvil válido. Twilio solo puede enviar SMS a números móviles.`);
       }
 
+      // Error específico: Permisos para enviar SMS a un país/región
+      if (error.message?.includes('Permission to send an SMS has not been enabled for the region')) {
+        throw new Error(
+          `Twilio no tiene permisos para enviar SMS a números de Argentina (+54). ` +
+          `Para solucionarlo:\n` +
+          `1. Si tu cuenta está en modo Trial, verifica el número en Twilio Console\n` +
+          `2. Si tu cuenta es de pago, habilita Argentina en la configuración de geografía de Twilio\n` +
+          `3. O usa un número de prueba verificado en Twilio`
+        );
+      }
+
       if (error.status === 400) {
         throw new Error(`Error de validación de Twilio: ${error.message}. Verifica el formato del número y que tu cuenta tenga crédito.`);
       }
