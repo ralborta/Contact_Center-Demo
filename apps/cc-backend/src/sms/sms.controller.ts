@@ -124,7 +124,8 @@ export class SmsController {
 
     try {
       const verificationToken = `verify-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const verificationUrl = `${process.env.FRONTEND_URL || 'https://tu-frontend.vercel.app'}/verify/${verificationToken}`;
+      // Link de prueba - puede ser cualquier URL de prueba
+      const verificationUrl = `https://ejemplo.com/verificar/${verificationToken}`;
       
       const message = `Hola! Para verificar tu identidad, hacé click en este enlace: ${verificationUrl}`;
 
