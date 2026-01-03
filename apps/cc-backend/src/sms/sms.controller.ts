@@ -129,14 +129,29 @@ export class SmsController {
       
       const message = `Hola! Para verificar tu identidad, hacé click en este enlace: ${verificationUrl}`;
 
-      return await this.sendSms({
+      this.logger.log(`📝 Mensaje generado: ${message.substring(0, 100)}...`);
+
+      const result = await this.sendSms({
         to: body.to,
         message,
         customerRef: body.customerRef,
       });
+
+      this.logger.log(`✅ Link de verificación enviado exitosamente`);
+      return result;
     } catch (error: any) {
       this.logger.error(`❌ Error al enviar link de verificación a ${body.to}:`, error);
-      throw error; // Re-lanzar el error para que se maneje en el frontend
+      this.logger.error(`❌ Stack trace:`, error.stack);
+      
+      // Si el error ya es una excepción HTTP, re-lanzarla
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      
+      // Si no, crear una nueva excepción con el mensaje del error
+      throw new InternalServerErrorException(
+        `Error al enviar link de verificación: ${error.message || 'Error desconocido'}`
+      );
     }
   }
 
