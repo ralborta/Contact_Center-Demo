@@ -194,14 +194,26 @@ export class WebhooksService {
     // Normalizar payload
     const normalized = this.builderBotAdapter.normalizePayload(payload);
 
+    // Extraer número de teléfono con fallbacks
+    const customerPhone = normalized.from || 
+                         payload.data?.from || 
+                         payload.data?.remoteJid?.split('@')[0] || 
+                         payload.data?.phone || 
+                         'unknown';
+
+    // Validar que tenemos un número válido
+    if (!customerPhone || customerPhone === 'unknown') {
+      throw new Error(`No se pudo extraer número de teléfono del payload: ${JSON.stringify(payload)}`);
+    }
+
     // Upsert Interaction
     const interaction = await this.interactionsService.upsertInteraction({
       channel: Channel.WHATSAPP,
       direction: Direction.INBOUND,
       provider: Provider.BUILDERBOT,
-      providerConversationId: normalized.threadId || normalized.conversationId,
-      from: normalized.from,
-      to: normalized.to,
+      providerConversationId: normalized.threadId || normalized.conversationId || customerPhone,
+      from: customerPhone,
+      to: normalized.to || 'system',
       status: InteractionStatus.IN_PROGRESS,
       startedAt: normalized.timestamp || new Date(),
     });

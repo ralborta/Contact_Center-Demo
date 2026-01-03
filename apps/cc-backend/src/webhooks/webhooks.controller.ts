@@ -37,15 +37,8 @@ export class WebhooksController {
     }
   }
 
-  @Post('builderbot/whatsapp')
-  @ApiOperation({ summary: 'Webhook para mensajes WhatsApp de builderbot' })
-  @ApiHeader({ name: 'X-Webhook-Token', required: false })
-  async handleBuilderBot(
-    @Body() payload: any,
-    @Headers('x-webhook-token') token: string,
-  ) {
-    return this.webhooksService.handleBuilderBot(payload, token);
-  }
+  // Nota: El webhook de BuilderBot ahora está manejado por BuilderBotWebhookController
+  // para tener mejor logging y validación específica del formato de BuilderBot.cloud
 
   @Post('twilio/sms/status')
   @ApiOperation({ summary: 'Webhook de status SMS de Twilio' })
