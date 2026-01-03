@@ -90,7 +90,7 @@ export class InteractionsService {
   }
 
   async findOne(id: string, includeAllEvents: boolean = true, includeAllMessages: boolean = true) {
-    return this.prisma.interaction.findUnique({
+    const interaction = await this.prisma.interaction.findUnique({
       where: { id },
       include: {
         events: {
@@ -98,11 +98,21 @@ export class InteractionsService {
         },
         messages: {
           orderBy: { createdAt: 'asc' },
+          // NO filtrar por dirección - incluir todos los mensajes (INBOUND y OUTBOUND)
         },
         callDetail: true,
         otpChallenges: true,
       },
     });
+
+    // Log para debugging
+    if (interaction) {
+      const inboundCount = interaction.messages?.filter(m => m.direction === 'INBOUND').length || 0;
+      const outboundCount = interaction.messages?.filter(m => m.direction === 'OUTBOUND').length || 0;
+      console.log(`[InteractionsService] findOne: Interaction ${id} tiene ${interaction.messages?.length || 0} mensajes (INBOUND: ${inboundCount}, OUTBOUND: ${outboundCount})`);
+    }
+
+    return interaction;
   }
 
   /**

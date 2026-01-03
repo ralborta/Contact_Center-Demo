@@ -125,7 +125,7 @@ export class WhatsAppController {
     }
 
     // Crear Message OUTBOUND (del agente)
-    await this.interactionsService.createMessage({
+    const message = await this.interactionsService.createMessage({
       interactionId: interaction.id,
       channel: Channel.WHATSAPP,
       direction: Direction.OUTBOUND,
@@ -134,7 +134,28 @@ export class WhatsAppController {
       sentAt: new Date(),
     });
 
-    this.logger.log(`💬 Mensaje OUTBOUND guardado en Interaction ${interaction.id}`);
+    this.logger.log(`💬 Mensaje OUTBOUND guardado: MessageId=${message.id}, InteractionId=${interaction.id}, Direction=${Direction.OUTBOUND}, Text="${body.text.substring(0, 50)}..."`);
+
+    // Verificar que el mensaje se guardó correctamente y contar mensajes en la interacción
+    const messageCount = await this.prisma.message.count({
+      where: { interactionId: interaction.id },
+    });
+    
+    const inboundCount = await this.prisma.message.count({
+      where: { 
+        interactionId: interaction.id,
+        direction: Direction.INBOUND,
+      },
+    });
+    
+    const outboundCount = await this.prisma.message.count({
+      where: { 
+        interactionId: interaction.id,
+        direction: Direction.OUTBOUND,
+      },
+    });
+    
+    this.logger.log(`✅ Verificación: Interaction ${interaction.id} tiene ${messageCount} mensajes totales (INBOUND: ${inboundCount}, OUTBOUND: ${outboundCount})`);
 
     // Audit log
     await this.auditService.log({
