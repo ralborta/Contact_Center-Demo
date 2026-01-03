@@ -669,16 +669,27 @@ export default function InteractionDetail({
                   />
                   <button
                     onClick={async () => {
-                      if (!whatsappMessage.trim() || !interaction.providerConversationId) return
+                      if (!whatsappMessage.trim() || !interaction.providerConversationId) {
+                        console.error('[WhatsApp] ❌ No se puede enviar: falta providerConversationId o mensaje vacío', {
+                          hasProviderConversationId: !!interaction.providerConversationId,
+                          hasMessage: !!whatsappMessage.trim(),
+                          providerConversationId: interaction.providerConversationId,
+                        })
+                        alert('Error: No se puede enviar el mensaje. Falta información de la conversación.')
+                        return
+                      }
                       
                       setSendingWhatsapp(true)
                       try {
-                        console.log('[WhatsApp] Enviando mensaje:', {
+                        const payload = {
                           providerConversationId: interaction.providerConversationId,
                           to: interaction.from,
                           text: whatsappMessage,
                           interactionId: interaction.id,
-                        })
+                          assignedAgent: interaction.assignedAgent || undefined,
+                        }
+                        
+                        console.log('[WhatsApp] 📤 ENVIANDO MENSAJE:', payload)
                         
                         const result = await whatsappApi.send(
                           interaction.providerConversationId,
@@ -687,26 +698,31 @@ export default function InteractionDetail({
                           interaction.assignedAgent || undefined
                         )
                         
-                        console.log('[WhatsApp] ✅ Mensaje enviado exitosamente:', result)
+                        console.log('[WhatsApp] ✅ RESPUESTA DEL BACKEND:', result)
                         setWhatsappMessage('')
                         
                         // Refrescar la interacción para mostrar el nuevo mensaje
                         if (onRefresh) {
                           // Esperar un momento para que el backend procese y guarde el mensaje
-                          console.log('[WhatsApp] Esperando 1.5s antes de refrescar...')
+                          console.log('[WhatsApp] ⏳ Esperando 2s antes de refrescar (backend necesita tiempo para guardar)...')
                           setTimeout(async () => {
-                            console.log('[WhatsApp] Refrescando interacción...')
+                            console.log('[WhatsApp] 🔄 Refrescando interacción desde el backend...')
                             await onRefresh()
-                            console.log('[WhatsApp] Interacción refrescada')
-                          }, 1500)
+                            console.log('[WhatsApp] ✅ Interacción refrescada - verifica si apareció el mensaje')
+                          }, 2000)
                         } else {
                           // Fallback: recargar la página
-                          console.log('[WhatsApp] Recargando página (no hay onRefresh)')
+                          console.log('[WhatsApp] 🔄 Recargando página completa (no hay onRefresh)')
                           window.location.reload()
                         }
                       } catch (error: any) {
-                        console.error('[WhatsApp] ❌ Error sending WhatsApp message:', error)
-                        alert(`Error al enviar mensaje: ${error.message || 'Error desconocido'}`)
+                        console.error('[WhatsApp] ❌ ERROR AL ENVIAR MENSAJE:', error)
+                        console.error('[WhatsApp] ❌ Detalles del error:', {
+                          message: error.message,
+                          response: error.response?.data,
+                          status: error.response?.status,
+                        })
+                        alert(`Error al enviar mensaje: ${error.response?.data?.message || error.message || 'Error desconocido'}`)
                       } finally {
                         setSendingWhatsapp(false)
                       }

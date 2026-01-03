@@ -63,6 +63,8 @@ export class WhatsAppController {
 
     // Buscar interacción existente usando providerConversationId normalizado
     // Esto agrupa todos los mensajes (INBOUND y OUTBOUND) en la misma conversación
+    this.logger.log(`🔍 Buscando interacción con providerConversationId="${providerConversationId}"`);
+    
     let interaction = await this.prisma.interaction.findUnique({
       where: {
         provider_providerConversationId: {
@@ -71,6 +73,8 @@ export class WhatsAppController {
         },
       },
     });
+    
+    this.logger.log(`🔍 Resultado búsqueda 1: ${interaction ? `✅ ENCONTRADA (ID: ${interaction.id})` : '❌ NO ENCONTRADA'}`);
 
     // Si no se encuentra, intentar buscar por el número normalizado sin el +
     if (!interaction && providerConversationId.startsWith('+')) {
@@ -157,6 +161,21 @@ export class WhatsAppController {
     });
     
     this.logger.log(`✅ Verificación: Interaction ${interaction.id} tiene ${messageCount} mensajes totales (INBOUND: ${inboundCount}, OUTBOUND: ${outboundCount})`);
+    
+    // Verificar que el mensaje recién creado esté en la lista
+    const justCreatedMessage = await this.prisma.message.findUnique({
+      where: { id: message.id },
+    });
+    
+    if (justCreatedMessage) {
+      this.logger.log(`✅ CONFIRMADO: Mensaje ${message.id} existe en la DB con direction=${justCreatedMessage.direction}`);
+    } else {
+      this.logger.error(`❌ ERROR CRÍTICO: Mensaje ${message.id} NO existe en la DB después de crearlo!`);
+    }
+    
+    this.logger.log(`═══════════════════════════════════════════════════════`);
+    this.logger.log(`✅ PROCESO COMPLETADO`);
+    this.logger.log(`═══════════════════════════════════════════════════════`);
 
     // Audit log
     await this.auditService.log({
@@ -167,6 +186,59 @@ export class WhatsAppController {
       metadata: { messageId: result.messageId, agent: body.assignedAgent || 'system' },
     });
 
-    return { success: true, messageId: result.messageId, interactionId: interaction.id };
+    return { 
+      success: true, 
+      messageId: result.messageId, 
+      interactionId: interaction.id,
+      messageCount,
+      inboundCount,
+      outboundCount,
+      providerConversationId: providerConversationId,
+    };
+  }
+
+  @Post('diagnostic')
+  @ApiOperation({ summary: 'Diagnóstico: Verificar mensajes de una interacción' })
+  async diagnostic(
+    @Body() body: { interactionId: string },
+  ) {
+    this.logger.log(`🔍 DIAGNÓSTICO: Verificando interacción ${body.interactionId}`);
+    
+    const interaction = await this.prisma.interaction.findUnique({
+      where: { id: body.interactionId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!interaction) {
+      return {
+        error: 'Interaction not found',
+        interactionId: body.interactionId,
+      };
+    }
+
+    const inboundCount = interaction.messages.filter(m => m.direction === 'INBOUND').length;
+    const outboundCount = interaction.messages.filter(m => m.direction === 'OUTBOUND').length;
+
+    return {
+      interactionId: interaction.id,
+      providerConversationId: interaction.providerConversationId,
+      from: interaction.from,
+      to: interaction.to,
+      channel: interaction.channel,
+      totalMessages: interaction.messages.length,
+      inboundCount,
+      outboundCount,
+      messages: interaction.messages.map(m => ({
+        id: m.id,
+        direction: m.direction,
+        text: m.text?.substring(0, 50),
+        sentAt: m.sentAt,
+        createdAt: m.createdAt,
+      })),
+    };
   }
 }
