@@ -51,6 +51,7 @@ export interface Interaction {
   outcome: 'RESOLVED' | 'ESCALATED' | 'TICKETED' | 'TRANSFERRED' | 'UNKNOWN' | null
   intent: string | null
   provider: string
+  providerConversationId?: string | null
   createdAt: string
   customerRef?: string | null
   queue?: string | null
