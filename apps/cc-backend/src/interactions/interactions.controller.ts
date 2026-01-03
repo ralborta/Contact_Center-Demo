@@ -172,4 +172,10 @@ export class InteractionsController {
 
     return { count };
   }
+
+  @Get('client/:phone')
+  @ApiOperation({ summary: 'Obtener perfil completo del cliente con estadísticas' })
+  async getClientProfile(@Param('phone') phone: string) {
+    return this.interactionsService.getClientProfile(phone);
+  }
 }

@@ -89,6 +89,135 @@ export class InteractionsService {
     return this.prisma.interaction.count({ where });
   }
 
+  /**
+   * Normaliza un número de teléfono para búsqueda
+   * Remueve espacios, guiones, paréntesis, y normaliza el formato
+   */
+  private normalizePhoneForSearch(phone: string): string {
+    // Decodificar URL encoding si existe
+    let normalized = decodeURIComponent(phone);
+    // Remover caracteres especiales
+    normalized = normalized.replace(/[\s\-\(\)\.]/g, '');
+    // Remover el + si existe para búsqueda más flexible
+    normalized = normalized.replace(/^\+/, '');
+    return normalized;
+  }
+
+  /**
+   * Obtener perfil completo del cliente con todas sus interacciones y estadísticas
+   */
+  async getClientProfile(phone: string) {
+    // Normalizar el número para búsqueda
+    const normalizedPhone = this.normalizePhoneForSearch(phone);
+    
+    // Buscar interacciones donde el número aparezca en from, to, o providerConversationId
+    const interactions = await this.prisma.interaction.findMany({
+      where: {
+        OR: [
+          { from: { contains: normalizedPhone } },
+          { to: { contains: normalizedPhone } },
+          { providerConversationId: { contains: normalizedPhone } },
+        ],
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+        callDetail: true,
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+
+    if (interactions.length === 0) {
+      return {
+        phone: phone,
+        normalizedPhone: normalizedPhone,
+        interactions: [],
+        stats: {
+          totalInteractions: 0,
+          inboundCalls: 0,
+          whatsappInteractions: 0,
+          whatsappMessages: { inbound: 0, outbound: 0, total: 0 },
+          smsOtpConfirmed: 0,
+          resolvedInteractions: 0,
+          resolvedPercentage: 0,
+        },
+        lastInteraction: null,
+        customerRef: null,
+      };
+    }
+
+    // Calcular estadísticas
+    const totalInteractions = interactions.length;
+    const inboundCalls = interactions.filter(
+      (i) => i.channel === Channel.CALL && i.direction === Direction.INBOUND
+    ).length;
+    
+    const whatsappInteractions = interactions.filter(
+      (i) => i.channel === Channel.WHATSAPP
+    );
+    
+    // Contar mensajes de WhatsApp (no solo interacciones)
+    const whatsappMessages = {
+      inbound: 0,
+      outbound: 0,
+      total: 0,
+    };
+    whatsappInteractions.forEach((interaction) => {
+      if (interaction.messages) {
+        interaction.messages.forEach((msg) => {
+          if (msg.direction === Direction.INBOUND) {
+            whatsappMessages.inbound++;
+          } else {
+            whatsappMessages.outbound++;
+          }
+          whatsappMessages.total++;
+        });
+      }
+    });
+
+    const smsOtpConfirmed = interactions.filter(
+      (i) => i.channel === Channel.SMS && i.intent?.includes('OTP') && i.outcome === 'RESOLVED'
+    ).length;
+
+    const resolvedInteractions = interactions.filter(
+      (i) => i.outcome === 'RESOLVED'
+    ).length;
+    const resolvedPercentage =
+      totalInteractions > 0 ? Math.round((resolvedInteractions / totalInteractions) * 100) : 0;
+
+    // Obtener información del cliente de la primera interacción
+    const firstInteraction = interactions[0];
+    const customerRef = firstInteraction.customerRef || null;
+
+    // Última interacción
+    const lastInteraction = interactions[0]; // Ya está ordenado por startedAt desc
+
+    return {
+      phone: phone,
+      normalizedPhone: normalizedPhone,
+      interactions: interactions,
+      stats: {
+        totalInteractions,
+        inboundCalls,
+        whatsappInteractions: whatsappInteractions.length,
+        whatsappMessages,
+        smsOtpConfirmed,
+        resolvedInteractions,
+        resolvedPercentage,
+      },
+      lastInteraction: lastInteraction
+        ? {
+            id: lastInteraction.id,
+            channel: lastInteraction.channel,
+            startedAt: lastInteraction.startedAt,
+            createdAt: lastInteraction.createdAt,
+          }
+        : null,
+      customerRef,
+    };
+  }
+
   async findOne(id: string, includeAllEvents: boolean = true, includeAllMessages: boolean = true) {
     const interaction = await this.prisma.interaction.findUnique({
       where: { id },

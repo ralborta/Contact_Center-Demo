@@ -144,6 +144,68 @@ export const interactionsApi = {
       return [] // Return empty array on error
     }
   },
+
+  getClientProfile: async (phone: string): Promise<{
+    phone: string
+    normalizedPhone: string
+    interactions: Interaction[]
+    stats: {
+      totalInteractions: number
+      inboundCalls: number
+      whatsappInteractions: number
+      whatsappMessages: { inbound: number; outbound: number; total: number }
+      smsOtpConfirmed: number
+      resolvedInteractions: number
+      resolvedPercentage: number
+    }
+    lastInteraction: { id: string; channel: string; startedAt: string | null; createdAt: string } | null
+    customerRef: string | null
+  }> => {
+    // Only execute on client side
+    if (typeof window === 'undefined') {
+      return {
+        phone,
+        normalizedPhone: phone,
+        interactions: [],
+        stats: {
+          totalInteractions: 0,
+          inboundCalls: 0,
+          whatsappInteractions: 0,
+          whatsappMessages: { inbound: 0, outbound: 0, total: 0 },
+          smsOtpConfirmed: 0,
+          resolvedInteractions: 0,
+          resolvedPercentage: 0,
+        },
+        lastInteraction: null,
+        customerRef: null,
+      }
+    }
+    try {
+      const api = getApi()
+      // Decodificar el número si está URL-encoded
+      const decodedPhone = decodeURIComponent(phone)
+      const { data } = await api.get(`/api/interactions/client/${encodeURIComponent(decodedPhone)}`)
+      return data
+    } catch (error) {
+      console.error('Error fetching client profile:', error)
+      return {
+        phone,
+        normalizedPhone: phone,
+        interactions: [],
+        stats: {
+          totalInteractions: 0,
+          inboundCalls: 0,
+          whatsappInteractions: 0,
+          whatsappMessages: { inbound: 0, outbound: 0, total: 0 },
+          smsOtpConfirmed: 0,
+          resolvedInteractions: 0,
+          resolvedPercentage: 0,
+        },
+        lastInteraction: null,
+        customerRef: null,
+      }
+    }
+  },
 }
 
 export const smsApi = {

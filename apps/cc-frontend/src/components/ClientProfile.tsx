@@ -23,19 +23,36 @@ interface ClientProfileProps {
   phone: string
 }
 
+interface ClientProfileData {
+  phone: string
+  normalizedPhone: string
+  interactions: Interaction[]
+  stats: {
+    totalInteractions: number
+    inboundCalls: number
+    whatsappInteractions: number
+    whatsappMessages: { inbound: number; outbound: number; total: number }
+    smsOtpConfirmed: number
+    resolvedInteractions: number
+    resolvedPercentage: number
+  }
+  lastInteraction: { id: string; channel: string; startedAt: string | null; createdAt: string } | null
+  customerRef: string | null
+}
+
 export default function ClientProfile({ phone }: ClientProfileProps) {
-  const [interactions, setInteractions] = useState<Interaction[]>([])
+  const [profileData, setProfileData] = useState<ClientProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await interactionsApi.getByPhone(phone)
-        setInteractions(data || [])
+        const data = await interactionsApi.getClientProfile(phone)
+        setProfileData(data)
       } catch (error) {
-        console.error('Error fetching client interactions:', error)
-        setInteractions([])
+        console.error('Error fetching client profile:', error)
+        setProfileData(null)
       } finally {
         setLoading(false)
       }
@@ -46,25 +63,34 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
     return () => clearInterval(interval)
   }, [phone])
 
-  // Extraer información del cliente de la primera interacción
-  const clientInfo = interactions[0]
-  const clientName = clientInfo?.customerRef || 'Cliente'
-  const clientPhone = phone
+  if (loading || !profileData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-lg">Cargando perfil del cliente...</div>
+      </div>
+    )
+  }
 
-  // Calcular KPIs
-  const inboundCalls = interactions.filter(
-    (i) => i.channel === 'CALL' && i.direction === 'INBOUND'
-  ).length
-  const whatsappCount = interactions.filter((i) => i.channel === 'WHATSAPP').length
-  const smsOtpCount = interactions.filter(
-    (i) => i.channel === 'SMS' && i.intent?.includes('OTP')
-  ).length
-  const resolvedCount = interactions.filter((i) => i.outcome === 'RESOLVED').length
-  const resolvedPercentage =
-    interactions.length > 0 ? Math.round((resolvedCount / interactions.length) * 100) : 0
+  const { interactions, stats, lastInteraction, customerRef } = profileData
+  
+  // Formatear el número de teléfono correctamente
+  const formatPhone = (phone: string): string => {
+    // Decodificar URL encoding
+    let formatted = decodeURIComponent(phone)
+    // Si no tiene +, agregarlo si empieza con 54
+    if (!formatted.startsWith('+')) {
+      if (formatted.startsWith('54')) {
+        formatted = '+' + formatted
+      } else if (formatted.length > 0) {
+        formatted = '+54' + formatted
+      }
+    }
+    return formatted
+  }
 
-  // Última interacción
-  const lastInteraction = interactions[0]
+  const clientName = customerRef || 'Cliente'
+  const clientPhone = formatPhone(phone)
+
   const getLastInteractionTime = () => {
     if (!lastInteraction) return 'N/A'
     const date = new Date(lastInteraction.startedAt || lastInteraction.createdAt)
@@ -150,6 +176,18 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
     )
   }
 
+  // Filtrar interacciones por búsqueda
+  const filteredInteractions = interactions.filter((interaction) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      interaction.id.toLowerCase().includes(query) ||
+      interaction.intent?.toLowerCase().includes(query) ||
+      customerRef?.toLowerCase().includes(query) ||
+      interaction.assignedAgent?.toLowerCase().includes(query)
+    )
+  })
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Contenido Principal */}
@@ -171,7 +209,9 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
                     <Phone className="w-4 h-4" />
                     <span>{clientPhone}</span>
                   </div>
-                  <span>DNI: {clientName.split(' ')[1] || 'N/A'}</span>
+                  {customerRef && customerRef !== 'Cliente' && (
+                    <span>DNI: N/A</span>
+                  )}
                 </div>
               </div>
 
@@ -207,7 +247,7 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Llamadas Inbound</p>
-                  <p className="text-2xl font-bold text-gray-900">{inboundCalls}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.inboundCalls}</p>
                 </div>
                 <Phone className="w-8 h-8 text-yellow-500" />
               </div>
@@ -218,7 +258,8 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">WhatsApps</p>
-                  <p className="text-2xl font-bold text-gray-900">{whatsappCount}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.whatsappMessages.total}</p>
+                  <p className="text-xs text-gray-500">({stats.whatsappInteractions} conversaciones)</p>
                 </div>
                 <MessageSquare className="w-8 h-8 text-green-600" />
               </div>
@@ -229,7 +270,7 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">SMS OTP Confirmados</p>
-                  <p className="text-2xl font-bold text-gray-900">{smsOtpCount}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.smsOtpConfirmed}</p>
                 </div>
                 <Mail className="w-8 h-8 text-blue-500" />
               </div>
@@ -240,7 +281,7 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Interacciones Resueltas</p>
-                  <p className="text-2xl font-bold text-gray-900">{resolvedPercentage}%</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.resolvedPercentage}%</p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
@@ -276,23 +317,35 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
               <h3 className="text-lg font-semibold mb-4">Perfil del Cliente</h3>
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-700">Sucursal: Centro N°003</span>
+                  <Phone className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-700">Teléfono: {clientPhone}</span>
                 </div>
+                {customerRef && customerRef !== 'Cliente' && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-700">Nombre: {customerRef}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm">
-                  <CreditCard className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-700">Cuenta: Caja de Ahorro</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <CreditCard className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-700">Productos: Tarjeta de Crédito</span>
-                </div>
-                <div className="flex items-start gap-2 text-sm">
-                  <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
+                  <MessageSquare className="w-4 h-4 text-gray-500" />
                   <span className="text-gray-700">
-                    Notas: Cliente preprobado para crédito.
+                    Total Interacciones: {stats.totalInteractions}
                   </span>
                 </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-700">
+                    Resueltas: {stats.resolvedInteractions} ({stats.resolvedPercentage}%)
+                  </span>
+                </div>
+                {lastInteraction && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-700">
+                      Última: {formatDate(lastInteraction.startedAt || lastInteraction.createdAt)}
+                    </span>
+                  </div>
+                )}
                 <button className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors mt-4">
                   <Settings className="w-4 h-4" />
                   <span>Gestionar Cliente</span>
