@@ -541,7 +541,7 @@ export default function InteractionDetail({
                             {senderName}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {formatTime(message.sentAt || message.createdAt)}
+                            {message.sentAt ? formatTime(message.sentAt) : 'Sin fecha'}
                           </span>
                         </div>
                         <div className={`inline-block rounded-lg px-4 py-2 ${
