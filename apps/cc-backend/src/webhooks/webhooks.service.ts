@@ -189,11 +189,8 @@ export class WebhooksService {
   }
 
   async handleBuilderBot(payload: any, token: string) {
-    // Validar token
-    if (!this.builderBotAdapter.verifyToken(token)) {
-      throw new UnauthorizedException('Invalid webhook token');
-    }
-
+    // Nota: La validación de token se removió porque BuilderBot no usa tokens en webhooks
+    
     // Normalizar payload
     const normalized = this.builderBotAdapter.normalizePayload(payload);
 

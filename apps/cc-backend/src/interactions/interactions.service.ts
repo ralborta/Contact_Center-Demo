@@ -233,7 +233,7 @@ export class InteractionsService {
       where: {
         provider_providerConversationId: {
           provider: data.provider as any,
-          providerConversationId: data.providerConversationId,
+          providerConversationId: data.providerConversationId!,
         },
       },
       update: {
