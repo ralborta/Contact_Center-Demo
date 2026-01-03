@@ -135,6 +135,7 @@ export class WhatsAppController {
     });
 
     this.logger.log(`💬 Mensaje OUTBOUND guardado: MessageId=${message.id}, InteractionId=${interaction.id}, Direction=${Direction.OUTBOUND}, Text="${body.text.substring(0, 50)}..."`);
+    this.logger.log(`📊 Estado actual de la interacción: providerConversationId=${providerConversationId}, normalizedTo=${normalizedTo}`);
 
     // Verificar que el mensaje se guardó correctamente y contar mensajes en la interacción
     const messageCount = await this.prisma.message.count({
