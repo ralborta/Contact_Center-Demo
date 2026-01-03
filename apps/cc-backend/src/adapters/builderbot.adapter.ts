@@ -1,12 +1,14 @@
 export class BuilderBotAdapter {
   private readonly webhookToken: string;
-  private readonly apiUrl: string;
+  private readonly apiBaseUrl: string;
   private readonly apiKey: string;
+  private readonly botId: string;
 
   constructor() {
     this.webhookToken = process.env.BUILDERBOT_WEBHOOK_TOKEN || '';
-    this.apiUrl = process.env.BUILDERBOT_API_URL || '';
+    this.apiBaseUrl = process.env.BUILDERBOT_BASE_URL || 'https://app.builderbot.cloud';
     this.apiKey = process.env.BUILDERBOT_API_KEY || '';
+    this.botId = process.env.BUILDERBOT_BOT_ID || '';
   }
 
   verifyToken(token: string): boolean {
@@ -48,35 +50,60 @@ export class BuilderBotAdapter {
     return normalized;
   }
 
-  async sendMessage(conversationId: string, to: string, text: string): Promise<{ success: boolean; messageId?: string }> {
-    if (!this.apiUrl || !this.apiKey) {
-      throw new Error('BuilderBot API not configured');
+  /**
+   * Enviar mensaje via BuilderBot.cloud API v2
+   * Docs: https://app.builderbot.cloud/api/v2/{botId}/messages
+   */
+  async sendMessage(conversationId: string, to: string, text: string, mediaUrl?: string): Promise<{ success: boolean; messageId?: string }> {
+    if (!this.apiKey || !this.botId) {
+      throw new Error('BuilderBot API not configured (BUILDERBOT_API_KEY and BUILDERBOT_BOT_ID required)');
+    }
+
+    const url = `${this.apiBaseUrl}/api/v2/${this.botId}/messages`;
+
+    const body: Record<string, any> = {
+      messages: {
+        content: text,
+      },
+      number: to,
+      checkIfExists: false,
+    };
+
+    if (mediaUrl) {
+      body.messages.mediaUrl = mediaUrl;
     }
 
     try {
-      const response = await fetch(`${this.apiUrl}/messages`, {
+      console.log('[BuilderBot] Enviando mensaje:', {
+        url,
+        number: to,
+        messageLength: text.length,
+        hasMediaUrl: !!mediaUrl,
+      });
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          'x-api-builderbot': this.apiKey,
         },
-        body: JSON.stringify({
-          conversation_id: conversationId,
-          to,
-          text,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        throw new Error(`BuilderBot API error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`BuilderBot API error (${response.status}): ${errorText}`);
       }
 
       const data: any = await response.json();
+      console.log('[BuilderBot] ✅ Mensaje enviado exitosamente');
+      
       return {
         success: true,
-        messageId: data.message_id || data.id,
+        messageId: data.message_id || data.id || `bb-${Date.now()}`,
       };
     } catch (error: any) {
+      console.error('[BuilderBot] ❌ Error al enviar mensaje:', error.message);
       throw new Error(`Failed to send message via BuilderBot: ${error.message}`);
     }
   }
