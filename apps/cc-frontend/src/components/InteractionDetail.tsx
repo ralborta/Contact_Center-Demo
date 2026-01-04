@@ -18,6 +18,8 @@ import {
   FileText,
   StickyNote,
   Send,
+  ArrowRight,
+  ChevronDown,
 } from 'lucide-react'
 
 interface InteractionDetailProps {
@@ -272,63 +274,237 @@ export default function InteractionDetail({
 
       {/* Contenido Principal */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Información del Cliente */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
-                <Phone className="w-4 h-4" />
-                Número del Cliente
-              </label>
-              <p className="text-lg font-semibold">{interaction.from}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600 mb-1">
-                Cliente
-              </label>
-              <p className="text-lg">
-                {interaction.customerRef || 'No especificado'}
-                {interaction.customerRef && (
-                  <span className="text-gray-500 text-sm ml-2">
-                    (DNI: {interaction.customerRef.split(' ')[1] || 'N/A'})
-                  </span>
-                )}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
-                <User className="w-4 h-4" />
-                Agente
-              </label>
-              <p className="text-lg flex items-center">
-                {interaction.assignedAgent || 'Sin asignar'}
-                {interaction.assignedAgent && (
-                  <button className="ml-2 text-blue-600 hover:text-blue-800">
-                    <Edit2 className="w-4 h-4" />
+        {/* Diseño específico para SMS */}
+        {interaction.channel === 'SMS' ? (
+          <>
+            {/* Información del Cliente - Card Superior */}
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <Phone className="w-4 h-4" />
+                    Número del Cliente
+                  </label>
+                  <p className="text-lg font-semibold flex items-center gap-2">
+                    {interaction.from}
+                    {interaction.from?.startsWith('+1') && (
+                      <span className="text-xs">🇺🇸</span>
+                    )}
+                    {interaction.from?.startsWith('+54') && (
+                      <span className="text-xs">🇦🇷</span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1">
+                    Cliente
+                  </label>
+                  <p className="text-lg">{interaction.customerRef || 'No especificado'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <User className="w-4 h-4" />
+                    Agente
+                  </label>
+                  <p className="text-lg">{interaction.assignedAgent || 'Sin asignar'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <Calendar className="w-4 h-4" />
+                    Fecha
+                  </label>
+                  <p className="text-lg">{formatDate(interaction.startedAt || interaction.createdAt)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <CheckCircle className="w-4 h-4" />
+                    Resultado
+                  </label>
+                  <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    <span>Asignar...</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid de 3 columnas: Información del Mensaje, Mensaje y Transcripción, Historial de Eventos */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              {/* Información del Mensaje */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Información del Mensaje
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600 block mb-1">
+                      Estado
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      <p className="text-base">{getStatusLabel(interaction.status)}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600 block mb-1">
+                      Destino
+                    </label>
+                    <p className="text-base">{interaction.to || 'No especificado'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600 block mb-1">
+                      Servicio
+                    </label>
+                    <p className="text-base">{interaction.intent || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensaje y Transcripción */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-blue-600" />
+                  Mensaje y Transcripción
+                </h3>
+                {interaction.messages && interaction.messages.length > 0 ? (
+                  <div className="space-y-4">
+                    {interaction.messages.map((message) => {
+                      const isInbound = message.direction === 'INBOUND'
+                      const maskedPhone = interaction.from 
+                        ? interaction.from.replace(/(\+\d{2}\s?\d{2,3})\s?\d{4}(\d{4})/, '$1 ****** $2')
+                        : 'N/A'
+                      
+                      return (
+                        <div key={message.id} className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <User className="w-5 h-5 text-gray-500" />
+                            <span className="text-sm text-gray-600">{maskedPhone}</span>
+                          </div>
+                          <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
+                            <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                              {message.text || '[Sin contenido]'}
+                            </p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs text-gray-500">
+                                {message.sentAt ? formatTime(message.sentAt) : 'Sin fecha'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Mensaje {isInbound ? 'Recibido' : 'Enviado'}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No hay mensajes disponibles</p>
                 )}
-              </p>
+              </div>
+
+              {/* Historial de Eventos */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-blue-600" />
+                    Historial de Eventos
+                  </h3>
+                  <select className="text-sm border border-gray-300 rounded px-2 py-1">
+                    <option>Filtrar: todo</option>
+                    <option>Últimas 24h</option>
+                    <option>Última semana</option>
+                  </select>
+                </div>
+                {interaction.events && interaction.events.length > 0 ? (
+                  <div className="space-y-2">
+                    {interaction.events.map((event) => (
+                      <div key={event.id} className="text-sm text-gray-600">
+                        <div className="font-medium">{event.type}</div>
+                        <div className="text-xs text-gray-500">
+                          {formatDate(event.ts)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No hay eventos registrados</p>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
-                <Calendar className="w-4 h-4" />
-                Fecha
-              </label>
-              <p className="text-lg">{formatDate(interaction.startedAt || interaction.createdAt)}</p>
+
+            {/* Notas del Agente */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <StickyNote className="w-5 h-5 text-blue-600" />
+                Notas del Agente
+              </h3>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg p-4 min-h-32 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                placeholder="Añadir notas sobre esta interacción..."
+              />
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
-                <CheckCircle className="w-4 h-4" />
-                Resultado
-              </label>
-              <p className={`text-lg font-semibold ${
-                interaction.outcome === 'RESOLVED' ? 'text-green-600' : 'text-gray-700'
-              }`}>
-                {getOutcomeLabel(interaction.outcome)}
-              </p>
+          </>
+        ) : (
+          <>
+            {/* Diseño original para CALL y WHATSAPP */}
+            {/* Información del Cliente */}
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <Phone className="w-4 h-4" />
+                    Número del Cliente
+                  </label>
+                  <p className="text-lg font-semibold">{interaction.from}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1">
+                    Cliente
+                  </label>
+                  <p className="text-lg">
+                    {interaction.customerRef || 'No especificado'}
+                    {interaction.customerRef && (
+                      <span className="text-gray-500 text-sm ml-2">
+                        (DNI: {interaction.customerRef.split(' ')[1] || 'N/A'})
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <User className="w-4 h-4" />
+                    Agente
+                  </label>
+                  <p className="text-lg flex items-center">
+                    {interaction.assignedAgent || 'Sin asignar'}
+                    {interaction.assignedAgent && (
+                      <button className="ml-2 text-blue-600 hover:text-blue-800">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <Calendar className="w-4 h-4" />
+                    Fecha
+                  </label>
+                  <p className="text-lg">{formatDate(interaction.startedAt || interaction.createdAt)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-1">
+                    <CheckCircle className="w-4 h-4" />
+                    Resultado
+                  </label>
+                  <p className={`text-lg font-semibold ${
+                    interaction.outcome === 'RESOLVED' ? 'text-green-600' : 'text-gray-700'
+                  }`}>
+                    {getOutcomeLabel(interaction.outcome)}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
         {/* Para WhatsApp: Detalles de la Conversación */}
         {interaction.channel === 'WHATSAPP' && (
@@ -380,14 +556,14 @@ export default function InteractionDetail({
           </div>
         )}
 
-        {/* Dos Columnas: Información y Eventos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Columna Izquierda: Información de la Llamada/SMS */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              {interaction.channel === 'SMS' ? 'Información del SMS' : 'Información de la Llamada'}
-            </h3>
+            {/* Dos Columnas: Información y Eventos (solo para CALL y WHATSAPP) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Columna Izquierda: Información de la Llamada */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Información de la Llamada
+                </h3>
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-600 block mb-1">
@@ -519,12 +695,10 @@ export default function InteractionDetail({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Columna Izquierda: Historial de Mensajes (WhatsApp) o Transcripción (Llamadas) */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
               {interaction.channel === 'WHATSAPP' 
                 ? 'Historial de Mensajes' 
-                : interaction.channel === 'SMS'
-                ? 'Mensajes SMS'
                 : 'Transcripción'}
             </h3>
             
@@ -595,63 +769,6 @@ export default function InteractionDetail({
               </div>
             ) : interaction.channel === 'WHATSAPP' ? (
               <p className="text-gray-500 text-sm">No hay mensajes disponibles</p>
-            ) : interaction.channel === 'SMS' && interaction.messages && interaction.messages.length > 0 ? (
-              // Para SMS: Mostrar mensajes en formato de lista
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {[...interaction.messages]
-                  .sort((a, b) => {
-                    const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
-                    const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
-                    return dateA - dateB;
-                  })
-                  .map((message) => {
-                    const isInbound = message.direction === 'INBOUND'
-                    const senderName = isInbound 
-                      ? (interaction.customerRef || 'Cliente')
-                      : (interaction.assignedAgent || 'Sistema')
-                    
-                    return (
-                      <div
-                        key={message.id}
-                        className={`p-4 rounded-lg border-l-4 ${
-                          isInbound 
-                            ? 'bg-blue-50 border-blue-500' 
-                            : 'bg-green-50 border-green-500'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                              isInbound ? 'bg-blue-500' : 'bg-green-500'
-                            }`}>
-                              {senderName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-sm font-semibold text-gray-800">
-                              {senderName}
-                            </span>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              isInbound 
-                                ? 'bg-blue-100 text-blue-700' 
-                                : 'bg-green-100 text-green-700'
-                            }`}>
-                              {isInbound ? 'Recibido' : 'Enviado'}
-                            </span>
-                          </div>
-                          {message.sentAt && (
-                            <span className="text-xs text-gray-500">
-                              {formatDate(message.sentAt)}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {message.text || '[Sin contenido]'}
-                        </p>
-                      </div>
-                    )
-                  })}
-              </div>
-            ) : interaction.channel === 'SMS' ? (
-              <p className="text-gray-500 text-sm">No hay mensajes SMS disponibles</p>
             ) : transcriptMessages.length > 0 ? (
               // Para llamadas: Mostrar transcripción parseada
               <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -692,8 +809,8 @@ export default function InteractionDetail({
             )}
           </div>
 
-          {/* Columna Derecha: Notas del Agente (solo para llamadas y SMS, WhatsApp ya lo tiene arriba) */}
-          {interaction.channel !== 'WHATSAPP' && (
+          {/* Columna Derecha: Notas del Agente (solo para llamadas, WhatsApp y SMS ya lo tienen arriba) */}
+          {interaction.channel !== 'WHATSAPP' && interaction.channel !== 'SMS' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <StickyNote className="w-5 h-5 text-blue-600" />
