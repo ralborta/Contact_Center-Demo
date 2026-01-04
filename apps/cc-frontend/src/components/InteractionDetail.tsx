@@ -206,27 +206,27 @@ export default function InteractionDetail({
         })
       } else {
         // Buscar patrones sin tiempo: "AGENTE: texto" o "Cliente: texto"
-            const speakerMatch = line.match(/^([^:]+):\s*(.+)$/)
-            if (speakerMatch) {
-              messages.push({
-                time: '',
-                speaker: speakerMatch[1].trim(),
-                text: speakerMatch[2].trim(),
-              })
-            } else if (line.trim()) {
-              // Si no hay formato, agregar como mensaje genérico
-              if (messages.length > 0) {
-                messages[messages.length - 1].text += ' ' + line.trim()
-              } else {
-                messages.push({
-                  time: '',
-                  speaker: 'Sistema',
-                  text: line.trim(),
-                })
-              }
-            }
+        const speakerMatch = line.match(/^([^:]+):\s*(.+)$/)
+        if (speakerMatch) {
+          messages.push({
+            time: '',
+            speaker: speakerMatch[1].trim(),
+            text: speakerMatch[2].trim(),
+          })
+        } else if (line.trim()) {
+          // Si no hay formato, agregar como mensaje genérico
+          if (messages.length > 0) {
+            messages[messages.length - 1].text += ' ' + line.trim()
+          } else {
+            messages.push({
+              time: '',
+              speaker: 'Sistema',
+              text: line.trim(),
+            })
           }
-        })
+        }
+      }
+    })
     
     return messages
   }
@@ -564,7 +564,7 @@ export default function InteractionDetail({
                   <FileText className="w-5 h-5 text-blue-600" />
                   Información de la Llamada
                 </h3>
-            <div className="space-y-4">
+                <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-600 block mb-1">
                   Estado
@@ -691,11 +691,11 @@ export default function InteractionDetail({
           </div>
         </div>
 
-        {/* Dos Columnas: Historial de Mensajes/Transcripción y Notas */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Dos Columnas: Historial de Mensajes/Transcripción y Notas */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Columna Izquierda: Historial de Mensajes (WhatsApp) o Transcripción (Llamadas) */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
               {interaction.channel === 'WHATSAPP' 
                 ? 'Historial de Mensajes' 
@@ -809,8 +809,8 @@ export default function InteractionDetail({
             )}
           </div>
 
-          {/* Columna Derecha: Notas del Agente (solo para llamadas, WhatsApp y SMS ya lo tienen arriba) */}
-          {interaction.channel !== 'WHATSAPP' && interaction.channel !== 'SMS' && (
+            {/* Columna Derecha: Notas del Agente (solo para llamadas, WhatsApp ya lo tiene arriba) */}
+            {interaction.channel !== 'WHATSAPP' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <StickyNote className="w-5 h-5 text-blue-600" />
@@ -826,10 +826,10 @@ export default function InteractionDetail({
               }
             />
           </div>
-          )}
-          
-          {/* Para WhatsApp: Formulario para enviar mensajes y detalles */}
-          {interaction.channel === 'WHATSAPP' && (
+            )}
+            
+            {/* Para WhatsApp: Formulario para enviar mensajes y detalles */}
+            {interaction.channel === 'WHATSAPP' && (
             <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
               {/* Formulario para enviar mensaje */}
               <div>
@@ -934,8 +934,10 @@ export default function InteractionDetail({
                 </div>
               </div>
             </div>
-          )}
-        </div>
+            )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
