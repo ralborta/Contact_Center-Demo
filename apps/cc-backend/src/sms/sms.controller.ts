@@ -30,39 +30,67 @@ export class SmsController {
     }
 
     this.logger.log(`📤 Enviando SMS personalizado a ${body.to}`);
+    this.logger.log(`📋 Datos del SMS:`, {
+      to: body.to,
+      messageLength: body.message.length,
+      customerRef: body.customerRef,
+    });
 
     try {
       const result = await this.twilioAdapter.sendSms(body.to, body.message);
+      this.logger.log(`✅ SMS enviado a Twilio: MessageId=${result.providerMessageId}`);
 
       // Buscar o crear Interaction
-      const interaction = await this.interactionsService.upsertInteraction({
-        channel: Channel.SMS,
-        direction: Direction.OUTBOUND,
-        provider: Provider.TWILIO,
-        from: 'system',
-        to: body.to,
-        status: InteractionStatus.IN_PROGRESS,
-        customerRef: body.customerRef,
-      });
+      this.logger.log(`💾 Creando/actualizando interacción SMS...`);
+      let interaction;
+      try {
+        // Para SMS, usamos el número de teléfono como providerConversationId
+        interaction = await this.interactionsService.upsertInteraction({
+          channel: Channel.SMS,
+          direction: Direction.OUTBOUND,
+          provider: Provider.TWILIO,
+          providerConversationId: body.to, // Usar el número como conversationId
+          from: 'system',
+          to: body.to,
+          status: InteractionStatus.IN_PROGRESS,
+          customerRef: body.customerRef,
+        });
+        this.logger.log(`✅ Interacción SMS creada/actualizada: ${interaction.id}`);
+      } catch (error: any) {
+        this.logger.error(`❌ ERROR creando/actualizando interacción SMS:`, error);
+        this.logger.error(`❌ Stack trace:`, error.stack);
+        throw error;
+      }
 
       // Crear Message
-      await this.interactionsService.createMessage({
-        interactionId: interaction.id,
-        channel: Channel.SMS,
-        direction: Direction.OUTBOUND,
-        providerMessageId: result.providerMessageId,
-        text: body.message,
-        sentAt: new Date(),
-      });
+      this.logger.log(`💬 Creando mensaje SMS...`);
+      try {
+        await this.interactionsService.createMessage({
+          interactionId: interaction.id,
+          channel: Channel.SMS,
+          direction: Direction.OUTBOUND,
+          providerMessageId: result.providerMessageId,
+          text: body.message,
+          sentAt: new Date(),
+        });
+        this.logger.log(`✅ Mensaje SMS creado exitosamente`);
+      } catch (error: any) {
+        this.logger.error(`❌ ERROR creando mensaje SMS:`, error);
+        throw error;
+      }
 
       // Audit log
-      await this.auditService.log({
-        actorType: 'SYSTEM',
-        action: 'sms.send',
-        entityType: 'Interaction',
-        entityId: interaction.id,
-        metadata: { messageId: result.providerMessageId, type: 'custom' },
-      });
+      try {
+        await this.auditService.log({
+          actorType: 'SYSTEM',
+          action: 'sms.send',
+          entityType: 'Interaction',
+          entityId: interaction.id,
+          metadata: { messageId: result.providerMessageId, type: 'custom' },
+        });
+      } catch (error: any) {
+        this.logger.error(`⚠️ Error en audit log (no crítico):`, error);
+      }
 
       this.logger.log(`✅ SMS enviado exitosamente: Interaction ${interaction.id}, MessageId: ${result.providerMessageId}`);
 

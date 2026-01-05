@@ -24,7 +24,13 @@ export default function WhatsAppPage() {
           dateFrom: filters.dateFrom || undefined,
           dateTo: filters.dateTo || undefined,
         })
-        setInteractions(data || [])
+        // Ordenar por updatedAt o startedAt (más reciente primero)
+        const sorted = (data || []).sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.startedAt || a.createdAt).getTime()
+          const dateB = new Date(b.updatedAt || b.startedAt || b.createdAt).getTime()
+          return dateB - dateA
+        })
+        setInteractions(sorted)
       } catch (error) {
         console.error('Error fetching WhatsApp:', error)
         setInteractions([])
@@ -34,6 +40,9 @@ export default function WhatsAppPage() {
     }
 
     fetchData()
+    // Auto-refresh cada 10 segundos para ver nuevos mensajes
+    const interval = setInterval(fetchData, 10000)
+    return () => clearInterval(interval)
   }, [filters])
 
   const getStatusBadge = (status: string) => {

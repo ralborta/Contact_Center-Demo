@@ -853,7 +853,7 @@ export default function InteractionDetail({
                           hasMessage: !!whatsappMessage.trim(),
                           providerConversationId: interaction.providerConversationId,
                         })
-                        alert('Error: No se puede enviar el mensaje. Falta información de la conversación.')
+                        // Error silencioso - no mostrar alert
                         return
                       }
                       
@@ -900,7 +900,8 @@ export default function InteractionDetail({
                           response: error.response?.data,
                           status: error.response?.status,
                         })
-                        alert(`Error al enviar mensaje: ${error.response?.data?.message || error.message || 'Error desconocido'}`)
+                        // Error silencioso - no mostrar alert, solo log en consola
+                        // El mensaje no se envió, pero no interrumpimos la experiencia del usuario
                       } finally {
                         setSendingWhatsapp(false)
                       }

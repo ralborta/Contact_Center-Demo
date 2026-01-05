@@ -32,6 +32,13 @@ export default function InteractionPage() {
 
   useEffect(() => {
     fetchInteraction()
+    
+    // Auto-refresh cada 5 segundos para WhatsApp y SMS (para ver nuevos mensajes)
+    const interval = setInterval(() => {
+      fetchInteraction()
+    }, 5000)
+    
+    return () => clearInterval(interval)
   }, [id])
 
   if (loading) {

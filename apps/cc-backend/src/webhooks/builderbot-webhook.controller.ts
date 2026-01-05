@@ -194,59 +194,128 @@ export class BuilderBotWebhookController {
       };
 
       // Buscar o crear interacción
-      // Usar el customerPhone normalizado como providerConversationId para agrupar mensajes del mismo número
-      const providerConversationId = normalizePhoneNumber(customerPhone);
+      // Usar el customerPhone normalizado como base para providerConversationId
+      const basePhoneNumber = normalizePhoneNumber(customerPhone);
+      
+      // Tiempo máximo para considerar una interacción como "activa" (24 horas)
+      const MAX_INACTIVE_HOURS = 24;
+      const maxInactiveTime = new Date(Date.now() - MAX_INACTIVE_HOURS * 60 * 60 * 1000);
 
-      this.logger.log(`💾 Creando/actualizando interacción para ${customerPhone} (normalized: ${providerConversationId})`);
-      this.logger.log(`📋 Datos para upsert: from=${isInbound ? providerConversationId : 'system'}, to=${isInbound ? 'system' : providerConversationId}, providerConversationId=${providerConversationId}`);
+      this.logger.log(`💾 Buscando interacción para ${customerPhone} (normalized: ${basePhoneNumber})`);
+      this.logger.log(`⏰ Tiempo máximo de inactividad: ${MAX_INACTIVE_HOURS} horas (antes de ${maxInactiveTime.toISOString()})`);
 
-      // Buscar interacción existente primero
-      let interaction = await this.interactionsService['prisma'].interaction.findUnique({
-        where: {
-          provider_providerConversationId: {
-            provider: Provider.BUILDERBOT,
-            providerConversationId: providerConversationId,
-          },
-        },
-      });
-
-      // Si no se encuentra, intentar buscar por el número sin normalizar (para migrar datos existentes)
-      if (!interaction) {
-        interaction = await this.interactionsService['prisma'].interaction.findUnique({
+      let interaction;
+      try {
+        // Buscar la interacción más reciente para este número (no necesariamente la única)
+        // Buscar todas las interacciones de WhatsApp para este número y encontrar la más reciente
+        const recentInteractions = await this.interactionsService['prisma'].interaction.findMany({
           where: {
-            provider_providerConversationId: {
-              provider: Provider.BUILDERBOT,
-              providerConversationId: customerPhone,
-            },
+            provider: Provider.BUILDERBOT,
+            channel: Channel.WHATSAPP,
+            OR: [
+              { providerConversationId: basePhoneNumber },
+              { providerConversationId: customerPhone },
+              { from: basePhoneNumber },
+              { from: customerPhone },
+              { to: basePhoneNumber },
+              { to: customerPhone },
+            ],
           },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
         });
-        
-        // Si se encuentra con el formato sin normalizar, actualizar para usar el formato normalizado
-        if (interaction) {
-          this.logger.log(`⚠️ Encontrada interacción con formato sin normalizar, actualizando providerConversationId`);
-          interaction = await this.interactionsService['prisma'].interaction.update({
-            where: { id: interaction.id },
-            data: {
-              providerConversationId: providerConversationId,
-              from: isInbound ? providerConversationId : interaction.from,
-              to: isInbound ? interaction.to : providerConversationId,
-            },
+
+        if (recentInteractions.length > 0) {
+          interaction = recentInteractions[0];
+          const lastUpdateTime = interaction.updatedAt || interaction.startedAt || interaction.createdAt;
+          const isOld = new Date(lastUpdateTime) < maxInactiveTime;
+          
+          this.logger.log(`🔍 Interacción encontrada: ${interaction.id}`);
+          this.logger.log(`📅 Última actualización: ${lastUpdateTime.toISOString()}`);
+          this.logger.log(`⏰ ¿Es antigua? ${isOld ? 'SÍ (crear nueva)' : 'NO (usar existente)'}`);
+          
+          if (isOld) {
+            this.logger.log(`📝 La interacción es muy antigua (${Math.round((Date.now() - lastUpdateTime.getTime()) / (1000 * 60 * 60))} horas), creando nueva interacción`);
+            interaction = null; // Forzar creación de nueva interacción
+          } else {
+            this.logger.log(`✅ Usando interacción existente (última actualización hace ${Math.round((Date.now() - lastUpdateTime.getTime()) / (1000 * 60))} minutos)`);
+            // Actualizar el updatedAt para que aparezca primero en la lista
+            interaction = await this.interactionsService['prisma'].interaction.update({
+              where: { id: interaction.id },
+              data: {
+                updatedAt: new Date(),
+              },
+            });
+          }
+        } else {
+          this.logger.log(`🔍 No se encontró interacción previa para este número`);
+        }
+
+        // Si no existe o es muy antigua, crear una nueva interacción
+        if (!interaction) {
+          // Generar un providerConversationId único para esta nueva sesión
+          // Usar el número base + timestamp para crear una sesión única
+          const sessionId = `${basePhoneNumber}-${Date.now()}`;
+          
+          this.logger.log(`📝 Creando nueva interacción (sesión nueva)...`);
+          this.logger.log(`📋 Datos para crear interacción:`, {
+            channel: Channel.WHATSAPP,
+            direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
+            provider: Provider.BUILDERBOT,
+            providerConversationId: sessionId,
+            from: isInbound ? basePhoneNumber : 'system',
+            to: isInbound ? 'system' : basePhoneNumber,
+            status: InteractionStatus.IN_PROGRESS,
+            customerRef: customerName,
+          });
+          
+          try {
+            interaction = await this.interactionsService.upsertInteraction({
+              channel: Channel.WHATSAPP,
+              direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
+              provider: Provider.BUILDERBOT,
+              providerConversationId: sessionId, // Usar sessionId único en lugar del número base
+              from: isInbound ? basePhoneNumber : 'system',
+              to: isInbound ? 'system' : basePhoneNumber,
+              status: InteractionStatus.IN_PROGRESS,
+              customerRef: customerName,
+            });
+            this.logger.log(`✅ Nueva interacción creada: ${interaction.id} (sesión: ${sessionId})`);
+            this.logger.log(`📋 Interacción creada con:`, {
+              id: interaction.id,
+              providerConversationId: interaction.providerConversationId,
+              from: interaction.from,
+              to: interaction.to,
+              channel: interaction.channel,
+              direction: interaction.direction,
+            });
+          } catch (upsertError: any) {
+            this.logger.error(`❌ ERROR en upsertInteraction:`, upsertError);
+            this.logger.error(`❌ Stack trace:`, upsertError.stack);
+            throw upsertError;
+          }
+        } else {
+          this.logger.log(`✅ Interacción existente encontrada: ${interaction.id}`);
+          this.logger.log(`📋 Interacción existente:`, {
+            id: interaction.id,
+            providerConversationId: interaction.providerConversationId,
+            from: interaction.from,
+            to: interaction.to,
+            channel: interaction.channel,
+            direction: interaction.direction,
+            lastUpdate: interaction.updatedAt,
           });
         }
-      }
-
-      // Si no existe, crear una nueva
-      if (!interaction) {
-        interaction = await this.interactionsService.upsertInteraction({
-          channel: Channel.WHATSAPP,
-          direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
-          provider: Provider.BUILDERBOT,
-          providerConversationId: providerConversationId,
+      } catch (error: any) {
+        this.logger.error(`❌ ERROR creando/actualizando interacción:`, error);
+        this.logger.error(`❌ Stack trace:`, error.stack);
+        this.logger.error(`❌ Datos que causaron el error:`, {
+          providerConversationId,
           from: isInbound ? providerConversationId : 'system',
           to: isInbound ? 'system' : providerConversationId,
-          status: InteractionStatus.IN_PROGRESS,
-          customerRef: customerName,
+          channel: Channel.WHATSAPP,
         });
+        throw error;
       }
 
       this.logger.log(`✅ Interaction creada/actualizada: ${interaction.id}`);
@@ -256,18 +325,32 @@ export class BuilderBotWebhookController {
       
       this.logger.log(`💾 Guardando mensaje: direction=${direction}, interactionId=${interaction.id}, text="${messageText.substring(0, 50)}..."`);
       
-      const savedMessage = await this.interactionsService.createMessage({
-        interactionId: interaction.id,
-        channel: Channel.WHATSAPP,
-        direction: direction,
-        providerMessageId: messageId,
-        text: messageText || (hasAttachments ? '[Archivo adjunto]' : null),
-        mediaUrl: urlTempFile || (attachments[0]?.url),
-        sentAt: new Date(),
-      });
+      let savedMessage;
+      try {
+        savedMessage = await this.interactionsService.createMessage({
+          interactionId: interaction.id,
+          channel: Channel.WHATSAPP,
+          direction: direction,
+          providerMessageId: messageId,
+          text: messageText || (hasAttachments ? '[Archivo adjunto]' : null),
+          mediaUrl: urlTempFile || (attachments[0]?.url),
+          sentAt: new Date(),
+        });
 
-      this.logger.log(`✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado: MessageId=${savedMessage.id}, InteractionId=${interaction.id}`);
-      this.logger.log(`📝 Detalles completos: direction=${savedMessage.direction}, text="${savedMessage.text?.substring(0, 50)}...", createdAt=${savedMessage.createdAt}`);
+        this.logger.log(`✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado: MessageId=${savedMessage.id}, InteractionId=${interaction.id}`);
+        this.logger.log(`📝 Detalles completos: direction=${savedMessage.direction}, text="${savedMessage.text?.substring(0, 50)}...", createdAt=${savedMessage.createdAt}`);
+      } catch (messageError: any) {
+        this.logger.error(`❌ ERROR guardando mensaje:`, messageError);
+        this.logger.error(`❌ Stack trace:`, messageError.stack);
+        this.logger.error(`❌ Datos del mensaje:`, {
+          interactionId: interaction.id,
+          channel: Channel.WHATSAPP,
+          direction: direction,
+          providerMessageId: messageId,
+          textLength: messageText.length,
+        });
+        throw messageError;
+      }
 
       // Crear evento con el tipo correcto
       const eventType = isInbound ? 'message.incoming' : 'message.outgoing';
@@ -298,6 +381,7 @@ export class BuilderBotWebhookController {
       });
 
       // Verificar que el mensaje se guardó correctamente
+      this.logger.log(`🔍 Verificando que el mensaje se guardó correctamente...`);
       const messageCount = await this.interactionsService['prisma'].message.count({
         where: { interactionId: interaction.id },
       });
@@ -316,6 +400,22 @@ export class BuilderBotWebhookController {
         },
       });
 
+      // Verificar que el mensaje recién creado existe
+      const verifyMessage = await this.interactionsService['prisma'].message.findFirst({
+        where: {
+          interactionId: interaction.id,
+          providerMessageId: messageId,
+        },
+      });
+
+      if (!verifyMessage) {
+        this.logger.error(`❌ CRÍTICO: El mensaje NO se encontró en la base de datos después de crearlo!`);
+        this.logger.error(`❌ MessageId buscado: ${messageId}`);
+        this.logger.error(`❌ InteractionId: ${interaction.id}`);
+      } else {
+        this.logger.log(`✅ Verificación exitosa: Mensaje encontrado en DB con ID: ${verifyMessage.id}`);
+      }
+
       this.logger.log(
         `✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} procesado completamente: Interaction ${interaction.id}, Customer: ${customerName || customerPhone}`,
       );
@@ -325,7 +425,11 @@ export class BuilderBotWebhookController {
       return {
         ok: true,
         interactionId: interaction.id,
-        messageId,
+        messageId: savedMessage.id,
+        messageCount,
+        inboundCount,
+        outboundCount,
+        verified: !!verifyMessage,
       };
     } catch (error) {
       this.logger.error(`❌ Error procesando webhook de BuilderBot:`, error.stack || error);

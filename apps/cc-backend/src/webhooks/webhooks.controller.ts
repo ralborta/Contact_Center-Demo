@@ -20,15 +20,23 @@ export class WebhooksController {
     @Req() req: RawBodyRequest<Request>,
   ) {
     try {
+      console.log(`[WebhookController] Webhook recibido en /webhooks/elevenlabs/call`);
+      console.log(`[WebhookController] Headers:`, JSON.stringify(req.headers, null, 2));
+      console.log(`[WebhookController] Body recibido:`, JSON.stringify(payload, null, 2));
+      
       const result = await this.webhooksService.handleElevenLabs(payload, token);
+      console.log(`[WebhookController] ✅ Webhook procesado exitosamente:`, result);
       return result;
     } catch (error: any) {
       // Log del error pero responder con 200 para que ElevenLabs no reintente
       // (a menos que sea un error de autenticación)
       if (error instanceof UnauthorizedException) {
+        console.error('[WebhookController] ❌ Error de autenticación:', error.message);
         throw error; // Re-lanzar errores de autenticación
       }
-      console.error('[Webhook ElevenLabs] Error procesando webhook:', error);
+      console.error('[WebhookController] ❌ Error procesando webhook:', error);
+      console.error('[WebhookController] Error stack:', error.stack);
+      console.error('[WebhookController] Payload que causó el error:', JSON.stringify(payload, null, 2));
       return { 
         success: false, 
         error: error.message,
@@ -46,8 +54,32 @@ export class WebhooksController {
   async handleTwilioStatus(
     @Body() payload: any,
     @Headers('x-webhook-token') token: string,
+    @Req() req: RawBodyRequest<Request>,
   ) {
-    return this.webhooksService.handleTwilioStatus(payload, token);
+    try {
+      console.log(`[WebhookController] Webhook recibido en /webhooks/twilio/sms/status`);
+      console.log(`[WebhookController] Headers:`, JSON.stringify(req.headers, null, 2));
+      console.log(`[WebhookController] Body recibido:`, JSON.stringify(payload, null, 2));
+      
+      const result = await this.webhooksService.handleTwilioStatus(payload, token);
+      console.log(`[WebhookController] ✅ Webhook Twilio procesado exitosamente:`, result);
+      return result;
+    } catch (error: any) {
+      // Log del error pero responder con 200 para que Twilio no reintente
+      // (a menos que sea un error de autenticación)
+      if (error instanceof UnauthorizedException) {
+        console.error('[WebhookController] ❌ Error de autenticación Twilio:', error.message);
+        throw error; // Re-lanzar errores de autenticación
+      }
+      console.error('[WebhookController] ❌ Error procesando webhook Twilio:', error);
+      console.error('[WebhookController] Error stack:', error.stack);
+      console.error('[WebhookController] Payload que causó el error:', JSON.stringify(payload, null, 2));
+      return { 
+        success: false, 
+        error: error.message,
+        message: 'Error procesado, se intentará nuevamente en el próximo evento'
+      };
+    }
   }
 
   @Post('elevenlabs/call-init')

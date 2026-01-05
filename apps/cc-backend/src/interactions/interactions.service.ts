@@ -53,7 +53,8 @@ export class InteractionsService {
         },
         callDetail: true,
       },
-      orderBy: { startedAt: 'desc' },
+      // Ordenar por updatedAt (más reciente primero) para mostrar conversaciones con actividad reciente arriba
+      orderBy: { updatedAt: 'desc' },
       take: limit,
       skip: skip,
     });
@@ -315,22 +316,42 @@ export class InteractionsService {
     customerRef?: string;
     queue?: string;
   }) {
+    // Normalizar providerConversationId (convertir string vacío a undefined)
+    const providerConversationId = data.providerConversationId?.trim() || undefined;
+    
+    console.log(`[InteractionsService] upsertInteraction llamado con:`, {
+      provider: data.provider,
+      providerConversationId: providerConversationId || '(sin ID)',
+      from: data.from,
+      to: data.to,
+      channel: data.channel,
+    });
+
     // Si no hay providerConversationId, usar findFirst + create en lugar de upsert
-    if (!data.providerConversationId) {
+    if (!providerConversationId) {
+      console.log(`[InteractionsService] ⚠️ No hay providerConversationId, buscando por otros campos...`);
       // Buscar interacción existente por otros campos
+      // Buscar interacción reciente (últimas 5 minutos) con los mismos datos
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const existing = await this.prisma.interaction.findFirst({
         where: {
           provider: data.provider as any,
           from: data.from,
           to: data.to,
           channel: data.channel,
-          startedAt: data.startedAt,
+          createdAt: {
+            gte: fiveMinutesAgo,
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
         },
       });
 
       if (existing) {
+        console.log(`[InteractionsService] ✅ Encontrada interacción existente: ${existing.id}`);
         // Actualizar existente
-        return this.prisma.interaction.update({
+        const updated = await this.prisma.interaction.update({
           where: { id: existing.id },
           data: {
             status: data.status,
@@ -344,14 +365,17 @@ export class InteractionsService {
             updatedAt: new Date(),
           },
         });
+        console.log(`[InteractionsService] ✅ Interacción actualizada: ${updated.id}`);
+        return updated;
       } else {
+        console.log(`[InteractionsService] 📝 Creando nueva interacción sin providerConversationId...`);
         // Crear nuevo
-        return this.prisma.interaction.create({
+        const created = await this.prisma.interaction.create({
           data: {
             channel: data.channel,
             direction: data.direction,
             provider: data.provider as any,
-            providerConversationId: data.providerConversationId,
+            providerConversationId: providerConversationId,
             from: data.from,
             to: data.to,
             status: data.status || InteractionStatus.NEW,
@@ -364,45 +388,61 @@ export class InteractionsService {
             queue: data.queue,
           },
         });
+        console.log(`[InteractionsService] ✅ Nueva interacción creada: ${created.id}`);
+        return created;
       }
     }
 
     // Si hay providerConversationId, usar upsert con el índice único
-    return this.prisma.interaction.upsert({
-      where: {
-        provider_providerConversationId: {
-          provider: data.provider as any,
-          providerConversationId: data.providerConversationId!,
+    console.log(`[InteractionsService] 🔄 Usando upsert con providerConversationId: ${providerConversationId}`);
+    try {
+      const result = await this.prisma.interaction.upsert({
+        where: {
+          provider_providerConversationId: {
+            provider: data.provider as any,
+            providerConversationId: providerConversationId!,
+          },
         },
-      },
-      update: {
-        status: data.status,
-        startedAt: data.startedAt,
-        endedAt: data.endedAt,
-        assignedAgent: data.assignedAgent,
-        intent: data.intent,
-        outcome: data.outcome as any,
-        customerRef: data.customerRef,
-        queue: data.queue,
-        updatedAt: new Date(),
-      },
-      create: {
-        channel: data.channel,
-        direction: data.direction,
-        provider: data.provider as any,
-        providerConversationId: data.providerConversationId,
+        update: {
+          status: data.status,
+          startedAt: data.startedAt,
+          endedAt: data.endedAt,
+          assignedAgent: data.assignedAgent,
+          intent: data.intent,
+          outcome: data.outcome as any,
+          customerRef: data.customerRef,
+          queue: data.queue,
+          updatedAt: new Date(),
+        },
+        create: {
+          channel: data.channel,
+          direction: data.direction,
+          provider: data.provider as any,
+          providerConversationId: providerConversationId,
+          from: data.from,
+          to: data.to,
+          status: data.status || InteractionStatus.NEW,
+          startedAt: data.startedAt || new Date(),
+          endedAt: data.endedAt,
+          assignedAgent: data.assignedAgent,
+          intent: data.intent,
+          outcome: data.outcome as any,
+          customerRef: data.customerRef,
+          queue: data.queue,
+        },
+      });
+      console.log(`[InteractionsService] ✅ Upsert exitoso: ${result.id}`);
+      return result;
+    } catch (error: any) {
+      console.error(`[InteractionsService] ❌ Error en upsert:`, error);
+      console.error(`[InteractionsService] Datos que causaron el error:`, {
+        provider: data.provider,
+        providerConversationId: providerConversationId,
         from: data.from,
         to: data.to,
-        status: data.status || InteractionStatus.NEW,
-        startedAt: data.startedAt || new Date(),
-        endedAt: data.endedAt,
-        assignedAgent: data.assignedAgent,
-        intent: data.intent,
-        outcome: data.outcome as any,
-        customerRef: data.customerRef,
-        queue: data.queue,
-      },
-    });
+      });
+      throw error;
+    }
   }
 
   async createEvent(data: {

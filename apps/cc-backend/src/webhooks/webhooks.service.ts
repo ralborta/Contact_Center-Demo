@@ -30,12 +30,23 @@ export class WebhooksService {
       throw new UnauthorizedException('Invalid webhook token');
     }
 
+    // Log del payload completo para debugging
+    console.log(`[Webhook ElevenLabs] Payload recibido:`, JSON.stringify(payload, null, 2));
+
     // Normalizar payload
     const normalized = this.elevenLabsAdapter.normalizePayload(payload);
     const eventType = normalized.eventType || 'call.event';
     const conversationId = normalized.conversationId || normalized.callId || normalized.sessionId;
 
     console.log(`[Webhook ElevenLabs] Evento recibido: ${eventType}, ConversationId: ${conversationId}`);
+    console.log(`[Webhook ElevenLabs] Payload normalizado:`, JSON.stringify(normalized, null, 2));
+    
+    // Validar que tenemos información mínima para crear la interacción
+    if (!conversationId && (!normalized.from || normalized.from === 'unknown')) {
+      console.error(`[Webhook ElevenLabs] ERROR: No se puede crear interacción sin conversationId o número de teléfono`);
+      console.error(`[Webhook ElevenLabs] Payload original:`, JSON.stringify(payload, null, 2));
+      throw new Error('Missing required fields: conversationId or from phone number');
+    }
 
     // Generar idempotency key
     const idempotencyKey = `elevenlabs:${normalized.eventId || crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`;
@@ -51,24 +62,47 @@ export class WebhooksService {
     }
 
     // Upsert Interaction - respuesta rápida para tiempo real
-    const interaction = await this.interactionsService.upsertInteraction({
-      channel: Channel.CALL,
-      direction: Direction.INBOUND,
-      provider: Provider.ELEVENLABS,
+    console.log(`[Webhook ElevenLabs] Creando/actualizando interacción con:`, {
       providerConversationId: conversationId,
-      from: normalized.from || 'unknown',
-      to: normalized.to || 'unknown',
+      from: normalized.from,
+      to: normalized.to,
       status: normalized.status,
       startedAt: normalized.startedAt,
-      endedAt: normalized.endedAt,
-      assignedAgent: normalized.assignedAgent || normalized.agentName || normalized.agentId,
-      intent: normalized.intent,
-      outcome: normalized.outcome,
-      customerRef: normalized.customerRef,
-      queue: normalized.queue,
     });
 
-    console.log(`[Webhook ElevenLabs] Interaction ${interaction.id} creada/actualizada`);
+    let interaction;
+    try {
+      interaction = await this.interactionsService.upsertInteraction({
+        channel: Channel.CALL,
+        direction: Direction.INBOUND,
+        provider: Provider.ELEVENLABS,
+        providerConversationId: conversationId || undefined, // Convertir string vacío a undefined
+        from: normalized.from || 'unknown',
+        to: normalized.to || 'unknown',
+        status: normalized.status,
+        startedAt: normalized.startedAt,
+        endedAt: normalized.endedAt,
+        assignedAgent: normalized.assignedAgent || normalized.agentName || normalized.agentId,
+        intent: normalized.intent,
+        outcome: normalized.outcome,
+        customerRef: normalized.customerRef,
+        queue: normalized.queue,
+      });
+
+      console.log(`[Webhook ElevenLabs] ✅ Interaction ${interaction.id} creada/actualizada exitosamente`);
+      console.log(`[Webhook ElevenLabs] Interaction details:`, {
+        id: interaction.id,
+        providerConversationId: interaction.providerConversationId,
+        from: interaction.from,
+        to: interaction.to,
+        status: interaction.status,
+        createdAt: interaction.createdAt,
+      });
+    } catch (error: any) {
+      console.error(`[Webhook ElevenLabs] ❌ ERROR creando/actualizando interacción:`, error);
+      console.error(`[Webhook ElevenLabs] Stack trace:`, error.stack);
+      throw error;
+    }
 
     // Crear evento
     await this.interactionsService.createEvent({
@@ -251,22 +285,40 @@ export class WebhooksService {
   }
 
   async handleTwilioStatus(payload: any, token: string) {
+    console.log(`[Webhook Twilio Status] Payload recibido:`, JSON.stringify(payload, null, 2));
+
     // Validar token (opcional, Twilio también puede usar firma)
     if (token && !this.twilioAdapter.verifyToken(token)) {
+      console.error(`[Webhook Twilio Status] ❌ Token inválido`);
       throw new UnauthorizedException('Invalid webhook token');
     }
 
     // Normalizar payload
     const normalized = this.twilioAdapter.normalizeStatusPayload(payload);
+    console.log(`[Webhook Twilio Status] Payload normalizado:`, JSON.stringify(normalized, null, 2));
 
     // Buscar Message por providerMessageId
+    console.log(`[Webhook Twilio Status] Buscando mensaje con providerMessageId: ${normalized.messageSid}`);
     const message = await this.prisma.message.findFirst({
       where: { providerMessageId: normalized.messageSid },
       include: { interaction: true },
     });
 
-    if (message) {
+    if (!message) {
+      console.warn(`[Webhook Twilio Status] ⚠️ Mensaje no encontrado con providerMessageId: ${normalized.messageSid}`);
+      console.warn(`[Webhook Twilio Status] Esto puede ser normal si el mensaje aún no se ha creado en la base de datos`);
+      return { 
+        success: false, 
+        message: 'Message not found',
+        messageSid: normalized.messageSid 
+      };
+    }
+
+    console.log(`[Webhook Twilio Status] ✅ Mensaje encontrado: MessageId=${message.id}, InteractionId=${message.interactionId}`);
+
+    try {
       // Actualizar Message
+      console.log(`[Webhook Twilio Status] Actualizando mensaje con status: ${normalized.status}`);
       await this.prisma.message.update({
         where: { id: message.id },
         data: {
@@ -275,38 +327,58 @@ export class WebhooksService {
           readAt: normalized.status === 'read' ? new Date() : null,
         },
       });
+      console.log(`[Webhook Twilio Status] ✅ Mensaje actualizado exitosamente`);
 
       // Crear evento
-      await this.interactionsService.createEvent({
-        interactionId: message.interactionId,
-        type: 'sms.status',
-        provider: Provider.TWILIO,
-        providerEventId: normalized.messageSid,
-        payload: { raw: payload, normalized },
-      });
+      try {
+        await this.interactionsService.createEvent({
+          interactionId: message.interactionId,
+          type: 'sms.status',
+          provider: Provider.TWILIO,
+          providerEventId: normalized.messageSid,
+          payload: { raw: payload, normalized },
+        });
+        console.log(`[Webhook Twilio Status] ✅ Evento creado exitosamente`);
+      } catch (error: any) {
+        console.error(`[Webhook Twilio Status] ⚠️ Error creando evento (no crítico):`, error.message);
+      }
 
       // Actualizar Interaction si es necesario
       if (normalized.status === 'delivered' || normalized.status === 'failed') {
-        await this.prisma.interaction.update({
-          where: { id: message.interactionId },
-          data: {
-            status: normalized.status === 'delivered' ? InteractionStatus.COMPLETED : InteractionStatus.FAILED,
-            endedAt: new Date(),
-          },
-        });
+        console.log(`[Webhook Twilio Status] Actualizando interacción con status: ${normalized.status === 'delivered' ? 'COMPLETED' : 'FAILED'}`);
+        try {
+          await this.prisma.interaction.update({
+            where: { id: message.interactionId },
+            data: {
+              status: normalized.status === 'delivered' ? InteractionStatus.COMPLETED : InteractionStatus.FAILED,
+              endedAt: new Date(),
+            },
+          });
+          console.log(`[Webhook Twilio Status] ✅ Interacción actualizada exitosamente`);
+        } catch (error: any) {
+          console.error(`[Webhook Twilio Status] ⚠️ Error actualizando interacción (no crítico):`, error.message);
+        }
       }
+    } catch (error: any) {
+      console.error(`[Webhook Twilio Status] ❌ ERROR procesando webhook:`, error);
+      console.error(`[Webhook Twilio Status] Stack trace:`, error.stack);
+      throw error;
     }
 
     // Audit log
-    await this.auditService.log({
-      actorType: 'SYSTEM',
-      action: 'webhook.twilio.status',
-      entityType: 'Message',
-      entityId: message?.id || 'unknown',
-      metadata: { status: normalized.status, messageSid: normalized.messageSid },
-    });
+    try {
+      await this.auditService.log({
+        actorType: 'SYSTEM',
+        action: 'webhook.twilio.status',
+        entityType: 'Message',
+        entityId: message.id,
+        metadata: { status: normalized.status, messageSid: normalized.messageSid },
+      });
+    } catch (error: any) {
+      console.error(`[Webhook Twilio Status] ⚠️ Error en audit log (no crítico):`, error.message);
+    }
 
-    return { success: true };
+    return { success: true, messageId: message.id, interactionId: message.interactionId };
   }
 
   /**

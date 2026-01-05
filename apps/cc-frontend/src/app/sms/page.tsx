@@ -64,7 +64,7 @@ export default function SMSPage() {
 
   const handleSendSms = async (type: string, message?: string) => {
     if (!phone.trim()) {
-      alert('Por favor ingresá un número de teléfono')
+      // Error silencioso - no mostrar alert
       return
     }
 
@@ -105,7 +105,7 @@ export default function SMSPage() {
       }
       setSendHistory([newHistory, ...sendHistory].slice(0, 10))
 
-      alert('SMS enviado exitosamente')
+      // Mensaje enviado exitosamente - sin alert visible
       
       // Refrescar historial
       const data = await interactionsApi.getAll({ channel: 'SMS', direction: 'OUTBOUND' })
@@ -113,23 +113,12 @@ export default function SMSPage() {
     } catch (error: any) {
       console.error('Error sending SMS:', error)
       
-      // Extraer el mensaje de error correctamente
-      let errorMessage = 'Error desconocido al enviar SMS'
-      
-      if (error.response?.data?.message) {
-        // Error del backend (NestJS)
-        errorMessage = error.response.data.message
-      } else if (error.response?.data?.error) {
-        // Error del backend (formato alternativo)
-        errorMessage = error.response.data.error
-      } else if (error.message) {
-        // Error de la red o axios
-        errorMessage = error.message
-      } else if (typeof error === 'string') {
-        errorMessage = error
-      }
-      
-      alert(`Error al enviar SMS: ${errorMessage}`)
+      // Error silencioso - no mostrar alert, solo log en consola
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      })
     } finally {
       setLoading(false)
     }
