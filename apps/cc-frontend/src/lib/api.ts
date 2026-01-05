@@ -53,6 +53,7 @@ export interface Interaction {
   provider: string
   providerConversationId?: string | null
   createdAt: string
+  updatedAt?: string | null
   customerRef?: string | null
   queue?: string | null
   events?: InteractionEvent[]
