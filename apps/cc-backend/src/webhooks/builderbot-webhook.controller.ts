@@ -209,7 +209,7 @@ export class BuilderBotWebhookController {
         // Buscar la interacción más reciente para este número (no necesariamente la única)
         // Buscar todas las interacciones de WhatsApp para este número y encontrar la más reciente
         const recentInteractions = await this.interactionsService['prisma'].interaction.findMany({
-          where: {
+        where: {
             provider: Provider.BUILDERBOT,
             channel: Channel.WHATSAPP,
             OR: [
@@ -240,19 +240,19 @@ export class BuilderBotWebhookController {
           } else {
             this.logger.log(`✅ Usando interacción existente (última actualización hace ${Math.round((Date.now() - lastUpdateTime.getTime()) / (1000 * 60))} minutos)`);
             // Actualizar el updatedAt para que aparezca primero en la lista
-            interaction = await this.interactionsService['prisma'].interaction.update({
-              where: { id: interaction.id },
-              data: {
+          interaction = await this.interactionsService['prisma'].interaction.update({
+            where: { id: interaction.id },
+            data: {
                 updatedAt: new Date(),
-              },
-            });
-          }
+            },
+          });
+        }
         } else {
           this.logger.log(`🔍 No se encontró interacción previa para este número`);
-        }
+      }
 
         // Si no existe o es muy antigua, crear una nueva interacción
-        if (!interaction) {
+      if (!interaction) {
           // Generar un providerConversationId único para esta nueva sesión
           // Usar el número base + timestamp para crear una sesión única
           const sessionId = `${basePhoneNumber}-${Date.now()}`;
@@ -270,16 +270,16 @@ export class BuilderBotWebhookController {
           });
           
           try {
-            interaction = await this.interactionsService.upsertInteraction({
-              channel: Channel.WHATSAPP,
-              direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
-              provider: Provider.BUILDERBOT,
+        interaction = await this.interactionsService.upsertInteraction({
+          channel: Channel.WHATSAPP,
+          direction: isInbound ? Direction.INBOUND : Direction.OUTBOUND,
+          provider: Provider.BUILDERBOT,
               providerConversationId: sessionId, // Usar sessionId único en lugar del número base
               from: isInbound ? basePhoneNumber : 'system',
               to: isInbound ? 'system' : basePhoneNumber,
-              status: InteractionStatus.IN_PROGRESS,
-              customerRef: customerName,
-            });
+          status: InteractionStatus.IN_PROGRESS,
+          customerRef: customerName,
+        });
             this.logger.log(`✅ Nueva interacción creada: ${interaction.id} (sesión: ${sessionId})`);
             this.logger.log(`📋 Interacción creada con:`, {
               id: interaction.id,
@@ -310,9 +310,10 @@ export class BuilderBotWebhookController {
         this.logger.error(`❌ ERROR creando/actualizando interacción:`, error);
         this.logger.error(`❌ Stack trace:`, error.stack);
         this.logger.error(`❌ Datos que causaron el error:`, {
-          providerConversationId,
-          from: isInbound ? providerConversationId : 'system',
-          to: isInbound ? 'system' : providerConversationId,
+          basePhoneNumber,
+          customerPhone,
+          from: isInbound ? basePhoneNumber : 'system',
+          to: isInbound ? 'system' : basePhoneNumber,
           channel: Channel.WHATSAPP,
         });
         throw error;
@@ -328,17 +329,17 @@ export class BuilderBotWebhookController {
       let savedMessage;
       try {
         savedMessage = await this.interactionsService.createMessage({
-          interactionId: interaction.id,
-          channel: Channel.WHATSAPP,
-          direction: direction,
-          providerMessageId: messageId,
-          text: messageText || (hasAttachments ? '[Archivo adjunto]' : null),
-          mediaUrl: urlTempFile || (attachments[0]?.url),
-          sentAt: new Date(),
-        });
+        interactionId: interaction.id,
+        channel: Channel.WHATSAPP,
+        direction: direction,
+        providerMessageId: messageId,
+        text: messageText || (hasAttachments ? '[Archivo adjunto]' : null),
+        mediaUrl: urlTempFile || (attachments[0]?.url),
+        sentAt: new Date(),
+      });
 
-        this.logger.log(`✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado: MessageId=${savedMessage.id}, InteractionId=${interaction.id}`);
-        this.logger.log(`📝 Detalles completos: direction=${savedMessage.direction}, text="${savedMessage.text?.substring(0, 50)}...", createdAt=${savedMessage.createdAt}`);
+      this.logger.log(`✅ Mensaje ${isInbound ? 'INBOUND' : 'OUTBOUND'} guardado: MessageId=${savedMessage.id}, InteractionId=${interaction.id}`);
+      this.logger.log(`📝 Detalles completos: direction=${savedMessage.direction}, text="${savedMessage.text?.substring(0, 50)}...", createdAt=${savedMessage.createdAt}`);
       } catch (messageError: any) {
         this.logger.error(`❌ ERROR guardando mensaje:`, messageError);
         this.logger.error(`❌ Stack trace:`, messageError.stack);
