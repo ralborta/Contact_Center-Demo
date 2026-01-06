@@ -45,14 +45,53 @@ export class BuilderBotWebhookController {
   @Post('whatsapp')
   @ApiOperation({ summary: 'Webhook para mensajes entrantes de BuilderBot' })
   async handleWhatsAppWebhook(
-    @Body() payload: BuilderBotWebhook,
+    @Body() payload: any,
   ) {
+    // Logging inicial CRÍTICO para diagnóstico
+    this.logger.log(`═══════════════════════════════════════════════════════`);
+    this.logger.log(`🚨 WEBHOOK BUILDERBOT RECIBIDO - INICIO`);
+    this.logger.log(`═══════════════════════════════════════════════════════`);
+    this.logger.log(`📦 Payload completo: ${JSON.stringify(payload, null, 2)}`);
+    this.logger.log(`📦 Tipo de payload: ${typeof payload}`);
+    this.logger.log(`📦 Keys del payload: ${Object.keys(payload || {}).join(', ')}`);
+    
     try {
-      this.logger.log(
-        `📩 Webhook recibido de BuilderBot: ${JSON.stringify(payload)}`,
-      );
+      // Validar que el payload tenga la estructura esperada
+      if (!payload) {
+        this.logger.error(`❌ ERROR: Payload vacío o null`);
+        return { ok: false, error: 'Payload vacío' };
+      }
 
-      const { eventName, data } = payload;
+      // Intentar extraer eventName y data de diferentes formatos posibles
+      let eventName: string;
+      let data: any;
+
+      // Formato esperado: { eventName: "...", data: {...} }
+      if (payload.eventName && payload.data) {
+        eventName = payload.eventName;
+        data = payload.data;
+        this.logger.log(`✅ Formato estándar detectado: eventName=${eventName}`);
+      } 
+      // Formato alternativo: el payload completo es el data
+      else if (payload.event || payload.type) {
+        eventName = payload.event || payload.type || 'message.incoming';
+        data = payload;
+        this.logger.log(`✅ Formato alternativo detectado: eventName=${eventName}`);
+      }
+      // Formato alternativo: solo viene el data directamente
+      else if (payload.body || payload.from || payload.phone) {
+        eventName = 'message.incoming';
+        data = payload;
+        this.logger.log(`✅ Formato directo detectado (solo data), asumiendo message.incoming`);
+      }
+      else {
+        this.logger.error(`❌ ERROR: No se pudo extraer eventName ni data del payload`);
+        this.logger.error(`❌ Payload recibido: ${JSON.stringify(payload, null, 2)}`);
+        return { ok: false, error: 'Formato de payload no reconocido', received: payload };
+      }
+
+      this.logger.log(`📩 Webhook recibido de BuilderBot: eventName=${eventName}`);
+      this.logger.log(`📋 Data extraída: ${JSON.stringify(data, null, 2)}`);
 
       // Procesar mensajes entrantes (del cliente) y salientes (del bot/agente)
       this.logger.log(`🔍 Evento recibido: ${eventName}`);
@@ -423,6 +462,10 @@ export class BuilderBotWebhookController {
       this.logger.log(`📊 Estado final: Total=${messageCount}, INBOUND=${inboundCount}, OUTBOUND=${outboundCount}`);
       this.logger.log(`═══════════════════════════════════════════════════════`);
 
+      this.logger.log(`═══════════════════════════════════════════════════════`);
+      this.logger.log(`✅ WEBHOOK BUILDERBOT PROCESADO EXITOSAMENTE`);
+      this.logger.log(`═══════════════════════════════════════════════════════`);
+
       return {
         ok: true,
         interactionId: interaction.id,
@@ -432,9 +475,22 @@ export class BuilderBotWebhookController {
         outboundCount,
         verified: !!verifyMessage,
       };
-    } catch (error) {
-      this.logger.error(`❌ Error procesando webhook de BuilderBot:`, error.stack || error);
-      throw error;
+    } catch (error: any) {
+      this.logger.error(`═══════════════════════════════════════════════════════`);
+      this.logger.error(`❌ ERROR CRÍTICO PROCESANDO WEBHOOK BUILDERBOT`);
+      this.logger.error(`═══════════════════════════════════════════════════════`);
+      this.logger.error(`❌ Error: ${error.message}`);
+      this.logger.error(`❌ Stack: ${error.stack}`);
+      this.logger.error(`❌ Payload que causó el error: ${JSON.stringify(payload, null, 2)}`);
+      
+      // NO lanzar el error - responder con 200 para que BuilderBot no reintente infinitamente
+      // pero loguear todo para diagnóstico
+      return {
+        ok: false,
+        error: error.message,
+        errorType: error.constructor.name,
+        message: 'Error procesando webhook, ver logs para detalles',
+      };
     }
   }
 
