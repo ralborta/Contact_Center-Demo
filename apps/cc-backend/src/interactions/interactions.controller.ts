@@ -8,13 +8,17 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiHeader } from '@nestjs/swagger';
 import { InteractionsService } from './interactions.service';
+import { AISummaryService } from './ai-summary.service';
 import { PiiMasker } from '../adapters/pii-masker';
 import { Channel, Direction, InteractionStatus } from '@prisma/client';
 
 @ApiTags('Interactions')
 @Controller('interactions')
 export class InteractionsController {
-  constructor(private interactionsService: InteractionsService) {}
+  constructor(
+    private interactionsService: InteractionsService,
+    private aiSummaryService: AISummaryService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Listar interacciones' })
@@ -177,5 +181,11 @@ export class InteractionsController {
   @ApiOperation({ summary: 'Obtener perfil completo del cliente con estadísticas' })
   async getClientProfile(@Param('phone') phone: string) {
     return this.interactionsService.getClientProfile(phone);
+  }
+
+  @Get('client/:phone/ai-summary')
+  @ApiOperation({ summary: 'Obtener resumen inteligente generado por IA del cliente' })
+  async getClientAISummary(@Param('phone') phone: string) {
+    return this.aiSummaryService.generateClientSummary(phone);
   }
 }

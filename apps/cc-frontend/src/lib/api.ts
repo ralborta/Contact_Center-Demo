@@ -146,6 +146,33 @@ export const interactionsApi = {
     }
   },
 
+  getClientAISummary: async (phone: string): Promise<{
+    summary: string
+    keyPoints: string[]
+    suggestedActions: string[]
+    sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+    generatedAt: string
+  }> => {
+    if (typeof window === 'undefined') {
+      return {
+        summary: '',
+        keyPoints: [],
+        suggestedActions: [],
+        sentiment: 'NEUTRAL',
+        generatedAt: new Date().toISOString(),
+      }
+    }
+    try {
+      const api = getApi()
+      const decodedPhone = decodeURIComponent(phone)
+      const { data } = await api.get(`/api/interactions/client/${encodeURIComponent(decodedPhone)}/ai-summary`)
+      return data
+    } catch (error) {
+      console.error('Error fetching AI summary:', error)
+      throw error
+    }
+  },
+
   getClientProfile: async (phone: string): Promise<{
     phone: string
     normalizedPhone: string

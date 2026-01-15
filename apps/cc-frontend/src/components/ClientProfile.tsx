@@ -18,6 +18,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 import Link from 'next/link'
+import AISummary from './AISummary'
 
 interface ClientProfileProps {
   phone: string
@@ -227,6 +228,9 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
             </div>
           </div>
         </div>
+
+        {/* Resumen Inteligente con IA */}
+        <AISummary phone={phone} />
 
         {/* KPIs y Búsqueda */}
         <div className="flex items-center justify-between mb-6">
