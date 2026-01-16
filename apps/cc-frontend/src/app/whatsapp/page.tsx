@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import { interactionsApi, Interaction } from '@/lib/api'
 import Link from 'next/link'
-import { MessageSquare, Filter, ExternalLink } from 'lucide-react'
+import { MessageSquare, Filter, ExternalLink, Clock, User, CheckCircle2, XCircle, AlertCircle, TrendingUp, MessageCircle } from 'lucide-react'
 
 export default function WhatsAppPage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
@@ -46,14 +46,14 @@ export default function WhatsAppPage() {
   }, [filters])
 
   const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      COMPLETED: 'bg-green-100 text-green-800',
-      IN_PROGRESS: 'bg-blue-100 text-blue-800',
-      ABANDONED: 'bg-red-100 text-red-800',
-      NEW: 'bg-gray-100 text-gray-800',
-      FAILED: 'bg-red-100 text-red-800',
+    const config: Record<string, { bg: string; text: string; icon: any }> = {
+      COMPLETED: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle2 },
+      IN_PROGRESS: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock },
+      ABANDONED: { bg: 'bg-amber-100', text: 'text-amber-700', icon: AlertCircle },
+      NEW: { bg: 'bg-gray-100', text: 'text-gray-700', icon: MessageSquare },
+      FAILED: { bg: 'bg-red-100', text: 'text-red-700', icon: XCircle },
     }
-    return colors[status] || 'bg-gray-100 text-gray-800'
+    return config[status] || config.NEW
   }
 
   const formatDate = (date: string | null) => {
@@ -71,158 +71,244 @@ export default function WhatsAppPage() {
     return interaction.messages?.length || 0
   }
 
+  // Calcular estadísticas
+  const stats = {
+    total: interactions.length,
+    totalMessages: interactions.reduce((acc, i) => acc + getMessageCount(i), 0),
+    inProgress: interactions.filter((i) => i.status === 'IN_PROGRESS').length,
+    completed: interactions.filter((i) => i.status === 'COMPLETED').length,
+    unassigned: interactions.filter((i) => !i.assignedAgent).length,
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50/30 to-gray-50">
       <Header />
-      <div className="container mx-auto px-4 py-6">
-        <div className="mb-6">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="p-3 bg-green-100 rounded-xl">
-              <MessageSquare className="w-6 h-6 text-green-600" />
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header con título mejorado */}
+        <div className="mb-8">
+          <div className="flex items-center space-x-4 mb-2">
+            <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg">
+              <MessageSquare className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Gestión de WhatsApp</h1>
-              <p className="text-gray-500 text-sm mt-1">Administra y revisa todas las conversaciones de WhatsApp</p>
-            </div>
-          </div>
-          
-          {/* Filtros */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Filter className="w-5 h-5 text-gray-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estado
-                </label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">Todos</option>
-                  <option value="NEW">Nueva</option>
-                  <option value="IN_PROGRESS">En Progreso</option>
-                  <option value="COMPLETED">Completada</option>
-                  <option value="ABANDONED">Abandonada</option>
-                  <option value="FAILED">Fallida</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Desde
-                </label>
-                <input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Hasta
-                </label>
-                <input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
+              <h1 className="text-4xl font-bold text-gray-900">Gestión de WhatsApp</h1>
+              <p className="text-gray-600 mt-1">Administra y revisa todas las conversaciones de WhatsApp</p>
             </div>
           </div>
         </div>
 
-        {/* Tabla de WhatsApp */}
+        {/* Estadísticas */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-green-100 rounded-xl">
+                <MessageCircle className="w-6 h-6 text-green-600" />
+              </div>
+              <TrendingUp className="w-5 h-5 text-gray-400" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+            <p className="text-sm text-gray-600 mt-1">Conversaciones</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <MessageSquare className="w-6 h-6 text-blue-600" />
+              </div>
+              <TrendingUp className="w-5 h-5 text-gray-400" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{stats.totalMessages}</p>
+            <p className="text-sm text-gray-600 mt-1">Total Mensajes</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <Clock className="w-6 h-6 text-blue-600" />
+              </div>
+              <TrendingUp className="w-5 h-5 text-gray-400" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{stats.inProgress}</p>
+            <p className="text-sm text-gray-600 mt-1">En Progreso</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-amber-100 rounded-xl">
+                <User className="w-6 h-6 text-amber-600" />
+              </div>
+              <TrendingUp className="w-5 h-5 text-gray-400" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{stats.unassigned}</p>
+            <p className="text-sm text-gray-600 mt-1">Sin Asignar</p>
+          </div>
+        </div>
+
+        {/* Filtros mejorados */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Filter className="w-5 h-5 text-green-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Filtros</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Estado
+              </label>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              >
+                <option value="">Todos</option>
+                <option value="NEW">Nueva</option>
+                <option value="IN_PROGRESS">En Progreso</option>
+                <option value="COMPLETED">Completada</option>
+                <option value="ABANDONED">Abandonada</option>
+                <option value="FAILED">Fallida</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Desde
+              </label>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Hasta
+              </label>
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de conversaciones con cards */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-            <p className="mt-4 text-gray-500">Cargando...</p>
+          <div className="text-center py-16">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-green-600 border-t-transparent"></div>
+            <p className="mt-4 text-gray-600 font-medium">Cargando conversaciones...</p>
+          </div>
+        ) : interactions.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-16 text-center">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MessageSquare className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No hay conversaciones registradas</h3>
+            <p className="text-gray-600">No se encontraron conversaciones con los filtros seleccionados</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Desde
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Hacia
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Mensajes
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Agente
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {interactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                        No hay conversaciones de WhatsApp registradas
-                      </td>
-                    </tr>
-                  ) : (
-                    interactions.map((interaction) => (
-                      <tr key={interaction.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {interaction.from}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {interaction.to}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(
-                              interaction.status
-                            )}`}
-                          >
-                            {interaction.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {getMessageCount(interaction)} mensajes
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {interaction.assignedAgent || 'Sin asignar'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(interaction.startedAt || interaction.createdAt)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Link
-                            href={`/interaction/${interaction.id}`}
-                            className="text-blue-600 hover:text-blue-800 flex items-center space-x-1 group"
-                          >
-                            <span>Ver conversación</span>
-                            <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                          </Link>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="bg-gray-50 px-6 py-3 border-t">
+          <div className="space-y-4">
+            {interactions.map((interaction) => {
+              const statusConfig = getStatusBadge(interaction.status)
+              const StatusIcon = statusConfig.icon
+              const messageCount = getMessageCount(interaction)
+              
+              return (
+                <div
+                  key={interaction.id}
+                  className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:border-green-200"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-4 mb-4">
+                        <div className={`p-3 ${statusConfig.bg} rounded-xl`}>
+                          <StatusIcon className={`w-6 h-6 ${statusConfig.text}`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="text-lg font-bold text-gray-900">
+                              {interaction.from || 'Número desconocido'}
+                            </h3>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
+                              {interaction.status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            Hacia: {interaction.to || 'Número desconocido'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        <div className="flex items-center space-x-2">
+                          <MessageSquare className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <p className="text-xs text-gray-500">Mensajes</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {messageCount} {messageCount === 1 ? 'mensaje' : 'mensajes'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <User className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <p className="text-xs text-gray-500">Agente</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {interaction.assignedAgent || 'Sin asignar'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <p className="text-xs text-gray-500">Última actividad</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {formatDate(interaction.updatedAt || interaction.startedAt || interaction.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        {interaction.intent && (
+                          <div className="flex items-center space-x-2">
+                            <AlertCircle className="w-4 h-4 text-gray-400" />
+                            <div>
+                              <p className="text-xs text-gray-500">Intención</p>
+                              <p className="text-sm font-semibold text-gray-900 truncate">
+                                {interaction.intent}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="ml-6">
+                      <Link
+                        href={`/interaction/${interaction.id}`}
+                        className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                      >
+                        <span>Ver conversación</span>
+                        <ExternalLink className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Footer con total */}
+        {!loading && interactions.length > 0 && (
+          <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-600 font-medium">
+                Mostrando <span className="font-bold text-gray-900">{stats.total}</span> conversaciones
+              </p>
               <p className="text-sm text-gray-500">
-                Total: {interactions.length} conversaciones de WhatsApp
+                Total mensajes: <span className="font-semibold">{stats.totalMessages}</span>
               </p>
             </div>
           </div>
