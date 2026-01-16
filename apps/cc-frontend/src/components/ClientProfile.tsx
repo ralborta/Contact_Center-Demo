@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import AISummary from './AISummary'
+import ClientManagementModal from './ClientManagementModal'
 
 interface ClientProfileProps {
   phone: string
@@ -45,6 +46,7 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
   const [profileData, setProfileData] = useState<ClientProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showManagementModal, setShowManagementModal] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -220,7 +222,10 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
               </div>
 
               {/* Botón Gestionar Cliente */}
-              <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+              <button
+                onClick={() => setShowManagementModal(true)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 <Settings className="w-4 h-4" />
                 <span>Gestionar Cliente</span>
                 <ChevronDown className="w-4 h-4" />
@@ -484,6 +489,26 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal de Gestión de Cliente */}
+      <ClientManagementModal
+        phone={phone}
+        customerName={clientName}
+        isOpen={showManagementModal}
+        onClose={() => setShowManagementModal(false)}
+        onUpdate={() => {
+          // Refrescar datos del perfil
+          const fetchData = async () => {
+            try {
+              const data = await interactionsApi.getClientProfile(phone)
+              setProfileData(data)
+            } catch (error) {
+              console.error('Error fetching client profile:', error)
+            }
+          }
+          fetchData()
+        }}
+      />
     </div>
   )
 }
