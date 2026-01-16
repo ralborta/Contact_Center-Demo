@@ -142,96 +142,126 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50/30 to-purple-50">
       <Header />
       
-      <div className="container mx-auto px-6 py-6">
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
         {/* Header de la página */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Clientes</h1>
+        <div className="mb-8">
+          <div className="flex items-center space-x-4 mb-6">
+            <div className="p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
+              <Users className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900">Clientes</h1>
+              <p className="text-gray-600 mt-1">Gestiona y revisa todos tus clientes</p>
+            </div>
+          </div>
           
-          {/* Búsqueda */}
+          {/* Búsqueda mejorada */}
           <div className="relative max-w-md">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="Buscar por nombre o teléfono..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white shadow-sm"
             />
           </div>
         </div>
 
         {/* Lista de Clientes */}
         {filteredClients.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-gray-100">
             <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">
               {searchQuery ? 'No se encontraron clientes' : 'No hay clientes registrados'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredClients.map(([phone, interactions]) => {
               const clientName = getClientName(interactions)
               const stats = getClientStats(interactions)
               const lastInteraction = interactions[0]
+              const initials = clientName
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2) || clientName.charAt(0).toUpperCase()
+              
+              // Colores de gradiente para el avatar basados en el nombre
+              const gradientColors = [
+                'from-blue-400 to-blue-600',
+                'from-purple-400 to-purple-600',
+                'from-pink-400 to-pink-600',
+                'from-indigo-400 to-indigo-600',
+                'from-cyan-400 to-cyan-600',
+                'from-emerald-400 to-emerald-600',
+                'from-orange-400 to-orange-600',
+                'from-rose-400 to-rose-600',
+              ]
+              const colorIndex = clientName.charCodeAt(0) % gradientColors.length
+              const avatarGradient = gradientColors[colorIndex]
               
               return (
                 <Link
                   key={phone}
                   href={`/cliente/${encodeURIComponent(phone)}`}
-                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow border border-gray-200"
+                  className="group bg-white rounded-2xl shadow-lg p-6 hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-indigo-200 hover:scale-[1.02]"
                 >
                   {/* Header del Card */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      {/* Avatar */}
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                        {clientName.charAt(0).toUpperCase()}
+                      {/* Avatar con gradiente */}
+                      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-bold text-lg shadow-md group-hover:scale-110 transition-transform`}>
+                        {initials}
                       </div>
                       
                       {/* Nombre y Teléfono */}
                       <div>
-                        <h3 className="font-semibold text-gray-900">{clientName}</h3>
+                        <h3 className="font-bold text-gray-900 text-lg group-hover:text-indigo-600 transition-colors">
+                          {clientName}
+                        </h3>
                         <p className="text-sm text-gray-600 flex items-center gap-1">
                           <Phone className="w-3 h-3" />
-                          {phone}
+                          <span className="truncate max-w-[150px]">{phone}</span>
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Estadísticas */}
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="text-center">
+                  {/* Estadísticas con iconos coloridos */}
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="text-center p-3 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
                       <div className="flex items-center justify-center gap-1 text-blue-600 mb-1">
                         <Phone className="w-4 h-4" />
-                        <span className="text-sm font-medium">{stats.calls}</span>
+                        <span className="text-lg font-bold">{stats.calls}</span>
                       </div>
-                      <p className="text-xs text-gray-500">Llamadas</p>
+                      <p className="text-xs text-gray-600 font-medium">Llamadas</p>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center p-3 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
                       <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
                         <MessageSquare className="w-4 h-4" />
-                        <span className="text-sm font-medium">{stats.whatsapp}</span>
+                        <span className="text-lg font-bold">{stats.whatsapp}</span>
                       </div>
-                      <p className="text-xs text-gray-500">WhatsApp</p>
+                      <p className="text-xs text-gray-600 font-medium">WhatsApp</p>
                     </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-1 text-blue-500 mb-1">
+                    <div className="text-center p-3 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
+                      <div className="flex items-center justify-center gap-1 text-indigo-600 mb-1">
                         <Mail className="w-4 h-4" />
-                        <span className="text-sm font-medium">{stats.sms}</span>
+                        <span className="text-lg font-bold">{stats.sms}</span>
                       </div>
-                      <p className="text-xs text-gray-500">SMS</p>
+                      <p className="text-xs text-gray-600 font-medium">SMS</p>
                     </div>
                   </div>
 
                   {/* Última Interacción */}
-                  <div className="border-t border-gray-200 pt-4">
+                  <div className="border-t border-gray-100 pt-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-500">Última interacción</span>
+                      <span className="text-xs text-gray-500 font-medium">Última interacción</span>
                       <span className="text-xs text-gray-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {getLastInteractionTime(interactions)}
@@ -239,7 +269,7 @@ export default function ClientsPage() {
                     </div>
                     
                     {lastInteraction && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg group-hover:bg-gray-100 transition-colors">
                         {getChannelIcon(lastInteraction.channel)}
                         <span className="text-sm text-gray-700 flex-1 truncate">
                           {lastInteraction.channel === 'CALL'
@@ -256,15 +286,15 @@ export default function ClientsPage() {
                   </div>
 
                   {/* Total de Interacciones */}
-                  <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">Total interacciones</span>
-                      <span className="text-sm font-semibold text-gray-900">{stats.total}</span>
+                      <span className="text-xs text-gray-500 font-medium">Total interacciones</span>
+                      <span className="text-lg font-bold text-indigo-600">{stats.total}</span>
                     </div>
                     {stats.resolved > 0 && (
-                      <div className="flex items-center justify-between mt-1">
+                      <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-gray-500">Resueltas</span>
-                        <span className="text-sm font-medium text-green-600">
+                        <span className="text-sm font-semibold text-green-600">
                           {stats.resolved} ({Math.round((stats.resolved / stats.total) * 100)}%)
                         </span>
                       </div>
