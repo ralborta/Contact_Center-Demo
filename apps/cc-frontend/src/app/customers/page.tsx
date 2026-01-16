@@ -36,12 +36,20 @@ export default function CustomersPage() {
     status: '',
     search: '',
   })
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    phone: string
+    name: string
+    email: string
+    dni: string
+    status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'PENDING'
+    segment: string
+    preferredChannel: string
+  }>({
     phone: '',
     name: '',
     email: '',
     dni: '',
-    status: 'ACTIVE' as const,
+    status: 'ACTIVE',
     segment: '',
     preferredChannel: '',
   })
@@ -116,7 +124,7 @@ export default function CustomersPage() {
       name: '',
       email: '',
       dni: '',
-      status: 'ACTIVE',
+      status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'PENDING',
       segment: '',
       preferredChannel: '',
     })
@@ -129,7 +137,7 @@ export default function CustomersPage() {
       name: customer.name || '',
       email: customer.email || '',
       dni: customer.dni || '',
-      status: customer.status,
+      status: customer.status as 'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'PENDING',
       segment: customer.segment || '',
       preferredChannel: customer.preferredChannel || '',
     })
