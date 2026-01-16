@@ -334,4 +334,197 @@ export const whatsappApi = {
   },
 }
 
+export const customersApi = {
+  getAll: async (filters?: {
+    status?: string
+    segment?: string
+    search?: string
+    limit?: number
+    skip?: number
+  }) => {
+    if (typeof window === 'undefined') {
+      return { customers: [], total: 0, limit: 100, skip: 0 }
+    }
+    try {
+      const api = getApi()
+      const params = new URLSearchParams()
+      if (filters?.status) params.append('status', filters.status)
+      if (filters?.segment) params.append('segment', filters.segment)
+      if (filters?.search) params.append('search', filters.search)
+      if (filters?.limit) params.append('limit', filters.limit.toString())
+      if (filters?.skip) params.append('skip', filters.skip.toString())
+      
+      const { data } = await api.get(`/api/customers?${params.toString()}`)
+      return data
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+      throw error
+    }
+  },
+
+  getByPhone: async (phone: string) => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.get(`/api/customers/phone/${encodeURIComponent(phone)}`)
+      return data
+    } catch (error) {
+      console.error('Error fetching customer by phone:', error)
+      return null
+    }
+  },
+
+  getById: async (id: string) => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.get(`/api/customers/${id}`)
+      return data
+    } catch (error) {
+      console.error('Error fetching customer:', error)
+      throw error
+    }
+  },
+
+  create: async (data: {
+    phone: string
+    name?: string
+    email?: string
+    dni?: string
+    status?: string
+    segment?: string
+    preferredChannel?: string
+  }) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data: result } = await api.post('/api/customers', data)
+      return result
+    } catch (error) {
+      console.error('Error creating customer:', error)
+      throw error
+    }
+  },
+
+  update: async (id: string, data: {
+    name?: string
+    email?: string
+    dni?: string
+    status?: string
+    segment?: string
+    preferredChannel?: string
+  }) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data: result } = await api.put(`/api/customers/${id}`, data)
+      return result
+    } catch (error) {
+      console.error('Error updating customer:', error)
+      throw error
+    }
+  },
+
+  delete: async (id: string) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.delete(`/api/customers/${id}`)
+      return data
+    } catch (error) {
+      console.error('Error deleting customer:', error)
+      throw error
+    }
+  },
+
+  block: async (id: string) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post(`/api/customers/${id}/block`, {})
+      return data
+    } catch (error) {
+      console.error('Error blocking customer:', error)
+      throw error
+    }
+  },
+
+  addTag: async (id: string, tag: {
+    type: string
+    label: string
+    description?: string
+    color?: string
+  }) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post(`/api/customers/${id}/tags`, tag)
+      return data
+    } catch (error) {
+      console.error('Error adding tag:', error)
+      throw error
+    }
+  },
+
+  removeTag: async (id: string, tagId: string) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.delete(`/api/customers/${id}/tags/${tagId}`)
+      return data
+    } catch (error) {
+      console.error('Error removing tag:', error)
+      throw error
+    }
+  },
+
+  addNote: async (id: string, note: {
+    title?: string
+    content: string
+    isInternal?: boolean
+  }) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Customers API only available on client side')
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.post(`/api/customers/${id}/notes`, note)
+      return data
+    } catch (error) {
+      console.error('Error adding note:', error)
+      throw error
+    }
+  },
+
+  getStats: async (id: string) => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+    try {
+      const api = getApi()
+      const { data } = await api.get(`/api/customers/${id}/stats`)
+      return data
+    } catch (error) {
+      console.error('Error fetching customer stats:', error)
+      throw error
+    }
+  },
+}
+
 export default getApi

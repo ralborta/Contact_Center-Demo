@@ -10,6 +10,7 @@ import { AuditModule } from './audit/audit.module';
 import { PiiModule } from './pii/pii.module';
 import { SyncModule } from './sync/sync.module';
 import { SmsModule } from './sms/sms.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { SmsModule } from './sms/sms.module';
     PiiModule,
     SyncModule,
     SmsModule,
+    CustomersModule,
   ],
 })
 export class AppModule {}

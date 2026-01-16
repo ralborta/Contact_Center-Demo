@@ -72,13 +72,24 @@ export default function Header() {
             <Link
               href="/cliente"
               className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all ${
-                pathname?.startsWith('/cliente')
+                pathname?.startsWith('/cliente') && !pathname?.startsWith('/customers')
                   ? 'bg-white/20 backdrop-blur-sm shadow-md'
                   : 'hover:bg-white/10'
               }`}
             >
               <Users className="w-4 h-4" />
               <span className="text-sm font-medium">Cliente</span>
+            </Link>
+            <Link
+              href="/customers"
+              className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all ${
+                pathname === '/customers'
+                  ? 'bg-white/20 backdrop-blur-sm shadow-md'
+                  : 'hover:bg-white/10'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span className="text-sm font-medium">Gestión</span>
             </Link>
             <div className="h-6 w-px bg-white/30 mx-2" />
             <button className="p-2 hover:bg-white/10 rounded-lg transition-all relative">

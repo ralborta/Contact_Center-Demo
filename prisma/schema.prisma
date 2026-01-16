@@ -66,30 +66,49 @@ enum ActorType {
   AGENT
 }
 
-model Interaction {
-  id                        String            @id @default(uuid())
-  channel                   Channel
-  direction                 Direction
-  status                    InteractionStatus @default(NEW)
-  startedAt                 DateTime?
-  endedAt                   DateTime?
-  from                      String
-  to                        String
-  customerRef               String?
-  queue                     String?
-  assignedAgent             String?
-  aiHandled                 Boolean           @default(false)
-  outcome                   Outcome?
-  intent                    String?
-  provider                  Provider
-  providerConversationId   String?
-  createdAt                 DateTime          @default(now())
-  updatedAt                 DateTime          @updatedAt
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  PENDING
+}
 
-  events                    InteractionEvent[]
-  messages                  Message[]
-  callDetail                CallDetail?
-  otpChallenges             OtpChallenge[]
+enum CustomerTagType {
+  PREFERRED
+  VIP
+  BLACKLIST
+  FRAUD_RISK
+  HIGH_VALUE
+  COMPLAINT
+  LOYAL
+  NEW
+  CUSTOM
+}
+
+model Interaction {
+  id                     String            @id @default(uuid())
+  channel                Channel
+  direction              Direction
+  status                 InteractionStatus @default(NEW)
+  startedAt              DateTime?
+  endedAt                DateTime?
+  from                   String
+  to                     String
+  customerRef            String?
+  queue                  String?
+  assignedAgent          String?
+  aiHandled              Boolean           @default(false)
+  outcome                Outcome?
+  intent                 String?
+  provider               Provider
+  providerConversationId String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  events        InteractionEvent[]
+  messages      Message[]
+  callDetail    CallDetail?
+  otpChallenges OtpChallenge[]
 
   @@unique([provider, providerConversationId])
   @@index([channel, startedAt])
@@ -101,17 +120,17 @@ model Interaction {
 }
 
 model InteractionEvent {
-  id                String    @id @default(uuid())
-  interactionId     String
-  ts                DateTime  @default(now())
-  type              String
-  provider          Provider
-  providerEventId   String?
-  idempotencyKey    String?   @unique
-  payload           Json
-  createdAt         DateTime  @default(now())
+  id              String   @id @default(uuid())
+  interactionId   String
+  ts              DateTime @default(now())
+  type            String
+  provider        Provider
+  providerEventId String?
+  idempotencyKey  String?  @unique
+  payload         Json
+  createdAt       DateTime @default(now())
 
-  interaction       Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  interaction Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
 
   @@index([interactionId, ts])
   @@index([idempotencyKey])
@@ -119,7 +138,7 @@ model InteractionEvent {
 }
 
 model Message {
-  id                String      @id @default(uuid())
+  id                String    @id @default(uuid())
   interactionId     String
   channel           Channel
   direction         Direction
@@ -128,11 +147,11 @@ model Message {
   mediaUrl          String?
   providerStatus    String?
   sentAt            DateTime?
-  deliveredAt      DateTime?
+  deliveredAt       DateTime?
   readAt            DateTime?
-  createdAt         DateTime    @default(now())
+  createdAt         DateTime  @default(now())
 
-  interaction       Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  interaction Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
 
   @@index([providerMessageId])
   @@index([interactionId])
@@ -140,38 +159,38 @@ model Message {
 }
 
 model CallDetail {
-  id                String      @id @default(uuid())
-  interactionId     String      @unique
-  elevenCallId      String?
-  recordingUrl      String?
-  transcriptText    String?     @db.Text
-  transcriptId      String?
-  summary           String?     @db.Text
-  durationSec       Int?
-  hangupReason      String?
-  createdAt         DateTime    @default(now())
+  id             String   @id @default(uuid())
+  interactionId  String   @unique
+  elevenCallId   String?
+  recordingUrl   String?
+  transcriptText String?  @db.Text
+  transcriptId   String?
+  summary        String?  @db.Text
+  durationSec    Int?
+  hangupReason   String?
+  createdAt      DateTime @default(now())
 
-  interaction       Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  interaction Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
 
   @@map("call_details")
 }
 
 model OtpChallenge {
-  id                String      @id @default(uuid())
-  phone             String
-  purpose           OtpPurpose
-  otpHash           String
-  expiresAt         DateTime
-  maxAttempts       Int         @default(5)
-  attempts          Int         @default(0)
-  status            OtpStatus   @default(PENDING)
-  correlationId     String      @unique
-  interactionId     String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  verifiedAt        DateTime?
+  id            String     @id @default(uuid())
+  phone         String
+  purpose       OtpPurpose
+  otpHash       String
+  expiresAt     DateTime
+  maxAttempts   Int        @default(5)
+  attempts      Int        @default(0)
+  status        OtpStatus  @default(PENDING)
+  correlationId String     @unique
+  interactionId String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  verifiedAt    DateTime?
 
-  interaction       Interaction? @relation(fields: [interactionId], references: [id], onDelete: SetNull)
+  interaction Interaction? @relation(fields: [interactionId], references: [id], onDelete: SetNull)
 
   @@index([phone, purpose, createdAt])
   @@index([correlationId])
@@ -180,20 +199,79 @@ model OtpChallenge {
 }
 
 model AuditLog {
-  id                String      @id @default(uuid())
-  ts                DateTime    @default(now())
-  actorType         ActorType
-  actorId           String?
-  action            String
-  entityType        String
-  entityId          String
-  ip                String?
-  userAgent         String?
-  metadata          Json?
-  createdAt         DateTime    @default(now())
+  id         String    @id @default(uuid())
+  ts         DateTime  @default(now())
+  actorType  ActorType
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  ip         String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
 
   @@index([ts])
   @@index([action])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+model Customer {
+  id               String         @id @default(uuid())
+  phone            String         @unique
+  normalizedPhone  String         @unique
+  name             String?
+  email            String?
+  dni              String?
+  status           CustomerStatus @default(ACTIVE)
+  segment          String?
+  preferredChannel Channel?
+  notes            CustomerNote[]
+  tags             CustomerTag[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  createdBy        String?
+  updatedBy        String?
+
+  @@index([phone])
+  @@index([normalizedPhone])
+  @@index([status])
+  @@index([createdAt])
+  @@map("customers")
+}
+
+model CustomerTag {
+  id          String          @id @default(uuid())
+  customerId  String
+  type        CustomerTagType
+  label       String
+  description String?
+  color       String? // Color para UI (hex)
+  createdAt   DateTime        @default(now())
+  createdBy   String?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, type, label])
+  @@index([customerId])
+  @@index([type])
+  @@map("customer_tags")
+}
+
+model CustomerNote {
+  id         String   @id @default(uuid())
+  customerId String
+  title      String?
+  content    String   @db.Text
+  isInternal Boolean  @default(false) // Si es true, solo visible para agentes
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("customer_notes")
 }
