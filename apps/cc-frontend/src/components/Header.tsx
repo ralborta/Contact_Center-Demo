@@ -2,10 +2,19 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Phone, MessageSquare, Mail, Bell, User, Users } from 'lucide-react'
+import { LayoutDashboard, Phone, MessageSquare, Mail, Bell, User, Users, UserCog, LogOut } from 'lucide-react'
+import { getUser, clearAuth, isAdmin } from '@/lib/auth'
+import { resetApiInstance } from '@/lib/api'
 
 export default function Header() {
   const pathname = usePathname()
+  const user = typeof window !== 'undefined' ? getUser() : null
+
+  function handleLogout() {
+    clearAuth()
+    resetApiInstance()
+    window.location.href = '/login'
+  }
 
   return (
     <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-xl">
@@ -80,13 +89,35 @@ export default function Header() {
               <Users className="w-4 h-4" />
               <span className="text-sm font-medium">Cliente</span>
             </Link>
+            {typeof window !== 'undefined' && isAdmin() && (
+              <Link
+                href="/usuarios"
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all ${
+                  pathname === '/usuarios'
+                    ? 'bg-white/20 backdrop-blur-sm shadow-md'
+                    : 'hover:bg-white/10'
+                }`}
+              >
+                <UserCog className="w-4 h-4" />
+                <span className="text-sm font-medium">Usuarios</span>
+              </Link>
+            )}
             <div className="h-6 w-px bg-white/30 mx-2" />
             <button className="p-2 hover:bg-white/10 rounded-lg transition-all relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-400 rounded-full"></span>
             </button>
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-all cursor-pointer">
-              <User className="w-5 h-5" />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-blue-100 hidden sm:inline">
+                {user?.username} ({user?.profileName ?? user?.profile})
+              </span>
+              <button
+                onClick={handleLogout}
+                className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             </div>
           </nav>
         </div>

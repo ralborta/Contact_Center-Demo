@@ -55,6 +55,8 @@ cp .env.example .env
 Variables importantes:
 - `DATABASE_URL`: URL de conexión a PostgreSQL
 - `REDIS_HOST`, `REDIS_PORT`: Configuración de Redis
+- `JWT_SECRET`: Clave secreta para firmar tokens JWT (ej. una cadena aleatoria larga). Obligatoria en producción.
+- `JWT_EXPIRES_IN`: (opcional) Expiración del token, ej. `7d` (por defecto).
 - `ELEVENLABS_WEBHOOK_TOKEN`: Token para validar webhooks de ElevenLabs
 - `BUILDERBOT_WEBHOOK_TOKEN`, `BUILDERBOT_API_URL`, `BUILDERBOT_API_KEY`: Configuración de builderbot
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: Credenciales de Twilio
@@ -83,7 +85,15 @@ npm run prisma:generate
 npm run prisma:migrate
 ```
 
-6. **Iniciar backend**
+6. **Crear perfiles y usuario admin inicial (seed)**
+
+```bash
+npm run db:seed
+```
+
+Esto crea los perfiles **ADMIN**, **AGENT** y **VIEWER**, y un usuario `admin` con contraseña `Admin123!`. **Cambiar la contraseña** después del primer acceso.
+
+7. **Iniciar backend**
 
 En una terminal:
 ```bash
@@ -97,6 +107,8 @@ npm run dev:worker
 
 El API estará disponible en `http://localhost:3000`
 La documentación Swagger en `http://localhost:3000/api/docs`
+
+**Autenticación:** La consola (frontend) y la mayoría de endpoints requieren login. Use `POST /api/auth/login` con `{ "username": "admin", "password": "Admin123!" }` para obtener el JWT y enviarlo en el header `Authorization: Bearer <token>`. El perfil **ADMIN** puede ver todos los registros, borrarlos y gestionar usuarios y perfiles en `/usuarios`.
 
 ## Deploy en Railway
 
@@ -241,11 +253,25 @@ Una vez que tengas el dominio público de Railway (ej: `https://your-app.up.rail
 ## Endpoints Principales
 
 ### Health
-- `GET /api/health` - Health check
+- `GET /api/health` - Health check (público)
+
+### Auth
+- `POST /api/auth/login` - Login con usuario y contraseña; devuelve JWT y datos del usuario. Resto de endpoints requieren `Authorization: Bearer <token>`.
+
+### Users (solo perfil ADMIN)
+- `GET /api/users` - Listar usuarios
+- `POST /api/users` - Crear usuario
+- `GET /api/users/:id` - Obtener usuario
+- `PUT /api/users/:id` - Actualizar usuario
+- `DELETE /api/users/:id` - Eliminar usuario
+
+### Profiles
+- `GET /api/profiles` - Listar perfiles (ADMIN, AGENT, VIEWER)
 
 ### Interactions
 - `GET /api/interactions` - Listar interacciones (con filtros)
 - `GET /api/interactions/:id` - Detalle de interacción
+- `DELETE /api/interactions/:id` - Eliminar interacción (solo ADMIN)
 
 ### OTP
 - `POST /api/otp` - Crear OTP challenge y encolar envío SMS

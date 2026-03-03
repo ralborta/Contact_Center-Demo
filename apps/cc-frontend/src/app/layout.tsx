@@ -1,4 +1,5 @@
 import './globals.css'
+import AuthGuard from '@/components/AuthGuard'
 
 export const metadata = {
   title: 'Contact Center - Dashboard',
@@ -12,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="bg-gray-50">{children}</body>
+      <body className="bg-gray-50">
+        <AuthGuard>{children}</AuthGuard>
+      </body>
     </html>
   )
 }

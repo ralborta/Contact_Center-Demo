@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 import { InteractionsModule } from './interactions/interactions.module';
 import { OtpModule } from './otp/otp.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
@@ -48,6 +50,8 @@ import { CustomersModule } from './customers/customers.module';
     }),
     PrismaModule,
     HealthModule,
+    AuthModule,
+    UsersModule,
     InteractionsModule,
     OtpModule,
     WebhooksModule,

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { getToken, clearAuth } from './auth'
 
 // Get API URL - only available on client side
 const getApiUrl = () => {
@@ -16,6 +17,10 @@ const getApiUrl = () => {
 // Create axios instance lazily to avoid SSR issues
 let apiInstance: AxiosInstance | null = null
 
+export function resetApiInstance() {
+  apiInstance = null
+}
+
 const getApi = (): AxiosInstance => {
   if (!apiInstance) {
     apiInstance = axios.create({
@@ -26,10 +31,25 @@ const getApi = (): AxiosInstance => {
       timeout: 10000, // 10 seconds timeout
     })
 
-    // Add response interceptor for error handling
+    // Request: add JWT
+    apiInstance.interceptors.request.use((config) => {
+      const token = getToken()
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      return config
+    })
+
+    // Response: 401 -> logout and redirect to login
     apiInstance.interceptors.response.use(
       (response) => response,
       (error) => {
+        if (error.response?.status === 401) {
+          clearAuth()
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login'
+          }
+        }
         console.error('API Error:', error.message)
         return Promise.reject(error)
       }
@@ -84,6 +104,57 @@ export interface CallDetail {
   durationSec: number | null
 }
 
+export const authApi = {
+  login: async (username: string, password: string) => {
+    const api = getApi()
+    const { data } = await api.post<{
+      accessToken: string
+      user: { id: string; username: string; profile: string; profileName: string }
+    }>('/api/auth/login', { username, password })
+    return data
+  },
+}
+
+export const usersApi = {
+  getAll: async () => {
+    const api = getApi()
+    const { data } = await api.get('/api/users')
+    return data
+  },
+  getById: async (id: string) => {
+    const api = getApi()
+    const { data } = await api.get(`/api/users/${id}`)
+    return data
+  },
+  create: async (body: { username: string; password: string; profileId: string; active?: boolean }) => {
+    const api = getApi()
+    const { data } = await api.post('/api/users', body)
+    return data
+  },
+  update: async (id: string, body: { password?: string; profileId?: string; active?: boolean }) => {
+    const api = getApi()
+    const { data } = await api.put(`/api/users/${id}`, body)
+    return data
+  },
+  delete: async (id: string) => {
+    const api = getApi()
+    await api.delete(`/api/users/${id}`)
+  },
+}
+
+export const profilesApi = {
+  getAll: async () => {
+    const api = getApi()
+    const { data } = await api.get('/api/profiles')
+    return data
+  },
+  getById: async (id: string) => {
+    const api = getApi()
+    const { data } = await api.get(`/api/profiles/${id}`)
+    return data
+  },
+}
+
 export const interactionsApi = {
   getAll: async (filters?: {
     channel?: string
@@ -127,6 +198,11 @@ export const interactionsApi = {
       console.error('Error fetching interaction:', error)
       return null // Return null on error
     }
+  },
+
+  delete: async (id: string) => {
+    const api = getApi()
+    await api.delete(`/api/interactions/${id}`)
   },
 
   getByPhone: async (phone: string): Promise<Interaction[]> => {

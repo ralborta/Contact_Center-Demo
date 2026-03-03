@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "db:seed": "npm run seed --workspace=apps/cc-backend",
     "dev:backend": "npm run dev --workspace=apps/cc-backend",
     "dev:worker": "npm run dev --workspace=apps/cc-worker",
     "dev:frontend": "npm run dev --workspace=apps/cc-frontend",

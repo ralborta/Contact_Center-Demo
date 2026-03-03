@@ -1,13 +1,16 @@
-import { Controller, Post, Body, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Post, Body, Logger, BadRequestException, InternalServerErrorException, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InteractionsService } from '../interactions/interactions.service';
 import { AuditService } from '../audit/audit.service';
 import { TwilioAdapter } from '../adapters/twilio.adapter';
 import { OtpService } from '../otp/otp.service';
 import { Channel, Direction, InteractionStatus, Provider, OtpPurpose } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('SMS')
+@ApiBearerAuth()
 @Controller('sms')
+@UseGuards(JwtAuthGuard)
 export class SmsController {
   private readonly logger = new Logger(SmsController.name);
   private readonly twilioAdapter: TwilioAdapter;

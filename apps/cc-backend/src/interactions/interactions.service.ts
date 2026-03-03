@@ -526,4 +526,9 @@ export class InteractionsService {
       },
     });
   }
+
+  async delete(id: string) {
+    await this.prisma.interaction.delete({ where: { id } });
+    return { success: true };
+  }
 }

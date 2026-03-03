@@ -3,17 +3,24 @@ import {
   Get,
   Param,
   Query,
+  Delete,
   UseGuards,
-  Headers,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiHeader } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InteractionsService } from './interactions.service';
 import { AISummaryService } from './ai-summary.service';
 import { PiiMasker } from '../adapters/pii-masker';
 import { Channel, Direction, InteractionStatus } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { RequestUser } from '../auth/jwt.strategy';
 
 @ApiTags('Interactions')
+@ApiBearerAuth()
 @Controller('interactions')
+@UseGuards(JwtAuthGuard)
 export class InteractionsController {
   constructor(
     private interactionsService: InteractionsService,
@@ -36,7 +43,6 @@ export class InteractionsController {
   @ApiQuery({ name: 'includeAllEvents', required: false, type: Boolean })
   @ApiQuery({ name: 'includeAllMessages', required: false, type: Boolean })
   @ApiQuery({ name: 'includePII', required: false, type: Boolean })
-  @ApiHeader({ name: 'X-Role', required: false })
   async findAll(
     @Query('channel') channel?: Channel,
     @Query('direction') direction?: Direction,
@@ -52,9 +58,9 @@ export class InteractionsController {
     @Query('includeAllEvents') includeAllEvents?: string,
     @Query('includeAllMessages') includeAllMessages?: string,
     @Query('includePII') includePII?: string,
-    @Headers('x-role') role?: string,
+    @CurrentUser() user?: RequestUser,
   ) {
-    const isAdmin = role === 'admin';
+    const isAdmin = user?.profile === 'ADMIN';
     const shouldMaskPII = process.env.PII_MASKING_ENABLED === 'true' && 
                          includePII !== 'true' && 
                          !isAdmin;
@@ -86,18 +92,62 @@ export class InteractionsController {
     return interactions;
   }
 
+  @Get('count')
+  @ApiOperation({ summary: 'Contar interacciones' })
+  @ApiQuery({ name: 'channel', required: false, enum: Channel })
+  @ApiQuery({ name: 'direction', required: false, enum: Direction })
+  @ApiQuery({ name: 'status', required: false, enum: InteractionStatus })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @ApiQuery({ name: 'agent', required: false })
+  @ApiQuery({ name: 'provider', required: false })
+  async count(
+    @Query('channel') channel?: Channel,
+    @Query('direction') direction?: Direction,
+    @Query('status') status?: InteractionStatus,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('agent') agent?: string,
+    @Query('provider') provider?: string,
+  ) {
+    const count = await this.interactionsService.count({
+      channel,
+      direction,
+      status,
+      from,
+      to,
+      dateFrom,
+      dateTo,
+      agent,
+      provider,
+    });
+
+    return { count };
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Eliminar interacción (solo admin)' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async remove(@Param('id') id: string) {
+    return this.interactionsService.delete(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de interacción' })
   @ApiQuery({ name: 'includePII', required: false, type: Boolean })
   @ApiQuery({ name: 'refreshDetails', required: false, type: Boolean })
-  @ApiHeader({ name: 'X-Role', required: false })
   async findOne(
     @Param('id') id: string,
     @Query('includePII') includePII?: string,
     @Query('refreshDetails') refreshDetails?: string,
-    @Headers('x-role') role?: string,
+    @CurrentUser() user?: RequestUser,
   ) {
-    const isAdmin = role === 'admin';
+    const isAdmin = user?.profile === 'ADMIN';
     const shouldMaskPII = process.env.PII_MASKING_ENABLED === 'true' && 
                          includePII !== 'true' && 
                          !isAdmin;
@@ -138,43 +188,6 @@ export class InteractionsController {
     }
 
     return interaction;
-  }
-
-  @Get('count')
-  @ApiOperation({ summary: 'Contar interacciones' })
-  @ApiQuery({ name: 'channel', required: false, enum: Channel })
-  @ApiQuery({ name: 'direction', required: false, enum: Direction })
-  @ApiQuery({ name: 'status', required: false, enum: InteractionStatus })
-  @ApiQuery({ name: 'from', required: false })
-  @ApiQuery({ name: 'to', required: false })
-  @ApiQuery({ name: 'dateFrom', required: false })
-  @ApiQuery({ name: 'dateTo', required: false })
-  @ApiQuery({ name: 'agent', required: false })
-  @ApiQuery({ name: 'provider', required: false })
-  async count(
-    @Query('channel') channel?: Channel,
-    @Query('direction') direction?: Direction,
-    @Query('status') status?: InteractionStatus,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-    @Query('agent') agent?: string,
-    @Query('provider') provider?: string,
-  ) {
-    const count = await this.interactionsService.count({
-      channel,
-      direction,
-      status,
-      from,
-      to,
-      dateFrom,
-      dateTo,
-      agent,
-      provider,
-    });
-
-    return { count };
   }
 
   @Get('client/:phone')

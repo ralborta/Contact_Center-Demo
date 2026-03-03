@@ -1,13 +1,16 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InteractionsService } from '../interactions/interactions.service';
 import { AuditService } from '../audit/audit.service';
 import { BuilderBotAdapter } from '../adapters/builderbot.adapter';
 import { Channel, Direction, InteractionStatus, Provider } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('WhatsApp')
+@ApiBearerAuth()
 @Controller('whatsapp')
+@UseGuards(JwtAuthGuard)
 export class WhatsAppController {
   private readonly logger = new Logger(WhatsAppController.name);
   private builderBotAdapter: BuilderBotAdapter;

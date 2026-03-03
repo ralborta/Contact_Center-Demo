@@ -7,13 +7,17 @@ import {
   Body,
   Param,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
 import { CustomerStatus, CustomerTagType, Channel } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Customers')
+@ApiBearerAuth()
 @Controller('customers')
+@UseGuards(JwtAuthGuard)
 export class CustomersController {
   constructor(private customersService: CustomersService) {}
 
