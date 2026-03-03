@@ -7,6 +7,8 @@ import * as winston from 'winston';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { PrismaClient } from '@prisma/client';
+import * as argon2 from 'argon2';
 
 // Asegurar que crypto esté disponible globalmente para @nestjs/schedule
 if (typeof globalThis.crypto === 'undefined') {
@@ -64,9 +66,49 @@ async function runMigrations() {
   }
 }
 
+async function runSeed() {
+  console.log('Ejecutando seed inicial (perfiles y usuario admin)...');
+  const prisma = new PrismaClient();
+  try {
+    const profiles = [
+      { name: 'Administrador', slug: 'ADMIN', description: 'Acceso total' },
+      { name: 'Agente', slug: 'AGENT', description: 'Operador del contact center' },
+      { name: 'Solo lectura', slug: 'VIEWER', description: 'Solo consulta' },
+    ];
+    for (const p of profiles) {
+      await prisma.profile.upsert({
+        where: { slug: p.slug },
+        update: { name: p.name },
+        create: p,
+      });
+    }
+    const adminProfile = await prisma.profile.findUnique({ where: { slug: 'ADMIN' } });
+    if (!adminProfile) throw new Error('Perfil ADMIN no encontrado después del seed');
+
+    const existing = await prisma.user.findUnique({ where: { username: 'admin' } });
+    if (!existing) {
+      const hash = await argon2.hash('Admin123!');
+      await prisma.user.create({
+        data: { username: 'admin', passwordHash: hash, profileId: adminProfile.id, active: true },
+      });
+      console.log('Usuario admin creado: admin / Admin123!');
+    } else {
+      console.log('Usuario admin ya existe, saltando creación.');
+    }
+    console.log('Seed completado.');
+  } catch (e: any) {
+    console.error('Error en seed (no crítico):', e.message);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function bootstrap() {
   // Ejecutar migraciones ANTES de iniciar la app
   await runMigrations();
+
+  // Crear perfiles y usuario admin si no existen
+  await runSeed();
 
   console.log('\nIniciando aplicación NestJS...');
   const app = await NestFactory.create(AppModule, {
