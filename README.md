@@ -57,6 +57,7 @@ Variables importantes:
 - `REDIS_HOST`, `REDIS_PORT`: Configuración de Redis
 - `JWT_SECRET`: Clave secreta para firmar tokens JWT (ej. una cadena aleatoria larga). Obligatoria en producción.
 - `JWT_EXPIRES_IN`: (opcional) Expiración del token, ej. `7d` (por defecto).
+- `CORS_ORIGIN`: (opcional) Para frontend en Vercel, ej. `https://tu-proyecto.vercel.app`. Ver sección Railway más abajo.
 - `ELEVENLABS_WEBHOOK_TOKEN`: Token para validar webhooks de ElevenLabs
 - `BUILDERBOT_WEBHOOK_TOKEN`, `BUILDERBOT_API_URL`, `BUILDERBOT_API_KEY`: Configuración de builderbot
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: Credenciales de Twilio
@@ -150,6 +151,7 @@ En Railway, ve a tu proyecto → "Variables" y agrega todas las variables del `.
 **App:**
 - `APP_PORT=3000`
 - `JWT_SECRET`: Clave secreta para JWT (generar con `openssl rand -base64 64`). **Obligatoria** para que el login funcione.
+- `CORS_ORIGIN`: Orígenes permitidos para CORS, separados por coma. Si el frontend está en **Vercel**, poné la URL (ej. `https://tu-proyecto.vercel.app`). Cualquier `*.vercel.app` también se permite. Si no se define, se permiten todos los orígenes.
 
 **ElevenLabs:**
 - `ELEVENLABS_WEBHOOK_TOKEN`: Tu token de webhook de ElevenLabs

@@ -69,8 +69,20 @@ const logger = winston.createLogger({
 const prisma = new PrismaClient();
 const twilioAdapter = new TwilioAdapter();
 
-// Conectar a Redis usando REDIS_URL (formato de Railway/Upstash)
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+// Conectar a Redis: REDIS_URL (Railway/Upstash) o REDIS_HOST + REDIS_PORT + REDIS_PASSWORD
+function getRedisConnection() {
+  if (process.env.REDIS_URL) {
+    return process.env.REDIS_URL;
+  }
+  const host = process.env.REDIS_HOST || 'localhost';
+  const port = process.env.REDIS_PORT || '6379';
+  const password = process.env.REDIS_PASSWORD;
+  if (password) {
+    return `redis://:${encodeURIComponent(password)}@${host}:${port}`;
+  }
+  return `redis://${host}:${port}`;
+}
+const redisUrl = getRedisConnection();
 const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: null, // Requerido por BullMQ
   enableReadyCheck: false,

@@ -91,7 +91,24 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
+  // CORS: frontend suele estar en Vercel. Permitir orígenes explícitos (CORS_ORIGIN) o *.vercel.app
+  const corsOrigin = process.env.CORS_ORIGIN;
+  const allowedOrigins = corsOrigin
+    ? corsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+
+  app.enableCors({
+    origin: allowedOrigins.length
+      ? (origin, callback) => {
+          if (!origin) return callback(null, true);
+          const allowed = allowedOrigins.some(
+            (o) => origin === o || origin.endsWith('.vercel.app')
+          );
+          callback(null, allowed);
+        }
+      : true,
+    credentials: true,
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Contact Center API')
