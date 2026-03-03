@@ -1,0 +1,35 @@
+# En cada push a master dispara deploy en Vercel (frontend) y Railway (backend).
+#
+# Secrets en GitHub: repo → Settings → Secrets and variables → Actions
+#
+# Vercel: Project → Settings → Git → Deploy Hooks → Create Hook (branch: master).
+#         Copiar la URL y añadirla como secret VERCEL_DEPLOY_HOOK.
+#
+# Railway: Project → Settings → Tokens → Create Token. Añadir como RAILWAY_TOKEN.
+#          En el servicio backend: Settings → Copy Service ID → añadir como RAILWAY_SERVICE_ID.
+
+name: Deploy on push
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  vercel:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_DEPLOY_HOOK != '' }}
+    steps:
+      - name: Trigger Vercel deploy
+        run: curl -f -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
+
+  railway:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    container:
+      image: ghcr.io/railwayapp/cli:latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Railway
+        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}

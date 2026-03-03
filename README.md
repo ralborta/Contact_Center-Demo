@@ -112,6 +112,11 @@ La documentación Swagger en `http://localhost:3000/api/docs`
 
 ## Deploy en Railway
 
+**Redeploy tras un push:** Si el repo está conectado a Railway, cada `git push` suele disparar un deploy automático. Si no se desplegó:
+1. Entrá a [railway.app](https://railway.app) → tu proyecto → servicio **cc-backend**.
+2. Pestaña **Deployments** → **Deploy** o **Redeploy** (o en **Settings** → **Redeploy**).
+3. Si agregaste tablas (User, Profile), las migraciones se ejecutan al arrancar el backend. Después ejecutá el seed desde tu máquina: `railway run --service cc-backend npm run seed` (con Railway CLI vinculado al proyecto), o creá el usuario admin desde la API/consola.
+
 ### 1. Crear Proyecto en Railway
 
 1. Ve a [Railway](https://railway.app) y crea una cuenta
@@ -144,6 +149,7 @@ En Railway, ve a tu proyecto → "Variables" y agrega todas las variables del `.
 
 **App:**
 - `APP_PORT=3000`
+- `JWT_SECRET`: Clave secreta para JWT (generar con `openssl rand -base64 64`). **Obligatoria** para que el login funcione.
 
 **ElevenLabs:**
 - `ELEVENLABS_WEBHOOK_TOKEN`: Tu token de webhook de ElevenLabs
@@ -362,6 +368,10 @@ Los adapters en `packages/adapters` normalizan los payloads de diferentes provee
 - Revisa los logs del worker para errores de Twilio
 
 ## Despliegue en Vercel (Frontend)
+
+**Redeploy tras un push:** Con el repo conectado, un `git push` suele generar un deploy automático. Si no:
+1. Entrá a [vercel.com](https://vercel.com) → tu proyecto (Contact_Center-Demo o el que sea).
+2. Pestaña **Deployments** → en el último deployment, los tres puntos **⋯** → **Redeploy**, o **Deploy** desde la pestaña **Git**.
 
 ### 1. Crear Proyecto en Vercel
 
