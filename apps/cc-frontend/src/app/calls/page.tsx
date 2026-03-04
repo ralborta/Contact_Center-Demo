@@ -1,40 +1,56 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Header from '@/components/Header'
-import { interactionsApi, Interaction } from '@/lib/api'
+import { interactionsApi, elevenlabsApi, Interaction } from '@/lib/api'
 import Link from 'next/link'
-import { Phone, Filter, ExternalLink, Clock, User, CheckCircle2, XCircle, AlertCircle, TrendingUp } from 'lucide-react'
+import { Phone, Filter, ExternalLink, Clock, User, CheckCircle2, XCircle, AlertCircle, TrendingUp, RefreshCw } from 'lucide-react'
 
 export default function CallsPage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     status: '',
     dateFrom: '',
     dateTo: '',
   })
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await interactionsApi.getAll({
-          channel: 'CALL',
-          status: filters.status || undefined,
-          dateFrom: filters.dateFrom || undefined,
-          dateTo: filters.dateTo || undefined,
-        })
-        setInteractions(data || [])
-      } catch (error) {
-        console.error('Error fetching calls:', error)
-        setInteractions([])
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await interactionsApi.getAll({
+        channel: 'CALL',
+        status: filters.status || undefined,
+        dateFrom: filters.dateFrom || undefined,
+        dateTo: filters.dateTo || undefined,
+      })
+      setInteractions(data || [])
+    } catch (error) {
+      console.error('Error fetching calls:', error)
+      setInteractions([])
+    } finally {
+      setLoading(false)
     }
+  }, [filters.status, filters.dateFrom, filters.dateTo])
 
+  useEffect(() => {
     fetchData()
-  }, [filters])
+  }, [fetchData])
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncError(null)
+    try {
+      await elevenlabsApi.sync({ syncDetails: true, limit: 100 })
+      await fetchData()
+    } catch (e: any) {
+      setSyncError(e.response?.data?.error || e.message || 'Error al sincronizar')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { bg: string; text: string; icon: any }> = {
@@ -136,6 +152,21 @@ export default function CallsPage() {
             <p className="text-3xl font-bold text-gray-900">{stats.failed}</p>
             <p className="text-sm text-gray-600 mt-1">Fallidas</p>
           </div>
+        </div>
+
+        {/* Sincronizar desde ElevenLabs */}
+        <div className="mb-6 flex flex-wrap items-center gap-4">
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-xl disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar desde ElevenLabs'}
+          </button>
+          {syncError && (
+            <p className="text-sm text-red-600">{syncError}</p>
+          )}
         </div>
 
         {/* Filtros mejorados */}

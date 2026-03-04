@@ -155,6 +155,19 @@ export const profilesApi = {
   },
 }
 
+export const elevenlabsApi = {
+  sync: async (options?: { syncDetails?: boolean; limit?: number }) => {
+    const api = getApi()
+    const { data } = await api.post('/api/elevenlabs/sync', options ?? { syncDetails: true, limit: 100 })
+    return data
+  },
+  getConfig: async () => {
+    const api = getApi()
+    const { data } = await api.get('/api/elevenlabs/config')
+    return data
+  },
+}
+
 export const interactionsApi = {
   getAll: async (filters?: {
     channel?: string

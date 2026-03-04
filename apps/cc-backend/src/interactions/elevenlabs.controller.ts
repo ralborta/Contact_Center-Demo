@@ -1,17 +1,35 @@
-import { Controller, Get, Param, Res, Post, Body, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Param, Res, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { InteractionsService } from './interactions.service';
 import { ElevenLabsAdapter } from '../adapters/elevenlabs.adapter';
 import { Channel, Direction, Provider } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('ElevenLabs')
+@ApiBearerAuth()
 @Controller('elevenlabs')
+@UseGuards(JwtAuthGuard)
 export class ElevenLabsController {
   private elevenLabsAdapter: ElevenLabsAdapter;
 
   constructor(private interactionsService: InteractionsService) {
     this.elevenLabsAdapter = new ElevenLabsAdapter();
+  }
+
+  @Get('config')
+  @ApiOperation({ summary: 'Ver qué agente de ElevenLabs está configurado (solo ID, sin secretos)' })
+  getConfig() {
+    const agentId = process.env.ELEVENLABS_AGENT_ID;
+    const hasApiKey = !!process.env.ELEVENLABS_API_KEY;
+    const hasWebhookToken = !!process.env.ELEVENLABS_WEBHOOK_TOKEN;
+    return {
+      configured: !!(agentId && hasApiKey),
+      agentId: agentId || null,
+      agentIdMasked: agentId ? `${agentId.slice(0, 8)}...${agentId.slice(-4)}` : null,
+      hasApiKey,
+      hasWebhookToken,
+    };
   }
 
   @Get('conversations/:conversationId')

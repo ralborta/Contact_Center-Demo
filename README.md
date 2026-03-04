@@ -230,7 +230,7 @@ Una vez que tengas el dominio público de Railway (ej: `https://your-app.up.rail
 #### ElevenLabs
 
 1. Ve a la configuración de Webhook Tools en ElevenLabs
-2. URL: `https://your-app.up.railway.app/webhooks/elevenlabs/call`
+2. URL: `https://your-app.up.railway.app/api/webhooks/elevenlabs/call`
 3. Header: `X-Webhook-Token: <tu ELEVENLABS_WEBHOOK_TOKEN>`
 
 #### BuilderBot
@@ -286,7 +286,7 @@ Una vez que tengas el dominio público de Railway (ej: `https://your-app.up.rail
 - `POST /api/otp/verify` - Verificar código OTP
 
 ### Webhooks
-- `POST /webhooks/elevenlabs/call` - Webhook de llamadas ElevenLabs
+- `POST /api/webhooks/elevenlabs/call` - Webhook de llamadas ElevenLabs
 - `POST /webhooks/builderbot/whatsapp` - Webhook de WhatsApp builderbot
 - `POST /webhooks/twilio/sms/status` - Webhook de status SMS Twilio
 
