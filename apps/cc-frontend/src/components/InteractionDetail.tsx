@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Interaction, whatsappApi } from '@/lib/api'
+import getApi, { Interaction, whatsappApi } from '@/lib/api'
 import {
   Play,
   Pause,
@@ -47,6 +47,10 @@ export default function InteractionDetail({
   // Estado para enviar mensajes WhatsApp
   const [whatsappMessage, setWhatsappMessage] = useState('')
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
+
+  // URL del audio: directa (http) o blob obtenido con auth (para /api/elevenlabs/audio)
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null)
+  const [audioLoadError, setAudioLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const audio = audioRef.current
@@ -233,24 +237,45 @@ export default function InteractionDetail({
 
   const transcriptMessages = parseTranscript(interaction.callDetail?.transcriptText || null)
 
-  // Obtener URL del audio desde el backend
-  const getAudioUrl = () => {
-    if (interaction.callDetail?.recordingUrl) {
-      // Si es una URL directa, usarla
-      if (interaction.callDetail.recordingUrl.startsWith('http')) {
-        return interaction.callDetail.recordingUrl
-      }
-    }
-    // Si tenemos un conversationId (elevenCallId), usar el endpoint del backend
-    if (interaction.callDetail?.elevenCallId && interaction.channel === 'CALL') {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-      const baseUrl = apiUrl.startsWith('http') ? apiUrl : `https://${apiUrl}`
-      return `${baseUrl}/api/elevenlabs/audio/${interaction.callDetail.elevenCallId}`
-    }
-    return null
-  }
+  // URL directa (http) — el reproductor puede usarla sin auth
+  const directRecordingUrl =
+    interaction.callDetail?.recordingUrl?.startsWith('http')
+      ? interaction.callDetail.recordingUrl
+      : null
 
-  const audioUrl = getAudioUrl()
+  // Para llamadas ElevenLabs sin URL directa: obtener audio con token y crear blob URL
+  useEffect(() => {
+    if (
+      interaction.channel !== 'CALL' ||
+      !interaction.callDetail?.elevenCallId ||
+      directRecordingUrl
+    ) {
+      if (!directRecordingUrl) setAudioBlobUrl(null)
+      setAudioLoadError(null)
+      return
+    }
+    setAudioLoadError(null)
+    let objectUrl: string | null = null
+    const api = getApi()
+    api
+      .get(`/api/elevenlabs/audio/${interaction.callDetail.elevenCallId}`, {
+        responseType: 'blob',
+        timeout: 60000,
+      })
+      .then((res) => {
+        objectUrl = URL.createObjectURL(res.data)
+        setAudioBlobUrl(objectUrl)
+      })
+      .catch((err) => {
+        setAudioBlobUrl(null)
+        setAudioLoadError(err.response?.status === 401 ? 'Inicia sesión para escuchar' : 'No se pudo cargar la grabación')
+      })
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [interaction.id, interaction.callDetail?.elevenCallId, interaction.channel, directRecordingUrl])
+
+  const audioUrl = directRecordingUrl || audioBlobUrl
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -648,6 +673,8 @@ export default function InteractionDetail({
                         </div>
                       </div>
                     </div>
+                  ) : audioLoadError ? (
+                    <p className="text-amber-600 text-sm">{audioLoadError}</p>
                   ) : (
                     <p className="text-gray-500 text-sm">No disponible</p>
                   )}
