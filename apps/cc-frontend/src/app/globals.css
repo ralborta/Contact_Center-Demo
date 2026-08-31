@@ -3,25 +3,64 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --foreground: #151c27;
+  --background: #f3f4f6;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
+html,
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: var(--foreground);
+  background: var(--background);
+  font-feature-settings: 'tnum' 1, 'cv11' 1;
+}
+
+input,
+textarea,
+select {
+  color: #151c27;
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #737686;
+}
+
+@layer components {
+  .surface-card {
+    @apply bg-surface-card rounded-lg border border-[#E5E7EB] shadow-card;
+  }
+
+  .hover-elevate {
+    @apply transition-all duration-200;
+  }
+
+  .hover-elevate:hover {
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    transform: translateY(-2px);
+  }
+
+  .field-input {
+    @apply w-full bg-surface-card border border-outline-variant rounded-lg px-4 py-2.5 text-sm text-on-surface placeholder:text-outline shadow-sm outline-none transition-all;
+  }
+
+  .field-input:focus {
+    @apply border-primary-container ring-2 ring-primary-container/20;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-primary-container hover:bg-primary text-on-primary font-semibold text-xs tracking-wider uppercase px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 border border-primary-container text-primary-container bg-transparent hover:bg-primary-fixed font-semibold text-xs tracking-wider uppercase px-5 py-2.5 rounded-lg transition-all;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase;
+  }
+
+  .label-caps {
+    @apply text-[12px] leading-4 font-semibold tracking-wider uppercase text-on-surface-variant;
+  }
 }

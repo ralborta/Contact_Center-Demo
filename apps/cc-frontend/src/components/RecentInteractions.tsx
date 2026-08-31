@@ -58,38 +58,38 @@ export default function RecentInteractions({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all">
+    <div className="surface-card p-6">
       <div className="flex items-center space-x-3 mb-6">
-        <div className="p-2 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl">
-          <History className="w-5 h-5 text-white" />
+        <div className="p-2 bg-primary-fixed rounded-lg">
+          <History className="w-5 h-5 text-primary-container" />
         </div>
-        <h3 className="text-xl font-bold text-gray-900">Últimas Interacciones</h3>
+        <h3 className="text-xl font-semibold text-on-surface">Últimas Interacciones</h3>
       </div>
       <div className="space-y-3">
         {recent.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <History className="w-8 h-8 text-gray-400" />
+            <div className="w-16 h-16 bg-surface-container-high rounded-full flex items-center justify-center mx-auto mb-4">
+              <History className="w-8 h-8 text-outline" />
             </div>
-            <p className="text-gray-500 font-medium">No hay interacciones recientes</p>
+            <p className="text-on-surface-variant font-medium">No hay interacciones recientes</p>
           </div>
         ) : (
           recent.map((interaction) => (
             <Link
               key={interaction.id}
               href={`/interaction/${interaction.id}`}
-              className="block p-4 border-2 border-gray-100 rounded-xl hover:border-indigo-300 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-blue-50 transition-all duration-300 group"
+              className="block p-4 border border-[#E5E7EB] rounded-lg hover:border-primary-container hover:bg-surface-container-low transition-all group"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className={`p-2.5 rounded-xl ${getChannelBg(interaction.channel)} group-hover:scale-110 transition-transform`}>
+                  <div className={`p-2.5 rounded-lg ${getChannelBg(interaction.channel)}`}>
                     {getChannelIcon(interaction.channel)}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                    <p className="font-semibold text-on-surface group-hover:text-primary-container transition-colors">
                       {interaction.from || 'Desconocido'}
                     </p>
-                    <p className="text-sm text-gray-600 mt-0.5">
+                    <p className="text-sm text-on-surface-variant mt-0.5">
                       {interaction.intent || 'Sin motivo'}
                     </p>
                   </div>
@@ -99,9 +99,9 @@ export default function RecentInteractions({
                     <span
                       className={`w-3 h-3 rounded-full ${getStatusColor(
                         interaction.status
-                      )} shadow-sm`}
+                      )}`}
                     />
-                    <span className="text-xs text-gray-600 flex items-center">
+                    <span className="text-xs text-on-surface-variant flex items-center tabular-nums">
                       <Clock className="w-3 h-3 mr-1" />
                       {new Date(interaction.createdAt).toLocaleTimeString('es-AR', {
                         hour: '2-digit',

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Header from '@/components/Header'
+import PageShell from '@/components/PageShell'
+import PageHeader from '@/components/PageHeader'
 import { interactionsApi, smsApi, Interaction } from '@/lib/api'
 import {
   Mail,
@@ -162,220 +163,135 @@ export default function SMSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      
-      <div className="container mx-auto px-6 py-6">
-        {/* Título Principal */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Enviar SMS OTP y Servicios
-          </h1>
-          <p className="text-gray-600">
-            Enviá códigos OTP y servicios personalizados a clientes mediante SMS de manera segura y rápida.
-          </p>
-        </div>
+    <PageShell>
+      <PageHeader
+        icon={Mail}
+        title="Enviar SMS OTP y Servicios"
+        subtitle="Enviá códigos OTP y servicios personalizados a clientes mediante SMS de manera segura y rápida."
+      />
 
-        {/* Sección de Envío */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Enviar a
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+54 11 1234 5678"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+      <div className="surface-card p-6 mb-6">
+        <label className="label-caps mb-2 block">Enviar a</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+54 11 1234 5678"
+            className="field-input flex-1"
+          />
+          <button
+            onClick={() => handleSendSms('custom', customMessage)}
+            disabled={loading || !phone.trim()}
+            className="btn-primary"
+          >
+            <Send className="w-4 h-4" />
+            Enviar SMS
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+        {phone && (
+          <p className="text-sm text-on-surface-variant mt-2">
+            ID: {customerId} - {customerName}
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          {[
+            { type: 'otp', title: 'Código OTP', desc: 'Enviar un código de verificación de 6 dígitos.', icon: Shield, action: 'Enviar OTP', bg: 'bg-primary-fixed', color: 'text-primary-container' },
+            { type: 'verification-link', title: 'Link de Verificación', desc: 'Enviar un enlace seguro para confirmar identidad.', icon: LinkIcon, action: 'Enviar Link', bg: 'bg-emerald-100', color: 'text-status-success' },
+            { type: 'onboarding', title: 'Onboarding', desc: 'Enviar enlace personalizado para iniciar onboarding.', icon: Headphones, action: 'Enviar Onboarding', bg: 'bg-secondary-container', color: 'text-on-secondary-container' },
+            { type: 'activate-card', title: 'Activar Tarjeta', desc: 'Enviar un instructivo para activar tarjeta bancaria.', icon: CreditCard, action: 'Enviar Instructivo', bg: 'bg-amber-100', color: 'text-amber-700' },
+          ].map((card) => {
+            const Icon = card.icon
+            return (
+              <div key={card.type} className="border border-[#E5E7EB] rounded-lg p-6 flex flex-col hover-elevate">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-12 h-12 ${card.bg} rounded-lg flex items-center justify-center`}>
+                    <Icon className={`w-6 h-6 ${card.color}`} />
+                  </div>
+                  <h3 className="text-base font-semibold text-on-surface">{card.title}</h3>
+                </div>
+                <p className="text-sm text-on-surface-variant mb-6 flex-1">{card.desc}</p>
                 <button
-                  onClick={() => handleSendSms('custom', customMessage)}
+                  onClick={() => handleSendSms(card.type)}
                   disabled={loading || !phone.trim()}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="btn-primary w-full"
                 >
-                  <Send className="w-4 h-4" />
-                  Enviar SMS
-                  <ArrowRight className="w-4 h-4" />
+                  {card.action}
                 </button>
               </div>
-              {phone && (
-                <p className="text-sm text-gray-500 mt-2">
-                  ID: {customerId} - {customerName}
-                </p>
-              )}
-            </div>
-          </div>
+            )
+          })}
 
-          {/* Grid de Servicios */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Card: Código OTP */}
-            <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Código OTP</h3>
+          <div className="border border-[#E5E7EB] rounded-lg p-6 flex flex-col hover-elevate md:col-span-2 lg:col-span-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-primary-fixed rounded-lg flex items-center justify-center">
+                <MessageSquare className="w-6 h-6 text-primary-container" />
               </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Enviar un código de verificación de 6 dígitos.
-              </p>
-              <button
-                onClick={() => handleSendSms('otp')}
-                disabled={loading || !phone.trim()}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Enviar OTP
-              </button>
+              <h3 className="text-base font-semibold text-on-surface">SMS Personalizado</h3>
             </div>
-
-            {/* Card: Link de Verificación */}
-            <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <LinkIcon className="w-6 h-6 text-green-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Link de Verificación</h3>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Enviar un enlace seguro para confirmar identidad.
-              </p>
-              <button
-                onClick={() => handleSendSms('verification-link')}
-                disabled={loading || !phone.trim()}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Enviar Link
-              </button>
-            </div>
-
-            {/* Card: Onboarding */}
-            <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Headphones className="w-6 h-6 text-purple-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Onboarding</h3>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Enviar enlace personalizado para iniciar onboarding.
-              </p>
-              <button
-                onClick={() => handleSendSms('onboarding')}
-                disabled={loading || !phone.trim()}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Enviar Onboarding
-              </button>
-            </div>
-
-            {/* Card: Activar Tarjeta */}
-            <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="w-6 h-6 text-orange-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Activar Tarjeta</h3>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Enviar un instructivo para activar tarjeta bancaria.
-              </p>
-              <button
-                onClick={() => handleSendSms('activate-card')}
-                disabled={loading || !phone.trim()}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Enviar Instructivo
-              </button>
-            </div>
-
-            {/* Card: SMS Personalizado */}
-            <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow md:col-span-2 lg:col-span-1">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center">
-                  <MessageSquare className="w-6 h-6 text-pink-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">SMS Personalizado</h3>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Enviar un mensaje personalizado al cliente.
-              </p>
-              <input
-                type="text"
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="Escribí tu mensaje..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={() => handleSendSms('custom', customMessage)}
-                disabled={loading || !phone.trim() || !customMessage.trim()}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Enviar SMS
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Historial de Envíos */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Historial de Envíos</h2>
-            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-              Ver historial
+            <p className="text-sm text-on-surface-variant mb-4">Enviar un mensaje personalizado al cliente.</p>
+            <input
+              type="text"
+              value={customMessage}
+              onChange={(e) => setCustomMessage(e.target.value)}
+              placeholder="Escribí tu mensaje..."
+              className="field-input mb-4"
+            />
+            <button
+              onClick={() => handleSendSms('custom', customMessage)}
+              disabled={loading || !phone.trim() || !customMessage.trim()}
+              className="btn-primary w-full"
+            >
+              Enviar SMS
             </button>
           </div>
-          
-          {sendHistory.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No hay registros recientes</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Destino
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Servicio
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {sendHistory.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(item.date)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.destination}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {item.service}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(item.status)}
-                          <span>{getStatusLabel(item.status)}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       </div>
-    </div>
+
+      <div className="surface-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-on-surface">Historial de Envíos</h2>
+        </div>
+        {sendHistory.length === 0 ? (
+          <p className="text-on-surface-variant text-center py-8">No hay registros recientes</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-outline-variant">
+                  <th className="px-6 py-3 text-left label-caps">Fecha</th>
+                  <th className="px-6 py-3 text-left label-caps">Destino</th>
+                  <th className="px-6 py-3 text-left label-caps">Servicio</th>
+                  <th className="px-6 py-3 text-left label-caps">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sendHistory.map((item, idx) => (
+                  <tr key={idx} className="border-b border-[#E5E7EB] hover:bg-surface-container-low">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm tabular-nums text-on-surface">
+                      {formatDate(item.date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface">
+                      {item.destination}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-variant">
+                      {item.service}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(item.status)}
+                        <span>{getStatusLabel(item.status)}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </PageShell>
   )
 }

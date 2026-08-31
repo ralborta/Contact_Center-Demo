@@ -6,8 +6,8 @@ import dynamic from 'next/dynamic'
 const Dashboard = dynamic(() => import('@/components/Dashboard'), {
   ssr: false,
   loading: () => (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-lg">Cargando...</div>
+    <div className="min-h-screen bg-surface-base flex items-center justify-center">
+      <div className="text-on-surface-variant">Cargando...</div>
     </div>
   ),
 })

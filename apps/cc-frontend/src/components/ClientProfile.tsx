@@ -68,8 +68,8 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
 
   if (loading || !profileData) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg">Cargando perfil del cliente...</div>
+      <div className="flex items-center justify-center py-16">
+        <div className="text-on-surface-variant">Cargando perfil del cliente...</div>
       </div>
     )
   }
@@ -162,8 +162,8 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg">Cargando perfil del cliente...</div>
+      <div className="flex items-center justify-center py-16">
+        <div className="text-on-surface-variant">Cargando perfil del cliente...</div>
       </div>
     )
   }
@@ -181,7 +181,7 @@ export default function ClientProfile({ phone }: ClientProfileProps) {
   })
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div>
       {/* Contenido Principal */}
       <div className="container mx-auto px-6 py-6">
         {/* Perfil del Cliente - Card Superior */}

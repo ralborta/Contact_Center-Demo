@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Header from '@/components/Header'
+import PageShell from '@/components/PageShell'
 import InteractionDetail from '@/components/InteractionDetail'
 import { interactionsApi, Interaction } from '@/lib/api'
 import { isAdmin } from '@/lib/auth'
@@ -46,9 +46,9 @@ export default function InteractionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg">Cargando...</div>
-      </div>
+      <PageShell>
+        <p className="text-on-surface-variant">Cargando...</p>
+      </PageShell>
     )
   }
 
@@ -68,32 +68,29 @@ export default function InteractionPage() {
 
   if (!interaction) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg text-red-600">Interacción no encontrada</div>
-      </div>
+      <PageShell>
+        <p className="text-lg text-status-error">Interacción no encontrada</p>
+      </PageShell>
     )
   }
 
   const admin = typeof window !== 'undefined' && isAdmin()
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="container mx-auto px-4 py-6">
-        {admin && (
-          <div className="mb-4 flex justify-end">
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50"
-            >
-              <Trash2 className="w-4 h-4" />
-              Eliminar interacción
-            </button>
-          </div>
-        )}
-        <InteractionDetail interaction={interaction} onRefresh={fetchInteraction} />
-      </div>
-    </div>
+    <PageShell>
+      {admin && (
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 px-4 py-2 text-status-error border border-error/30 rounded-lg hover:bg-error-container disabled:opacity-50"
+          >
+            <Trash2 className="w-4 h-4" />
+            Eliminar interacción
+          </button>
+        </div>
+      )}
+      <InteractionDetail interaction={interaction} onRefresh={fetchInteraction} />
+    </PageShell>
   )
 }

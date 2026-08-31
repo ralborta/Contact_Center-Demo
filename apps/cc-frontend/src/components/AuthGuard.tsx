@@ -26,8 +26,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Redirigiendo al login...</p>
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <p className="text-on-surface-variant">Redirigiendo al login...</p>
       </div>
     )
   }

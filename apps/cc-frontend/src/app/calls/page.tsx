@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Header from '@/components/Header'
+import PageShell from '@/components/PageShell'
+import PageHeader from '@/components/PageHeader'
+import KpiCard from '@/components/KpiCard'
+import StatusBadge from '@/components/StatusBadge'
 import { interactionsApi, elevenlabsApi, Interaction } from '@/lib/api'
 import Link from 'next/link'
-import { Phone, Filter, ExternalLink, Clock, User, CheckCircle2, XCircle, AlertCircle, TrendingUp, RefreshCw } from 'lucide-react'
+import { Phone, Filter, ExternalLink, Clock, User, CheckCircle2, XCircle, AlertCircle, RefreshCw } from 'lucide-react'
 
 export default function CallsPage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
@@ -91,255 +94,181 @@ export default function CallsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-gray-50">
-      <Header />
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header con título mejorado */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-2">
-            <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg">
-              <Phone className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900">Gestión de Llamadas</h1>
-              <p className="text-gray-600 mt-1">Administra y revisa todas las llamadas telefónicas</p>
-            </div>
+    <PageShell>
+      <PageHeader
+        icon={Phone}
+        title="Gestión de Llamadas"
+        subtitle="Administra y revisa todas las llamadas telefónicas"
+        action={
+          <div className="flex flex-col items-end gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs tracking-wider uppercase rounded-lg disabled:opacity-50"
+            >
+              <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Sincronizando...' : 'Sincronizar desde ElevenLabs'}
+            </button>
+            {syncError && <p className="text-sm text-status-error">{syncError}</p>}
+          </div>
+        }
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <KpiCard icon={Phone} value={stats.total} label="Total de Llamadas" />
+        <KpiCard icon={CheckCircle2} iconBg="bg-emerald-100" iconColor="text-status-success" value={stats.completed} label="Completadas" />
+        <KpiCard icon={Clock} iconBg="bg-blue-100" iconColor="text-primary-container" value={stats.inProgress} label="En Progreso" />
+        <KpiCard icon={XCircle} iconBg="bg-red-100" iconColor="text-status-error" value={stats.failed} label="Fallidas" />
+      </div>
+
+      <div className="surface-card p-6 mb-8">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="bg-primary-fixed p-1.5 rounded-lg text-primary-container">
+            <Filter className="w-5 h-5" />
+          </div>
+          <h3 className="text-xl font-semibold text-on-surface">Filtros</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex flex-col gap-1.5">
+            <label className="label-caps">Estado</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="field-input"
+            >
+              <option value="">Todos</option>
+              <option value="NEW">Nueva</option>
+              <option value="IN_PROGRESS">En Progreso</option>
+              <option value="COMPLETED">Completada</option>
+              <option value="ABANDONED">Abandonada</option>
+              <option value="FAILED">Fallida</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="label-caps">Desde</label>
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              className="field-input"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="label-caps">Hasta</label>
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              className="field-input"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Phone className="w-6 h-6 text-blue-600" />
-              </div>
-              <TrendingUp className="w-5 h-5 text-gray-400" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
-            <p className="text-sm text-gray-600 mt-1">Total de Llamadas</p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-emerald-100 rounded-xl">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-              </div>
-              <TrendingUp className="w-5 h-5 text-gray-400" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.completed}</p>
-            <p className="text-sm text-gray-600 mt-1">Completadas</p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Clock className="w-6 h-6 text-blue-600" />
-              </div>
-              <TrendingUp className="w-5 h-5 text-gray-400" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.inProgress}</p>
-            <p className="text-sm text-gray-600 mt-1">En Progreso</p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-red-100 rounded-xl">
-                <XCircle className="w-6 h-6 text-red-600" />
-              </div>
-              <TrendingUp className="w-5 h-5 text-gray-400" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.failed}</p>
-            <p className="text-sm text-gray-600 mt-1">Fallidas</p>
-          </div>
+      {loading ? (
+        <div className="text-center py-16">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary-container border-t-transparent" />
+          <p className="mt-4 text-on-surface-variant font-medium">Cargando llamadas...</p>
         </div>
-
-        {/* Sincronizar desde ElevenLabs */}
-        <div className="mb-6 flex flex-wrap items-center gap-4">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-xl disabled:opacity-50"
-          >
-            <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar desde ElevenLabs'}
-          </button>
-          {syncError && (
-            <p className="text-sm text-red-600">{syncError}</p>
-          )}
-        </div>
-
-        {/* Filtros mejorados */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Filter className="w-5 h-5 text-blue-600" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">Filtros</h2>
+      ) : interactions.length === 0 ? (
+        <div className="surface-card p-16 text-center">
+          <div className="w-20 h-20 bg-surface-container-high rounded-full flex items-center justify-center mx-auto mb-4">
+            <Phone className="w-10 h-10 text-outline" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Estado
-              </label>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          <h3 className="text-xl font-semibold text-on-surface mb-2">No hay llamadas registradas</h3>
+          <p className="text-on-surface-variant">No se encontraron llamadas con los filtros seleccionados</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {interactions.map((interaction) => {
+            const statusConfig = getStatusBadge(interaction.status)
+            const StatusIcon = statusConfig.icon
+
+            return (
+              <div
+                key={interaction.id}
+                className="surface-card hover-elevate p-6 flex flex-col md:flex-row md:items-center justify-between gap-6"
               >
-                <option value="">Todos</option>
-                <option value="NEW">Nueva</option>
-                <option value="IN_PROGRESS">En Progreso</option>
-                <option value="COMPLETED">Completada</option>
-                <option value="ABANDONED">Abandonada</option>
-                <option value="FAILED">Fallida</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Desde
-              </label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Hasta
-              </label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Lista de llamadas con cards */}
-        {loading ? (
-          <div className="text-center py-16">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-            <p className="mt-4 text-gray-600 font-medium">Cargando llamadas...</p>
-          </div>
-        ) : interactions.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-16 text-center">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone className="w-10 h-10 text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No hay llamadas registradas</h3>
-            <p className="text-gray-600">No se encontraron llamadas con los filtros seleccionados</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {interactions.map((interaction) => {
-              const statusConfig = getStatusBadge(interaction.status)
-              const StatusIcon = statusConfig.icon
-              
-              return (
-                <div
-                  key={interaction.id}
-                  className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:border-blue-200"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-4 mb-4">
-                        <div className={`p-3 ${statusConfig.bg} rounded-xl`}>
-                          <StatusIcon className={`w-6 h-6 ${statusConfig.text}`} />
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-3">
-                            <h3 className="text-lg font-bold text-gray-900">
-                              {interaction.from || 'Número desconocido'}
-                            </h3>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
-                              {interaction.status}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">
-                            Hacia: {interaction.to || 'Número desconocido'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                        <div className="flex items-center space-x-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          <div>
-                            <p className="text-xs text-gray-500">Duración</p>
-                            <p className="text-sm font-semibold text-gray-900">
-                              {formatDuration(interaction.callDetail?.durationSec)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <div>
-                            <p className="text-xs text-gray-500">Agente</p>
-                            <p className="text-sm font-semibold text-gray-900">
-                              {interaction.assignedAgent || 'Sin asignar'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          <div>
-                            <p className="text-xs text-gray-500">Fecha</p>
-                            <p className="text-sm font-semibold text-gray-900">
-                              {formatDate(interaction.startedAt || interaction.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-                        {interaction.intent && (
-                          <div className="flex items-center space-x-2">
-                            <AlertCircle className="w-4 h-4 text-gray-400" />
-                            <div>
-                              <p className="text-xs text-gray-500">Intención</p>
-                              <p className="text-sm font-semibold text-gray-900 truncate">
-                                {interaction.intent}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 ${statusConfig.bg} rounded-full flex items-center justify-center shrink-0`}>
+                    <StatusIcon className={`w-6 h-6 ${statusConfig.text}`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h4 className="text-xl font-semibold text-on-surface">
+                        {interaction.from || 'Número desconocido'}
+                      </h4>
+                      <StatusBadge status={interaction.status} />
                     </div>
-
-                    <div className="ml-6">
-                      <Link
-                        href={`/interaction/${interaction.id}`}
-                        className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                      >
-                        <span>Ver detalle</span>
-                        <ExternalLink className="w-4 h-4" />
-                      </Link>
-                    </div>
+                    <p className="text-sm text-on-surface-variant mt-0.5">
+                      Hacia: {interaction.to || 'Número desconocido'}
+                    </p>
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
 
-        {/* Footer con total */}
-        {!loading && interactions.length > 0 && (
-          <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-600 font-medium">
-                Mostrando <span className="font-bold text-gray-900">{interactions.length}</span> llamadas
-              </p>
-              {stats.avgDuration > 0 && (
-                <p className="text-sm text-gray-500">
-                  Duración promedio: <span className="font-semibold">{formatDuration(stats.avgDuration)}</span>
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+                <div className="flex flex-wrap md:flex-nowrap items-center gap-6 md:gap-8">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-[18px] h-[18px] text-outline" />
+                    <div>
+                      <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">Duración</span>
+                      <p className="text-sm font-medium tabular-nums text-on-surface">
+                        {formatDuration(interaction.callDetail?.durationSec)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="w-[18px] h-[18px] text-outline" />
+                    <div>
+                      <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">Agente</span>
+                      <p className="text-sm font-medium text-on-surface">
+                        {interaction.assignedAgent || 'Sin asignar'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-[18px] h-[18px] text-outline" />
+                    <div>
+                      <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">Fecha</span>
+                      <p className="text-sm font-medium tabular-nums text-on-surface">
+                        {formatDate(interaction.startedAt || interaction.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  {interaction.intent && (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-[18px] h-[18px] text-outline" />
+                      <div>
+                        <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">Intención</span>
+                        <p className="text-sm font-medium text-on-surface truncate max-w-[160px]">
+                          {interaction.intent}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Link href={`/interaction/${interaction.id}`} className="btn-primary w-full md:w-auto">
+                  Ver detalle
+                  <ExternalLink className="w-4 h-4" />
+                </Link>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {!loading && interactions.length > 0 && (
+        <div className="mt-8 surface-card p-6 flex items-center justify-between">
+          <p className="text-on-surface-variant">
+            Mostrando <span className="font-bold text-on-surface">{interactions.length}</span> llamadas
+          </p>
+          {stats.avgDuration > 0 && (
+            <p className="text-sm text-on-surface-variant">
+              Duración promedio: <span className="font-semibold tabular-nums">{formatDuration(stats.avgDuration)}</span>
+            </p>
+          )}
+        </div>
+      )}
+    </PageShell>
   )
 }

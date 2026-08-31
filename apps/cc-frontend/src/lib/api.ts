@@ -40,13 +40,16 @@ const getApi = (): AxiosInstance => {
       return config
     })
 
-    // Response: 401 -> logout and redirect to login
+    // Response: 401 -> logout and redirect to login (excepto el propio login)
     apiInstance.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
+        const status = error.response?.status
+        const reqUrl = String(error.config?.url || '')
+        const isLoginAttempt = reqUrl.includes('/auth/login')
+        if (status === 401 && !isLoginAttempt) {
           clearAuth()
-          if (typeof window !== 'undefined') {
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
             window.location.href = '/login'
           }
         }
