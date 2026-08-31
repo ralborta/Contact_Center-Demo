@@ -29,7 +29,11 @@ export default function LoginPage() {
       router.push('/')
       router.refresh()
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Usuario o contraseña incorrectos')
+      if (!err.response) {
+        setError('No se pudo conectar con el servidor. Revisá CORS o la URL de la API.')
+      } else {
+        setError(err.response?.data?.message || 'Usuario o contraseña incorrectos')
+      }
     } finally {
       setLoading(false)
     }

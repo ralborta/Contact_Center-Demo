@@ -133,7 +133,7 @@ async function bootstrap() {
     }),
   );
 
-  // CORS: frontend suele estar en Vercel. Permitir orígenes explícitos (CORS_ORIGIN) o *.vercel.app
+  // CORS: frontend en Vercel o EasyPanel. Permitir orígenes explícitos (CORS_ORIGIN) o dominios conocidos
   const corsOrigin = process.env.CORS_ORIGIN;
   const allowedOrigins = corsOrigin
     ? corsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
@@ -143,9 +143,10 @@ async function bootstrap() {
     origin: allowedOrigins.length
       ? (origin, callback) => {
           if (!origin) return callback(null, true);
-          const allowed = allowedOrigins.some(
-            (o) => origin === o || origin.endsWith('.vercel.app')
-          );
+          const allowed =
+            allowedOrigins.includes(origin) ||
+            origin.endsWith('.vercel.app') ||
+            origin.endsWith('.easypanel.host');
           callback(null, allowed);
         }
       : true,
