@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WhatsappChatStatus, WhatsappSendMode } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { WhatsappService } from './whatsapp.service';
 
 @ApiTags('WhatsApp')
@@ -81,5 +82,35 @@ export class WhatsappController {
   @ApiOperation({ summary: 'Sembrar conversaciones demo (idempotente)' })
   seedDemo() {
     return this.whatsapp.seedDemoConversations();
+  }
+
+  @Post('doctor/cancel')
+  @ApiOperation({
+    summary: 'Cancelar cita por doctor y avisar por WhatsApp con alternativas',
+  })
+  doctorCancel(
+    @Body() body: { appointmentId: string; reason: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.whatsapp.doctorCancelWithNotice({
+      appointmentId: body.appointmentId,
+      reason: body.reason || 'Cambio de agenda del doctor',
+      actorId: user?.id,
+    });
+  }
+
+  @Post('doctor/reschedule')
+  @ApiOperation({
+    summary: 'Pedir reprogramación por doctor y ofrecer alternativas por WhatsApp',
+  })
+  doctorReschedule(
+    @Body() body: { appointmentId: string; reason: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.whatsapp.doctorRescheduleWithNotice({
+      appointmentId: body.appointmentId,
+      reason: body.reason || 'El doctor necesita cambiar el horario',
+      actorId: user?.id,
+    });
   }
 }

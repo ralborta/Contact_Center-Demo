@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import PageShell from '@/components/PageShell'
 import {
   APPT_STATUS_LABEL,
+  CHANGE_ORIGIN_LABEL,
   WA_CHAT_STATUS_LABEL,
   appointmentsApi,
   doctorsApi,
   formatLaPaz,
   patientsApi,
+  whatsappApi,
 } from '@/lib/api'
 
 export default function CitasPage() {
@@ -60,9 +62,26 @@ export default function CitasPage() {
   }
 
   async function cancel(id: string, byDoctor: boolean) {
-    const reason = prompt(byDoctor ? 'Motivo de cancelación del doctor' : 'Motivo de cancelación') || ''
-    await appointmentsApi.cancel(id, { byDoctor, reason, blockSlot: false })
-    setMessage(byDoctor ? 'Cancelada por doctor · se generó aviso' : 'Cita cancelada')
+    const reason =
+      prompt(byDoctor ? 'Motivo de cancelación del doctor' : 'Motivo de cancelación') || ''
+    if (byDoctor) {
+      await whatsappApi.doctorCancel({
+        appointmentId: id,
+        reason: reason || 'Cambio de agenda del doctor',
+      })
+      setMessage('Cancelada por doctor · se avisó al paciente por WhatsApp')
+    } else {
+      await appointmentsApi.cancel(id, { byDoctor: false, reason, blockSlot: false })
+      setMessage('Cita cancelada')
+    }
+    load()
+  }
+
+  async function doctorReschedule(id: string) {
+    const reason =
+      prompt('Motivo del cambio de horario (doctor)') || 'El doctor necesita cambiar el horario'
+    await whatsappApi.doctorReschedule({ appointmentId: id, reason })
+    setMessage('Se pidió reprogramación · opciones enviadas por WhatsApp')
     load()
   }
 
@@ -115,12 +134,20 @@ export default function CitasPage() {
               <th className="px-4 py-3 label-caps">Paciente</th>
               <th className="px-4 py-3 label-caps">Doctor</th>
               <th className="px-4 py-3 label-caps">Estado</th>
+              <th className="px-4 py-3 label-caps">Cambio</th>
               <th className="px-4 py-3 label-caps">WhatsApp</th>
               <th className="px-4 py-3 label-caps">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((a) => (
+            {items.map((a) => {
+              const lastChange = a.changes?.[0]
+              const active =
+                a.status === 'RESERVED' ||
+                a.status === 'CONFIRMED' ||
+                a.status === 'RESCHEDULED' ||
+                a.status === 'NEEDS_RESCHEDULE'
+              return (
               <tr
                 key={a.id}
                 id={`cita-${a.id}`}
@@ -137,6 +164,20 @@ export default function CitasPage() {
                   <span className={`status-pill ${a.needsReschedule ? 'bg-accent-soft text-accent' : 'bg-primary-100 text-primary'}`}>
                     {APPT_STATUS_LABEL[a.status] || a.status}
                   </span>
+                </td>
+                <td className="px-4 py-3 text-xs max-w-[180px]">
+                  {lastChange ? (
+                    <div>
+                      <p className="font-semibold">
+                        {CHANGE_ORIGIN_LABEL[lastChange.origin] || lastChange.origin}
+                      </p>
+                      <p className="text-on-surface-variant truncate" title={lastChange.reason || a.reason || ''}>
+                        {lastChange.reason || a.reason || '—'}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-outline">{a.reason || '—'}</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   {a.whatsappConversation ? (
@@ -157,11 +198,25 @@ export default function CitasPage() {
                       Llamada
                     </a>
                   )}
-                  <button className="text-status-error font-semibold" onClick={() => cancel(a.id, false)}>Cancelar</button>
-                  <button className="text-accent font-semibold" onClick={() => cancel(a.id, true)}>Cancelar doctor</button>
+                  {active && (
+                    <>
+                      <button
+                        className="text-status-error font-semibold"
+                        onClick={() => cancel(a.id, true)}
+                      >
+                        Cancelar (doctor)
+                      </button>
+                      <button
+                        className="text-accent font-semibold"
+                        onClick={() => doctorReschedule(a.id)}
+                      >
+                        Reprogramar (doctor)
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>

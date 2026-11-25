@@ -117,12 +117,13 @@ export default function DashboardPage() {
             <MessageCircle className="w-4 h-4 text-primary" />
           </div>
           <p className="text-sm text-on-surface-variant mb-4">Estado de las conversaciones de confirmación</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { label: 'Confirmadas', value: data?.whatsapp?.confirmed },
               { label: 'Canceladas', value: data?.whatsapp?.cancelled },
               { label: 'Reprogramadas', value: data?.whatsapp?.rescheduled },
               { label: 'Sin respuesta', value: data?.whatsapp?.pending },
+              { label: 'Cambios por doctor', value: data?.whatsapp?.doctorChanges },
             ].map((x) => (
               <div key={x.label} className="rounded-lg bg-surface-muted/60 px-3 py-3">
                 <p className="text-xl font-display font-semibold">{x.value ?? '—'}</p>

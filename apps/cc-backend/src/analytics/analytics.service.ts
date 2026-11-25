@@ -30,6 +30,7 @@ export class AnalyticsService {
       waCancelled,
       waRescheduled,
       waPending,
+      waDoctorChanges,
     ] = await Promise.all([
       this.prisma.interaction.count({
         where: { startedAt: { gte: startOfDay, lt: endOfDay } },
@@ -91,6 +92,9 @@ export class AnalyticsService {
       this.prisma.whatsappConversation.count({
         where: { status: WhatsappChatStatus.PENDING },
       }),
+      this.prisma.appointmentChange.count({
+        where: { origin: 'DOCTOR' },
+      }),
     ]);
 
     const resolutionRate =
@@ -113,6 +117,7 @@ export class AnalyticsService {
         cancelled: waCancelled,
         rescheduled: waRescheduled,
         pending: waPending,
+        doctorChanges: waDoctorChanges,
       },
       timezone: 'America/La_Paz',
       currency: 'Bs',

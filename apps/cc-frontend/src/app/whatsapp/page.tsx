@@ -58,6 +58,20 @@ export default function WhatsappPage() {
     }
     const d = await whatsappApi.get(id)
     setDetail(d)
+    setShowReschedule(false)
+    setOptions([])
+    if (
+      d?.status === 'PENDING' &&
+      (d.kind === 'DOCTOR_CANCEL' || d.kind === 'DOCTOR_RESCHEDULE')
+    ) {
+      try {
+        const opts = await whatsappApi.options(id)
+        setOptions(opts)
+        if (opts.length) setShowReschedule(true)
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   async function loadConfig() {
@@ -192,12 +206,13 @@ export default function WhatsappPage() {
 
       {tab === 'inbox' && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
             {[
               { label: 'Confirmadas', value: metrics?.confirmed, icon: CheckCircle2, tone: 'text-status-success' },
               { label: 'Canceladas', value: metrics?.cancelled, icon: XCircle, tone: 'text-status-error' },
               { label: 'Reprogramadas', value: metrics?.rescheduled, icon: CalendarClock, tone: 'text-accent' },
               { label: 'Sin respuesta', value: metrics?.pending, icon: Clock, tone: 'text-on-surface-variant' },
+              { label: 'Cambios por doctor', value: metrics?.doctorChanges, icon: RefreshCw, tone: 'text-primary' },
             ].map((c) => {
               const Icon = c.icon
               return (
@@ -355,29 +370,58 @@ export default function WhatsappPage() {
                   {detail.status === 'PENDING' && (
                     <footer className="p-4 border-t border-outline-variant/50 space-y-3 bg-surface-muted/20">
                       <p className="label-caps">Simular respuesta del paciente</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          className="btn-primary"
-                          disabled={busy}
-                          onClick={() => simulate('confirm')}
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          className="btn-danger"
-                          disabled={busy}
-                          onClick={() => simulate('cancel')}
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          disabled={busy}
-                          onClick={() => simulate('reschedule')}
-                        >
-                          Cambiar horario
-                        </button>
-                      </div>
+                      {(detail.kind === 'DOCTOR_CANCEL' ||
+                        detail.kind === 'DOCTOR_RESCHEDULE') ? (
+                        <>
+                          <p className="text-xs text-on-surface-variant">
+                            Aviso del doctor: el paciente puede elegir un horario o declinar.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              className="btn-primary"
+                              disabled={busy}
+                              onClick={async () => {
+                                const opts = await whatsappApi.options(selectedId)
+                                setOptions(opts)
+                                setShowReschedule(true)
+                              }}
+                            >
+                              Elegir horario
+                            </button>
+                            <button
+                              className="btn-danger"
+                              disabled={busy}
+                              onClick={() => simulate('cancel')}
+                            >
+                              Declinar / cancelar
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="btn-primary"
+                            disabled={busy}
+                            onClick={() => simulate('confirm')}
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            className="btn-danger"
+                            disabled={busy}
+                            onClick={() => simulate('cancel')}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            disabled={busy}
+                            onClick={() => simulate('reschedule')}
+                          >
+                            Cambiar horario
+                          </button>
+                        </div>
+                      )}
 
                       {showReschedule && (
                         <div className="surface-card p-3 space-y-2">

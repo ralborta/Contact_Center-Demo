@@ -91,7 +91,14 @@ export class WhatsappService {
   }
 
   async metrics() {
-    const [confirmed, cancelled, rescheduled, pending, total] = await Promise.all([
+    const [
+      confirmed,
+      cancelled,
+      rescheduled,
+      pending,
+      total,
+      doctorChanges,
+    ] = await Promise.all([
       this.prisma.whatsappConversation.count({
         where: { status: WhatsappChatStatus.CONFIRMED },
       }),
@@ -105,8 +112,280 @@ export class WhatsappService {
         where: { status: WhatsappChatStatus.PENDING },
       }),
       this.prisma.whatsappConversation.count(),
+      this.prisma.appointmentChange.count({
+        where: { origin: ChangeOrigin.DOCTOR },
+      }),
     ]);
-    return { confirmed, cancelled, rescheduled, pending, total };
+    return {
+      confirmed,
+      cancelled,
+      rescheduled,
+      pending,
+      total,
+      doctorChanges,
+    };
+  }
+
+  /** Alternativas reales: mismo doctor, si faltan completa con misma especialidad. */
+  async findAlternativeSlots(params: {
+    doctorId: string;
+    specialtyId: string;
+    excludeSlotId?: string;
+    take?: number;
+  }) {
+    const take = params.take ?? 3;
+    const baseWhere = {
+      status: SlotStatus.FREE,
+      startsAt: { gt: new Date() },
+      ...(params.excludeSlotId ? { NOT: { id: params.excludeSlotId } } : {}),
+    };
+    const sameDoctor = await this.prisma.slot.findMany({
+      where: { ...baseWhere, doctorId: params.doctorId },
+      include: { doctor: true },
+      orderBy: { startsAt: 'asc' },
+      take,
+    });
+    if (sameDoctor.length >= take) return sameDoctor;
+    const extra = await this.prisma.slot.findMany({
+      where: {
+        ...baseWhere,
+        doctor: { specialtyId: params.specialtyId },
+        id: { notIn: sameDoctor.map((s) => s.id) },
+      },
+      include: { doctor: true },
+      orderBy: { startsAt: 'asc' },
+      take: take - sameDoctor.length,
+    });
+    return [...sameDoctor, ...extra];
+  }
+
+  private async ensureConversationForAppointment(appt: {
+    id: string;
+    patientId: string;
+    patient: { phone: string };
+    whatsappConversation?: { id: string } | null;
+  }) {
+    const config = await this.getConfig();
+    if (appt.whatsappConversation?.id) {
+      return this.prisma.whatsappConversation.findUniqueOrThrow({
+        where: { id: appt.whatsappConversation.id },
+      });
+    }
+    const existing = await this.prisma.whatsappConversation.findUnique({
+      where: { appointmentId: appt.id },
+    });
+    if (existing) return existing;
+    return this.prisma.whatsappConversation.create({
+      data: {
+        patientId: appt.patientId,
+        appointmentId: appt.id,
+        phone: appt.patient.phone,
+        status: WhatsappChatStatus.PENDING,
+        provider: config.provider || 'simulated',
+      },
+    });
+  }
+
+  private formatOptionsMessage(options: Array<{ id: string; startsAt: Date; doctor?: { lastName: string } }>) {
+    const lines = options.map((s, i) => {
+      const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
+      const doc = s.doctor?.lastName ? ` · Dr(a). ${s.doctor.lastName}` : '';
+      return `${i + 1}) ${fecha} a las ${hora}${doc}`;
+    });
+    return {
+      payload: options.map((s) => s.id).join(','),
+      text: lines.join('\n'),
+    };
+  }
+
+  /**
+   * Cancelar cita por doctor + aviso WhatsApp simulado con 2–3 alternativas.
+   */
+  async doctorCancelWithNotice(params: {
+    appointmentId: string;
+    reason: string;
+    actorId?: string;
+  }) {
+    const before = await this.prisma.appointment.findUnique({
+      where: { id: params.appointmentId },
+      include: {
+        patient: true,
+        doctor: true,
+        specialty: true,
+        slot: true,
+        whatsappConversation: true,
+      },
+    });
+    if (!before) throw new NotFoundException('Cita no encontrada');
+
+    const cancelled = await this.appointments.cancelByDoctor({
+      appointmentId: params.appointmentId,
+      actorId: params.actorId,
+      reason: params.reason,
+      blockSlot: false,
+      createOutboundNotice: false,
+    });
+
+    const options = await this.findAlternativeSlots({
+      doctorId: before.doctorId,
+      specialtyId: before.specialtyId,
+      excludeSlotId: before.slotId,
+      take: 3,
+    });
+
+    const conv = await this.ensureConversationForAppointment({
+      ...before,
+      patient: cancelled.patient,
+    });
+
+    const { fecha, hora } = formatLaPazParts(new Date(before.slot.startsAt));
+    const intro =
+      `Hola ${cancelled.patient.firstName}, te escribimos del Hospital Central La Paz. ` +
+      `Lamentablemente el/la Dr(a). ${before.doctor.lastName} tuvo que cancelar tu cita de ${before.specialty.name} ` +
+      `del ${fecha} a las ${hora}. Motivo: ${params.reason}.`;
+
+    const provider = resolveWhatsappProvider((await this.getConfig()).provider);
+    let body = intro;
+    if (options.length) {
+      const fmt = this.formatOptionsMessage(options);
+      body += `\n\nPodemos reasignarte uno de estos horarios:\n${fmt.text}\n\nRespondé con el número que preferís, o decinos si preferís cancelar.`;
+      await this.appendMessage({
+        conversationId: conv.id,
+        direction: WhatsappMessageDirection.SYSTEM,
+        body: `KIND:DOCTOR_CANCEL`,
+      });
+      await this.appendMessage({
+        conversationId: conv.id,
+        direction: WhatsappMessageDirection.SYSTEM,
+        body: `OPCIONES:${fmt.payload}`,
+      });
+    } else {
+      body +=
+        '\n\nPor ahora no hay otros horarios libres. Respondé CANCELAR si querés dar de baja, o escribinos más adelante.';
+      await this.appendMessage({
+        conversationId: conv.id,
+        direction: WhatsappMessageDirection.SYSTEM,
+        body: `KIND:DOCTOR_CANCEL`,
+      });
+    }
+
+    await provider.send({
+      to: cancelled.patient.phone,
+      body,
+      conversationId: conv.id,
+      appointmentId: cancelled.id,
+    });
+    await this.prisma.whatsappConversation.update({
+      where: { id: conv.id },
+      data: {
+        sentAt: new Date(),
+        status: WhatsappChatStatus.PENDING,
+        appointmentId: cancelled.id,
+      },
+    });
+    return this.appendMessage({
+      conversationId: conv.id,
+      direction: WhatsappMessageDirection.OUTBOUND,
+      body,
+      simulated: true,
+    });
+  }
+
+  /**
+   * El doctor pide cambiar el horario: libera turno + WhatsApp con alternativas.
+   */
+  async doctorRescheduleWithNotice(params: {
+    appointmentId: string;
+    reason: string;
+    actorId?: string;
+  }) {
+    const before = await this.prisma.appointment.findUnique({
+      where: { id: params.appointmentId },
+      include: {
+        patient: true,
+        doctor: true,
+        specialty: true,
+        slot: true,
+        whatsappConversation: true,
+      },
+    });
+    if (!before) throw new NotFoundException('Cita no encontrada');
+
+    const updated = await this.appointments.requestDoctorReschedule({
+      appointmentId: params.appointmentId,
+      actorId: params.actorId,
+      reason: params.reason,
+    });
+
+    const options = await this.findAlternativeSlots({
+      doctorId: before.doctorId,
+      specialtyId: before.specialtyId,
+      excludeSlotId: before.slotId,
+      take: 3,
+    });
+    if (!options.length) {
+      throw new BadRequestException(
+        'No hay horarios alternativos libres para ofrecer al paciente',
+      );
+    }
+
+    const conv = await this.ensureConversationForAppointment({
+      ...before,
+      patient: updated.patient,
+    });
+
+    const { fecha, hora } = formatLaPazParts(new Date(before.slot.startsAt));
+    const fmt = this.formatOptionsMessage(options);
+    const body =
+      `Hola ${updated.patient.firstName}, te escribimos del Hospital Central La Paz. ` +
+      `El/la Dr(a). ${before.doctor.lastName} necesita cambiar tu cita de ${before.specialty.name} ` +
+      `del ${fecha} a las ${hora}. Motivo: ${params.reason}.\n\n` +
+      `Estas son las opciones disponibles:\n${fmt.text}\n\n` +
+      `Respondé con el número que te sirva, o CANCELAR si no podés en ninguno.`;
+
+    await this.appendMessage({
+      conversationId: conv.id,
+      direction: WhatsappMessageDirection.SYSTEM,
+      body: `KIND:DOCTOR_RESCHEDULE`,
+    });
+    await this.appendMessage({
+      conversationId: conv.id,
+      direction: WhatsappMessageDirection.SYSTEM,
+      body: `OPCIONES:${fmt.payload}`,
+    });
+
+    const provider = resolveWhatsappProvider((await this.getConfig()).provider);
+    await provider.send({
+      to: updated.patient.phone,
+      body,
+      conversationId: conv.id,
+      appointmentId: updated.id,
+    });
+    await this.prisma.whatsappConversation.update({
+      where: { id: conv.id },
+      data: {
+        sentAt: new Date(),
+        status: WhatsappChatStatus.PENDING,
+        appointmentId: updated.id,
+      },
+    });
+    return this.appendMessage({
+      conversationId: conv.id,
+      direction: WhatsappMessageDirection.OUTBOUND,
+      body,
+      simulated: true,
+    });
+  }
+
+  private conversationKind(
+    messages: Array<{ direction: string; body: string }>,
+  ): 'CONFIRMATION' | 'DOCTOR_CANCEL' | 'DOCTOR_RESCHEDULE' {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const b = messages[i]?.body || '';
+      if (b === 'KIND:DOCTOR_CANCEL') return 'DOCTOR_CANCEL';
+      if (b === 'KIND:DOCTOR_RESCHEDULE') return 'DOCTOR_RESCHEDULE';
+    }
+    return 'CONFIRMATION';
   }
 
   async listConversations(status?: WhatsappChatStatus) {
@@ -133,7 +412,10 @@ export class WhatsappService {
       include: CHAT_INCLUDE,
     });
     if (!row) throw new NotFoundException('Conversación no encontrada');
-    return row;
+    return {
+      ...row,
+      kind: this.conversationKind(row.messages || []),
+    };
   }
 
   private async appendMessage(params: {
@@ -356,6 +638,71 @@ export class WhatsappService {
       throw new BadRequestException('Esta conversación no tiene cita vinculada');
     }
     const appt = conv.appointment;
+    const kind = this.conversationKind(conv.messages || []);
+
+    // Aviso del doctor: el paciente elige horario o declina
+    if (kind === 'DOCTOR_CANCEL' || kind === 'DOCTOR_RESCHEDULE') {
+      if (params.action === 'cancel' || (params.action === 'confirm' && !params.newSlotId)) {
+        await this.appendMessage({
+          conversationId: conv.id,
+          direction: WhatsappMessageDirection.INBOUND,
+          body: 'Gracias, por ahora no puedo en ninguno de esos horarios. Cancelen la cita.',
+          responded: true,
+        });
+        if (
+          appt.status !== AppointmentStatus.CANCELLED_BY_DOCTOR &&
+          appt.status !== AppointmentStatus.CANCELLED_BY_PATIENT
+        ) {
+          await this.appointments.cancelByPatient({
+            appointmentId: appt.id,
+            origin: ChangeOrigin.PATIENT,
+            reason: 'Paciente declinó alternativas por WhatsApp',
+          });
+        } else {
+          await this.prisma.appointment.update({
+            where: { id: appt.id },
+            data: { needsReschedule: false },
+          });
+        }
+        return this.appendMessage({
+          conversationId: conv.id,
+          direction: WhatsappMessageDirection.OUTBOUND,
+          body: `Entendido, ${conv.patient.firstName}. Dejamos la cita cancelada. Cuando quieras podés pedir un nuevo turno.`,
+          status: WhatsappChatStatus.CANCELLED,
+        });
+      }
+
+      if (!params.newSlotId) {
+        // Reexponer opciones guardadas o buscar de nuevo
+        const opts = await this.getRescheduleOptions(conv.id);
+        return { ...conv, offeredOptions: opts };
+      }
+
+      const slot = await this.prisma.slot.findUnique({
+        where: { id: params.newSlotId },
+        include: { doctor: true },
+      });
+      if (!slot) throw new NotFoundException('Horario no encontrado');
+      const { fecha, hora } = formatLaPazParts(new Date(slot.startsAt));
+      await this.appendMessage({
+        conversationId: conv.id,
+        direction: WhatsappMessageDirection.INBOUND,
+        body: `Me sirve la opción del ${fecha} a las ${hora}, por favor.`,
+        responded: true,
+      });
+      await this.appointments.reschedule({
+        appointmentId: appt.id,
+        newSlotId: params.newSlotId,
+        origin: ChangeOrigin.PATIENT,
+        reason: 'Paciente eligió alternativa ofrecida por el doctor (WhatsApp)',
+      });
+      return this.appendMessage({
+        conversationId: conv.id,
+        direction: WhatsappMessageDirection.OUTBOUND,
+        body: `Listo, ${conv.patient.firstName}. Quedó reprogramada para el ${fecha} a las ${hora}. ¡Gracias!`,
+        status: WhatsappChatStatus.RESCHEDULED,
+      });
+    }
 
     if (params.action === 'confirm') {
       await this.appendMessage({
@@ -384,11 +731,16 @@ export class WhatsappService {
         body: 'No voy a poder asistir, por favor cancelen la cita.',
         responded: true,
       });
-      await this.appointments.cancelByPatient({
-        appointmentId: appt.id,
-        origin: ChangeOrigin.PATIENT,
-        reason: 'Cancelación por WhatsApp',
-      });
+      if (
+        appt.status !== AppointmentStatus.CANCELLED_BY_DOCTOR &&
+        appt.status !== AppointmentStatus.CANCELLED_BY_PATIENT
+      ) {
+        await this.appointments.cancelByPatient({
+          appointmentId: appt.id,
+          origin: ChangeOrigin.PATIENT,
+          reason: 'Cancelación por WhatsApp',
+        });
+      }
       return this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.OUTBOUND,
@@ -397,7 +749,7 @@ export class WhatsappService {
       });
     }
 
-    // reschedule
+    // reschedule (iniciado por el paciente)
     if (!params.newSlotId) {
       await this.appendMessage({
         conversationId: conv.id,
@@ -405,13 +757,10 @@ export class WhatsappService {
         body: 'Necesito cambiar el horario, ¿qué otras opciones tienen?',
         responded: true,
       });
-      const options = await this.prisma.slot.findMany({
-        where: {
-          doctorId: appt.doctorId,
-          status: SlotStatus.FREE,
-          startsAt: { gt: new Date() },
-        },
-        orderBy: { startsAt: 'asc' },
+      const options = await this.findAlternativeSlots({
+        doctorId: appt.doctorId,
+        specialtyId: appt.specialtyId,
+        excludeSlotId: appt.slotId,
         take: 3,
       });
       if (!options.length) {
@@ -421,21 +770,16 @@ export class WhatsappService {
           body: 'Por ahora no hay otros horarios libres con el mismo médico. ¿Preferís cancelar o mantener la cita?',
         });
       }
-      const lines = options.map((s, i) => {
-        const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
-        return `${i + 1}) ${fecha} a las ${hora}`;
-      });
-      // Guardar ids en mensaje system para el front
-      const payload = options.map((s) => s.id).join(',');
+      const fmt = this.formatOptionsMessage(options);
       await this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.SYSTEM,
-        body: `OPCIONES:${payload}`,
+        body: `OPCIONES:${fmt.payload}`,
       });
       return this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.OUTBOUND,
-        body: `Claro. Estas son las próximas opciones disponibles:\n${lines.join('\n')}\nDecime cuál te sirve (1, 2 o 3).`,
+        body: `Claro. Estas son las próximas opciones disponibles:\n${fmt.text}\n\nDecime cuál te sirve (1, 2 o 3).`,
       });
     }
 
@@ -465,18 +809,50 @@ export class WhatsappService {
   async getRescheduleOptions(conversationId: string) {
     const conv = await this.getConversation(conversationId);
     if (!conv.appointment) throw new BadRequestException('Sin cita vinculada');
-    const options = await this.prisma.slot.findMany({
-      where: {
-        doctorId: conv.appointment.doctorId,
-        status: SlotStatus.FREE,
-        startsAt: { gt: new Date() },
-      },
-      orderBy: { startsAt: 'asc' },
+
+    // Preferir opciones ya ofrecidas en el chat
+    const optMsg = [...(conv.messages || [])]
+      .reverse()
+      .find((m) => String(m.body || '').startsWith('OPCIONES:'));
+    if (optMsg) {
+      const ids = String(optMsg.body)
+        .replace(/^OPCIONES:/, '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ids.length) {
+        const slots = await this.prisma.slot.findMany({
+          where: { id: { in: ids } },
+          include: { doctor: true },
+        });
+        const byId = new Map(slots.map((s) => [s.id, s]));
+        return ids
+          .map((id) => byId.get(id))
+          .filter(Boolean)
+          .map((s: any) => {
+            const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
+            return {
+              slotId: s.id,
+              label: `${fecha} · ${hora}${s.doctor ? ` · Dr(a). ${s.doctor.lastName}` : ''}`,
+              startsAt: s.startsAt,
+            };
+          });
+      }
+    }
+
+    const options = await this.findAlternativeSlots({
+      doctorId: conv.appointment.doctorId,
+      specialtyId: conv.appointment.specialtyId,
+      excludeSlotId: conv.appointment.slotId,
       take: 5,
     });
     return options.map((s) => {
       const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
-      return { slotId: s.id, label: `${fecha} · ${hora}`, startsAt: s.startsAt };
+      return {
+        slotId: s.id,
+        label: `${fecha} · ${hora}${s.doctor ? ` · Dr(a). ${s.doctor.lastName}` : ''}`,
+        startsAt: s.startsAt,
+      };
     });
   }
 

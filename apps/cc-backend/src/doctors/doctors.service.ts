@@ -132,6 +132,16 @@ export class DoctorsService {
             whatsappConversation: {
               select: { id: true, status: true, lastMessageAt: true },
             },
+            changes: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                origin: true,
+                reason: true,
+                toStatus: true,
+                createdAt: true,
+              },
+            },
           },
         },
       },

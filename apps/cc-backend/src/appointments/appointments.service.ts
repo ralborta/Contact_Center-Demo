@@ -200,7 +200,12 @@ export class AppointmentsService {
         include: { slot: true, doctor: true },
       });
       if (!appt) throw new NotFoundException('Cita no encontrada');
-      if (!ACTIVE_STATUSES.includes(appt.status) && appt.status !== AppointmentStatus.NEEDS_RESCHEDULE) {
+      const canReschedule =
+        ACTIVE_STATUSES.includes(appt.status) ||
+        appt.status === AppointmentStatus.NEEDS_RESCHEDULE ||
+        (appt.status === AppointmentStatus.CANCELLED_BY_DOCTOR &&
+          appt.needsReschedule);
+      if (!canReschedule) {
         throw new BadRequestException(`No se puede reprogramar una cita en estado ${appt.status}`);
       }
 
@@ -348,6 +353,67 @@ export class AppointmentsService {
       await this.createDoctorCancelCampaign(result.id, result.patientId, result.patient.phone);
     }
     return result;
+  }
+
+  /**
+   * El doctor pide cambiar el horario: libera el slot y deja la cita
+   * en NEEDS_RESCHEDULE para que el paciente elija otra opción.
+   */
+  async requestDoctorReschedule(params: {
+    appointmentId: string;
+    actorId?: string;
+    reason: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const appt = await tx.appointment.findUnique({
+        where: { id: params.appointmentId },
+        include: {
+          patient: true,
+          doctor: { include: { specialty: true } },
+          specialty: true,
+          slot: true,
+        },
+      });
+      if (!appt) throw new NotFoundException('Cita no encontrada');
+      if (
+        appt.status === AppointmentStatus.CANCELLED_BY_PATIENT ||
+        appt.status === AppointmentStatus.CANCELLED_BY_DOCTOR ||
+        appt.status === AppointmentStatus.COMPLETED
+      ) {
+        throw new BadRequestException(`La cita ya está en estado ${appt.status}`);
+      }
+
+      await tx.slot.update({
+        where: { id: appt.slotId },
+        data: { status: SlotStatus.FREE },
+      });
+
+      return tx.appointment.update({
+        where: { id: appt.id },
+        data: {
+          status: AppointmentStatus.NEEDS_RESCHEDULE,
+          needsReschedule: true,
+          reason: params.reason,
+          changes: {
+            create: {
+              fromStatus: appt.status,
+              toStatus: AppointmentStatus.NEEDS_RESCHEDULE,
+              fromSlotId: appt.slotId,
+              origin: ChangeOrigin.DOCTOR,
+              actorId: params.actorId,
+              reason: params.reason,
+              notified: true,
+            },
+          },
+        },
+        include: {
+          patient: true,
+          doctor: { include: { specialty: true } },
+          specialty: true,
+          slot: true,
+        },
+      });
+    });
   }
 
   /**

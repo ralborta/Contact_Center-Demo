@@ -6,15 +6,18 @@ import { CalendarDays, MessageCircle, Phone, X } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import {
   APPT_STATUS_LABEL,
+  CHANGE_ORIGIN_LABEL,
   WA_CHAT_STATUS_LABEL,
   doctorsApi,
   formatLaPaz,
   specialtiesApi,
+  whatsappApi,
 } from '@/lib/api'
 
 type AgendaAppointment = {
   id: string
   status?: string
+  reason?: string | null
   voiceConversationId?: string | null
   patient?: {
     firstName: string
@@ -34,6 +37,12 @@ type AgendaAppointment = {
     status?: string
     lastMessageAt?: string | null
   } | null
+  changes?: Array<{
+    origin?: string
+    reason?: string | null
+    toStatus?: string
+    createdAt?: string
+  }>
 }
 
 type Slot = {
@@ -81,6 +90,23 @@ export default function AgendaPage() {
   const [view, setView] = useState<'day' | 'week'>('week')
   const [loading, setLoading] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
+  const [actionMsg, setActionMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function reloadAgenda() {
+    if (!doctorId) return
+    setLoading(true)
+    const from = new Date()
+    from.setHours(0, 0, 0, 0)
+    const to = new Date(from)
+    to.setDate(to.getDate() + (view === 'day' ? 1 : 7))
+    try {
+      const data = await doctorsApi.agenda(doctorId, from.toISOString(), to.toISOString())
+      setSlots(data)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     Promise.all([doctorsApi.list(), specialtiesApi.list()]).then(([d, s]) => {
@@ -92,16 +118,9 @@ export default function AgendaPage() {
 
   useEffect(() => {
     if (!doctorId) return
-    setLoading(true)
     setSelectedSlot(null)
-    const from = new Date()
-    from.setHours(0, 0, 0, 0)
-    const to = new Date(from)
-    to.setDate(to.getDate() + (view === 'day' ? 1 : 7))
-    doctorsApi
-      .agenda(doctorId, from.toISOString(), to.toISOString())
-      .then(setSlots)
-      .finally(() => setLoading(false))
+    void reloadAgenda()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId, view])
 
   const filteredDoctors = useMemo(
@@ -445,9 +464,89 @@ export default function AgendaPage() {
                   </p>
                 </div>
               )}
+              {(detailAppt.changes?.[0] || detailAppt.reason) && (
+                <div className="col-span-2">
+                  <p className="label-caps">Último cambio</p>
+                  <p className="font-medium">
+                    {detailAppt.changes?.[0]
+                      ? CHANGE_ORIGIN_LABEL[detailAppt.changes[0].origin || ''] ||
+                        detailAppt.changes[0].origin
+                      : '—'}
+                  </p>
+                  <p className="text-sm text-on-surface-variant mt-0.5">
+                    {detailAppt.changes?.[0]?.reason || detailAppt.reason || '—'}
+                  </p>
+                </div>
+              )}
             </div>
 
+            {actionMsg && (
+              <p className="text-sm text-status-success bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                {actionMsg}
+              </p>
+            )}
+
             <div className="flex flex-col gap-2">
+              {['RESERVED', 'CONFIRMED', 'RESCHEDULED', 'NEEDS_RESCHEDULE'].includes(
+                detailAppt.status || '',
+              ) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    disabled={busy}
+                    onClick={async () => {
+                      const reason =
+                        prompt('Motivo de cancelación del doctor') ||
+                        'Cambio de agenda del doctor'
+                      setBusy(true)
+                      setActionMsg('')
+                      try {
+                        await whatsappApi.doctorCancel({
+                          appointmentId: detailAppt.id,
+                          reason,
+                        })
+                        setActionMsg('Cancelada · aviso WhatsApp enviado')
+                        await reloadAgenda()
+                        setSelectedSlot(null)
+                      } catch (e: any) {
+                        setActionMsg(e?.response?.data?.message || 'No se pudo cancelar')
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Cancelar (doctor)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={async () => {
+                      const reason =
+                        prompt('Motivo del cambio de horario') ||
+                        'El doctor necesita cambiar el horario'
+                      setBusy(true)
+                      setActionMsg('')
+                      try {
+                        await whatsappApi.doctorReschedule({
+                          appointmentId: detailAppt.id,
+                          reason,
+                        })
+                        setActionMsg('Reprogramación pedida · opciones por WhatsApp')
+                        await reloadAgenda()
+                        setSelectedSlot(null)
+                      } catch (e: any) {
+                        setActionMsg(e?.response?.data?.message || 'No se pudo reprogramar')
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Reprogramar (doctor)
+                  </button>
+                </div>
+              )}
               {detailCall ? (
                 <Link
                   href={`/llamadas/${detailCall.id}`}

@@ -139,6 +139,18 @@ export const whatsappApi = {
     (await getApi().post(`/api/whatsapp/conversations/${id}/simulate-reply`, body)).data,
   runNow: async () => (await getApi().post('/api/whatsapp/run-now')).data,
   seedDemo: async () => (await getApi().post('/api/whatsapp/seed-demo')).data,
+  doctorCancel: async (body: { appointmentId: string; reason: string }) =>
+    (await getApi().post('/api/whatsapp/doctor/cancel', body)).data,
+  doctorReschedule: async (body: { appointmentId: string; reason: string }) =>
+    (await getApi().post('/api/whatsapp/doctor/reschedule', body)).data,
+}
+
+export const CHANGE_ORIGIN_LABEL: Record<string, string> = {
+  PATIENT: 'Paciente',
+  DOCTOR: 'Doctor',
+  VOICE_AGENT: 'Agente de voz',
+  OPERATOR: 'Operador',
+  SYSTEM: 'Sistema',
 }
 
 export const WA_CHAT_STATUS_LABEL: Record<string, string> = {
