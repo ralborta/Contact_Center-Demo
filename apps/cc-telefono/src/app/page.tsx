@@ -29,11 +29,11 @@ export default function TelefonoPage() {
   const [elapsed, setElapsed] = useState(0)
   const [statusHint, setStatusHint] = useState('Listo para llamar')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [conversationId, setConversationId] = useState<string | null>(null)
 
   const conversationRef = useRef<Awaited<ReturnType<typeof Conversation.startSession>> | null>(
     null,
   )
+  const conversationIdRef = useRef<string | null>(null)
   const connectedAtRef = useRef<number | null>(null)
   const callerPhoneRef = useRef(callerPhone)
   const endingRef = useRef(false)
@@ -84,7 +84,7 @@ export default function TelefonoPage() {
         }),
       })
     } catch {
-      /* webhook post-call puede completar luego */
+      /* el post-call de ElevenLabs completa el registro */
     }
   }, [])
 
@@ -92,7 +92,8 @@ export default function TelefonoPage() {
     if (endingRef.current) return
     endingRef.current = true
     const conv = conversationRef.current
-    const id = conversationId || (conv?.getId?.() ? String(conv.getId()) : null)
+    const id =
+      conversationIdRef.current || (conv?.getId?.() ? String(conv.getId()) : null)
     const dur = connectedAtRef.current
       ? Math.floor((Date.now() - connectedAtRef.current) / 1000)
       : elapsed
@@ -108,7 +109,7 @@ export default function TelefonoPage() {
     }
     await reportEnd(id, dur)
     endingRef.current = false
-  }, [conversationId, elapsed, reportEnd])
+  }, [elapsed, reportEnd])
 
   const startCall = useCallback(async () => {
     if (phase === 'connecting' || phase === 'active') return
@@ -117,15 +118,16 @@ export default function TelefonoPage() {
     setPhase('connecting')
     setStatusHint('Conectando…')
     setElapsed(0)
-    setConversationId(null)
+    conversationIdRef.current = null
     setMode('idle')
+    setShowSettings(false)
 
     try {
       const res = await fetch(`${apiBase()}/api/voice/public/session`)
-      if (!res.ok) throw new Error('No se pudo abrir sesión de voz')
+      if (!res.ok) throw new Error('No se pudo iniciar la llamada')
       const session = await res.json()
       if (!session.signedUrl && !session.agentId) {
-        throw new Error('Sesión de voz incompleta')
+        throw new Error('No se pudo iniciar la llamada')
       }
 
       // Nunca enviar system__* desde el cliente: ElevenLabs responde
@@ -140,14 +142,14 @@ export default function TelefonoPage() {
         : { signedUrl: String(session.signedUrl) }
 
       if (session.conversationId) {
-        setConversationId(String(session.conversationId))
+        conversationIdRef.current = String(session.conversationId)
       }
 
       const conv = await Conversation.startSession({
         ...sessionOpts,
         dynamicVariables,
         onConnect: ({ conversationId: id }) => {
-          if (id) setConversationId(id)
+          if (id) conversationIdRef.current = id
           connectedAtRef.current = Date.now()
           setPhase('active')
           setStatusHint('En llamada')
@@ -156,8 +158,8 @@ export default function TelefonoPage() {
         onDisconnect: () => {
           if (!endingRef.current) void hangUp()
         },
-        onError: (message) => {
-          setErrorMsg(message || 'Error en la llamada')
+        onError: () => {
+          setErrorMsg('No se pudo completar la llamada. Intentá de nuevo.')
           setPhase('error')
           setStatusHint('No se pudo completar')
         },
@@ -179,14 +181,14 @@ export default function TelefonoPage() {
 
       conversationRef.current = conv
       const id = conv.getId?.()
-      if (id) setConversationId(String(id))
-    } catch (err: any) {
+      if (id) conversationIdRef.current = String(id)
+    } catch {
       setPhase('error')
       setStatusHint('Error al llamar')
-      setErrorMsg(err?.message || 'No se pudo iniciar la llamada')
+      setErrorMsg('No se pudo iniciar la llamada. Intentá de nuevo.')
       conversationRef.current = null
     }
-  }, [callerName, callerPhone, hangUp, phase])
+  }, [callerPhone, hangUp, phase])
 
   useEffect(() => {
     return () => {
@@ -216,10 +218,11 @@ export default function TelefonoPage() {
             <button
               type="button"
               className="gear"
-              aria-label="Ajustes"
+              aria-label="Quién llama"
+              title="Quién llama"
               onClick={() => setShowSettings((v) => !v)}
             >
-              ⚙
+              <span className="gear-icon" aria-hidden />
             </button>
           </header>
 
@@ -245,15 +248,13 @@ export default function TelefonoPage() {
               <p className="mode-hint">Escuchando…</p>
             )}
             {errorMsg && <p className="error-hint">{errorMsg}</p>}
-            {conversationId && phase === 'ended' && (
-              <p className="conv-hint">{conversationId}</p>
-            )}
           </section>
 
           {showSettings && (
-            <div className="settings-panel" role="dialog" aria-label="Ajustes de llamada">
+            <div className="settings-panel" role="dialog" aria-label="Quién llama">
+              <p className="settings-title">Quién llama</p>
               <label>
-                Quién llama
+                Nombre
                 <input
                   value={callerName}
                   onChange={(e) => setCallerName(e.target.value)}
