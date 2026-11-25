@@ -128,14 +128,13 @@ export default function TelefonoPage() {
         throw new Error('Sesión de voz incompleta')
       }
 
+      // Nunca enviar system__* desde el cliente: ElevenLabs responde
+      // "Invalid message received" y la conversación queda failed.
       const dynamicVariables: Record<string, string> = {
         caller_phone: String(callerPhone),
         telefono: String(callerPhone),
-        system__caller_id: String(callerPhone),
-        paciente_nombre_simulado: String(callerName),
       }
 
-      // Preferir agentId público: signed URL a veces cierra con "Invalid message".
       const sessionOpts = session.agentId
         ? { agentId: String(session.agentId) }
         : { signedUrl: String(session.signedUrl) }

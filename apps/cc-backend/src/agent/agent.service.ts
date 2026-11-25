@@ -422,20 +422,29 @@ export class AgentService {
       payload?.metadata?.phone ||
       dyn?.caller_phone ||
       dyn?.telefono ||
+      // system__caller_id solo lo setea ElevenLabs en canales telefónicos reales
       dyn?.system__caller_id ||
       '';
     const patient = phone
       ? await this.patients.findByPhoneOrCi(String(phone))
       : null;
     const config = await this.prisma.agentConfig.findUnique({ where: { id: 'default' } });
+    const hospital = config?.hospitalName || 'Hospital Central La Paz';
+    const saludo =
+      config?.greeting ||
+      'Buenos días, habla el asistente de citas del Hospital Central La Paz. ¿En qué puedo ayudarle?';
 
+    // Respuesta estricta: type + dynamic_variables (strings). HTTP 200.
+    // No incluir claves system__* (las pone ElevenLabs).
     if (!patient) {
       return {
         type: 'conversation_initiation_client_data',
         dynamic_variables: {
+          caller_phone: String(phone || ''),
+          telefono: String(phone || ''),
           paciente_conocido: 'false',
-          hospital_nombre: config?.hospitalName || 'Hospital Central La Paz',
-          saludo: config?.greeting || '',
+          hospital_nombre: hospital,
+          saludo,
         },
       };
     }
@@ -443,11 +452,13 @@ export class AgentService {
     return {
       type: 'conversation_initiation_client_data',
       dynamic_variables: {
+        caller_phone: String(phone || patient.phone || ''),
+        telefono: String(phone || patient.phone || ''),
         paciente_conocido: 'true',
-        paciente_id: patient.id,
-        paciente_nombre: patient.firstName,
-        paciente_nombre_completo: `${patient.firstName} ${patient.lastName}`,
-        paciente_ci_mask: patient.documentId.slice(-3),
+        paciente_id: String(patient.id),
+        paciente_nombre: String(patient.firstName || ''),
+        paciente_nombre_completo: `${patient.firstName} ${patient.lastName}`.trim(),
+        paciente_ci_mask: String(patient.documentId || '').slice(-3),
         citas_proximas_count: String(citas.length),
         citas_resumen:
           citas.length === 0
@@ -456,8 +467,8 @@ export class AgentService {
                 .slice(0, 3)
                 .map((c) => this.appointments.formatForVoice(c).mensaje)
                 .join('; '),
-        hospital_nombre: config?.hospitalName || 'Hospital Central La Paz',
-        saludo: config?.greeting || '',
+        hospital_nombre: hospital,
+        saludo,
       },
     };
   }

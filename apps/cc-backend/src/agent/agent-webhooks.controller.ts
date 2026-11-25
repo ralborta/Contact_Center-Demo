@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Headers,
+  HttpCode,
   Post,
   Req,
   UnauthorizedException,
@@ -82,6 +83,7 @@ export class AgentWebhooksController {
   }
 
   @Post('voice/call-init')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Inicio de llamada — variables dinámicas del paciente' })
   @ApiHeader({ name: 'X-Webhook-Token', required: false })
   callInit(
@@ -99,6 +101,7 @@ export class AgentWebhooksController {
   }
 
   @Post('voice/post-call')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Post-llamada — guarda transcripción, resumen y resultado' })
   @ApiHeader({ name: 'X-Webhook-Token', required: false })
   @ApiHeader({ name: 'ElevenLabs-Signature', required: false })
