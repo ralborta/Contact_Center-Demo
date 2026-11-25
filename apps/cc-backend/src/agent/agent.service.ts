@@ -458,79 +458,90 @@ export class AgentService {
   }
 
   async handlePostCall(payload: any) {
+    const data = payload?.data || payload;
     const conversationId =
-      payload?.data?.conversation_id ||
+      data?.conversation_id ||
       payload?.conversation_id ||
       payload?.cid ||
       null;
+    const dyn =
+      data?.conversation_initiation_client_data?.dynamic_variables ||
+      data?.dynamic_variables ||
+      {};
     const from =
-      payload?.data?.metadata?.phone_call?.external_number ||
-      payload?.data?.metadata?.caller_id ||
+      data?.metadata?.phone_call?.external_number ||
+      data?.metadata?.caller_id ||
+      dyn?.caller_phone ||
+      dyn?.telefono ||
+      dyn?.system__caller_id ||
       payload?.caller_id ||
       'unknown';
     const to =
-      payload?.data?.metadata?.phone_call?.agent_number ||
+      data?.metadata?.phone_call?.agent_number ||
       payload?.to ||
-      'hospital';
-    const transcript =
-      payload?.data?.transcript ||
-      payload?.transcript ||
-      (Array.isArray(payload?.data?.transcript)
-        ? payload.data.transcript.map((t: any) => `${t.role}: ${t.message}`).join('\n')
-        : null);
+      'Hospital Central La Paz';
+    const transcript = data?.transcript || payload?.transcript || null;
     const summary =
-      payload?.data?.analysis?.transcript_summary ||
-      payload?.data?.analysis?.call_summary_title ||
+      data?.analysis?.transcript_summary ||
+      data?.analysis?.call_summary_title ||
       payload?.summary ||
       null;
     const durationSec =
-      payload?.data?.metadata?.call_duration_secs ||
+      data?.metadata?.call_duration_secs ||
       payload?.duration_secs ||
       null;
     const recordingUrl =
-      payload?.data?.metadata?.recording_url ||
+      data?.metadata?.recording_url ||
       payload?.recording_url ||
       null;
     const direction =
-      (payload?.data?.metadata?.phone_call?.direction || '').toLowerCase() === 'outbound'
+      (data?.metadata?.phone_call?.direction || '').toLowerCase() === 'outbound'
         ? Direction.OUTBOUND
         : Direction.INBOUND;
 
     let transcriptText = '';
     if (typeof transcript === 'string') transcriptText = transcript;
     else if (Array.isArray(transcript)) {
-      transcriptText = transcript
-        .map((t: any) => `${t.role || t.speaker || '?'}: ${t.message || t.text || ''}`)
-        .join('\n');
+      transcriptText = JSON.stringify(
+        transcript.map((t: any) => ({
+          role: t.role || t.speaker || 'agent',
+          text: t.message || t.text || '',
+          t: t.time_in_call_secs,
+          tool_calls: t.tool_calls,
+        })),
+      );
     }
 
     const patient = await this.patients.findByPhoneOrCi(String(from));
+    const startedAt = new Date(Date.now() - (durationSec || 0) * 1000);
+    const endedAt = new Date();
+    const providerConversationId = conversationId || `anon-${Date.now()}`;
 
     const interaction = await this.prisma.interaction.upsert({
       where: {
         provider_providerConversationId: {
           provider: Provider.VOICE_AGENT,
-          providerConversationId: conversationId || `anon-${Date.now()}`,
+          providerConversationId,
         },
       },
       create: {
         channel: 'CALL',
         direction,
         status: InteractionStatus.COMPLETED,
-        startedAt: new Date(Date.now() - (durationSec || 0) * 1000),
-        endedAt: new Date(),
+        startedAt,
+        endedAt,
         from: String(from),
         to: String(to),
         patientId: patient?.id,
         aiHandled: true,
         outcome: Outcome.RESOLVED,
         provider: Provider.VOICE_AGENT,
-        providerConversationId: conversationId || `anon-${Date.now()}`,
+        providerConversationId,
         callDetail: {
           create: {
             externalCallId: conversationId,
             transcriptText,
-            summary: typeof summary === 'string' ? summary : JSON.stringify(summary),
+            summary: typeof summary === 'string' ? summary : null,
             durationSec: durationSec ? Number(durationSec) : null,
             recordingUrl,
           },
@@ -538,7 +549,8 @@ export class AgentService {
       },
       update: {
         status: InteractionStatus.COMPLETED,
-        endedAt: new Date(),
+        endedAt,
+        from: String(from),
         patientId: patient?.id || undefined,
         callDetail: {
           upsert: {
@@ -560,6 +572,67 @@ export class AgentService {
       },
     });
 
-    return { ok: true, interactionId: interaction.id };
+    const appointmentId = await this.resolveAppointmentForCall({
+      interactionId: interaction.id,
+      patientId: patient?.id,
+      startedAt,
+      endedAt,
+    });
+
+    return {
+      ok: true,
+      interactionId: interaction.id,
+      appointmentId: appointmentId || interaction.appointmentId || null,
+    };
+  }
+
+  private async resolveAppointmentForCall(params: {
+    interactionId: string;
+    patientId?: string;
+    startedAt: Date;
+    endedAt: Date;
+  }) {
+    const existing = await this.prisma.interaction.findUnique({
+      where: { id: params.interactionId },
+    });
+    if (existing?.appointmentId) return existing.appointmentId;
+
+    const windowStart = new Date(params.startedAt.getTime() - 10 * 60_000);
+    const windowEnd = new Date(params.endedAt.getTime() + 10 * 60_000);
+
+    const change = await this.prisma.appointmentChange.findFirst({
+      where: {
+        origin: 'VOICE_AGENT',
+        createdAt: { gte: windowStart, lte: windowEnd },
+        ...(params.patientId
+          ? { appointment: { patientId: params.patientId } }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let appointmentId = change?.appointmentId;
+    if (!appointmentId && params.patientId) {
+      const recent = await this.prisma.appointment.findFirst({
+        where: {
+          patientId: params.patientId,
+          channel: 'PHONE_IN',
+          updatedAt: { gte: windowStart, lte: windowEnd },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      appointmentId = recent?.id;
+    }
+
+    if (appointmentId) {
+      await this.prisma.interaction.update({
+        where: { id: params.interactionId },
+        data: {
+          appointmentId,
+          resultCode: existing?.resultCode || 'APPOINTMENT_BOOKED',
+        },
+      });
+    }
+    return appointmentId || null;
   }
 }

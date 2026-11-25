@@ -67,6 +67,7 @@ async function bootstrap() {
   await maybeSeed();
 
   const app = await NestFactory.create(AppModule, {
+    rawBody: true,
     logger: WinstonModule.createLogger({
       transports: [
         new winston.transports.Console({
