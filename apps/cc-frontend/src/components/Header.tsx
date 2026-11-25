@@ -19,6 +19,7 @@ import {
 import { getUser, clearAuth, isAdmin } from '@/lib/auth'
 import { resetApiInstance } from '@/lib/api'
 
+// Panel LIVE: sin Simulador ni ruta /telefono (webapp separada).
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, match: (p: string) => p === '/' },
   { href: '/llamadas', label: 'Llamadas', icon: Phone, match: (p: string) => p.startsWith('/llamadas') },
