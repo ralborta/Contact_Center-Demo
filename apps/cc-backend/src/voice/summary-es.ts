@@ -37,11 +37,15 @@ export function ensureSpanishSummary(params: {
   const booked = tools.some((t) => /reservar_cita|reservó cita|cita reservada/.test(t));
   const rescheduled = tools.some((t) => /reprogramar_cita|reprogramó|cita reprogramada/.test(t));
   const cancelled = tools.some((t) => /cancelar_cita|canceló|cita cancelada/.test(t));
+  const registered = tools.some((t) => /registrar_paciente|registró paciente|paciente registrado/.test(t));
   const identified = tools.some((t) => /identificar_paciente|identificó/.test(t));
   const availability = tools.some((t) => /consultar_disponibilidad|disponibilidad/.test(t));
 
   const code = params.resultCode || '';
   if (booked || code === 'APPOINTMENT_BOOKED') {
+    if (registered) {
+      return `Se registró a ${who}, se consultó disponibilidad y se reservó una cita.`;
+    }
     return `Se identificó a ${who}, se consultó disponibilidad y se reservó una cita.`;
   }
   if (rescheduled || code === 'RESCHEDULED') {

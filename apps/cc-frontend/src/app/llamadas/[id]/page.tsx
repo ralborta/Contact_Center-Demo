@@ -16,6 +16,7 @@ const TOOL_LABELS: Record<string, (args?: any) => string> = {
     `Buscó médicos${a?.especialidad ? ` de ${a.especialidad}` : a?.nombre || a?.doctor ? `: ${a.nombre || a.doctor}` : ''}`,
   listar_especialidades: () => 'Consultó especialidades',
   identificar_paciente: () => 'Identificó al paciente',
+  registrar_paciente: () => 'Registró paciente nuevo',
   reservar_cita: () => 'Reservó cita',
   reprogramar_cita: () => 'Reprogramó cita',
   cancelar_cita: () => 'Canceló cita',

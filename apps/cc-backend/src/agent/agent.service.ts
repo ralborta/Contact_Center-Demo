@@ -48,35 +48,75 @@ export class AgentService {
     apellido?: string;
     seguro?: string;
   }) {
-    const [firstName, ...rest] = (body.nombre || '').trim().split(/\s+/);
-    const lastName = body.apellido || rest.join(' ') || undefined;
-    const result = await this.patients.identifyOrRegister({
-      phone: body.telefono,
-      documentId: body.ci,
-      firstName: firstName || undefined,
-      lastName,
-      insurance: body.seguro,
-    });
-    if (!result.patient) {
+    // Solo búsqueda: el alta va por registrar-paciente
+    const patient = await this.patients.findByPhoneOrCi(body.telefono, body.ci);
+    if (!patient) {
       return {
         ok: false,
         encontrado: false,
         mensaje:
-          'No encontré al paciente. Necesito nombre completo, carnet de identidad y teléfono para registrarlo.',
-        faltantes: result.missing,
+          'No encontré al paciente. Ofrezca registrarlo: pida nombre, apellido, carnet de identidad y teléfono, confirme los datos y use registrar_paciente.',
+        faltantes: ['nombre', 'apellido', 'ci', 'telefono'],
       };
     }
-    const voice = this.patients.formatForVoice(result.patient);
-    const citas = await this.appointments.listPatientAppointments(result.patient.id);
+    const voice = this.patients.formatForVoice(patient);
+    const citas = await this.appointments.listPatientAppointments(patient.id);
     return {
       ok: true,
       encontrado: true,
-      creado: result.created,
+      creado: false,
       paciente: voice,
       citasProximas: citas.map((c) => this.appointments.formatForVoice(c)),
+      mensaje: `Hola ${patient.firstName}. ${voice.mensaje}`,
+    };
+  }
+
+  async registerPatient(body: {
+    nombre?: string;
+    apellido?: string;
+    documento?: string;
+    ci?: string;
+    telefono?: string;
+    fechaNacimiento?: string;
+    fecha_nacimiento?: string;
+    seguro?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
+  }) {
+    const documentId = body.documento || body.ci;
+    const dateOfBirth = body.fechaNacimiento || body.fecha_nacimiento || null;
+    const result = await this.patients.registerNew({
+      firstName: (body.nombre || '').trim(),
+      lastName: (body.apellido || '').trim(),
+      documentId: documentId || '',
+      phone: body.telefono || '',
+      insurance: body.seguro,
+      dateOfBirth,
+    });
+    if (!result.patient) {
+      return {
+        ok: false,
+        registrado: false,
+        mensaje:
+          'Faltan datos para registrar. Necesito nombre, apellido, carnet de identidad y teléfono.',
+        faltantes: result.missing,
+      };
+    }
+    const conversationId = resolveConversationId(body);
+    await this.linkConversationToPatient(conversationId, result.patient.id);
+    const voice = this.patients.formatForVoice(result.patient);
+    return {
+      ok: true,
+      registrado: true,
+      creado: result.created,
+      yaExistia: !result.created,
+      paciente: voice,
+      pacienteId: result.patient.id,
+      conversationId: conversationId || null,
       mensaje: result.created
         ? `Registré a ${voice.nombre}. ¿En qué especialidad desea su cita?`
-        : `Hola ${result.patient.firstName}. ${voice.mensaje}`,
+        : `Ya teníamos a ${voice.nombre} en el sistema. ¿En qué especialidad desea su cita?`,
     };
   }
 
@@ -408,6 +448,10 @@ export class AgentService {
     resultCode: string,
   ) {
     if (!conversationId) return;
+    const appt = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { patientId: true },
+    });
     const existing = await this.prisma.interaction.findUnique({
       where: {
         provider_providerConversationId: {
@@ -419,7 +463,11 @@ export class AgentService {
     if (existing) {
       await this.prisma.interaction.update({
         where: { id: existing.id },
-        data: { appointmentId, resultCode },
+        data: {
+          appointmentId,
+          resultCode,
+          ...(appt?.patientId ? { patientId: appt.patientId } : {}),
+        },
       });
       return;
     }
@@ -436,6 +484,50 @@ export class AgentService {
         provider: Provider.VOICE_AGENT,
         providerConversationId: conversationId,
         appointmentId,
+        ...(appt?.patientId ? { patientId: appt.patientId } : {}),
+      },
+    });
+  }
+
+  /** Vincula la conversación en curso con el paciente recién registrado/encontrado. */
+  private async linkConversationToPatient(
+    conversationId: string | undefined,
+    patientId: string,
+  ) {
+    if (!conversationId) return;
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { phone: true, normalizedPhone: true },
+    });
+    const from = patient?.normalizedPhone || patient?.phone || 'pending';
+    const existing = await this.prisma.interaction.findUnique({
+      where: {
+        provider_providerConversationId: {
+          provider: Provider.VOICE_AGENT,
+          providerConversationId: conversationId,
+        },
+      },
+    });
+    if (existing) {
+      await this.prisma.interaction.update({
+        where: { id: existing.id },
+        data: { patientId, from: existing.from === 'pending' ? from : existing.from },
+      });
+      return;
+    }
+    await this.prisma.interaction.create({
+      data: {
+        channel: 'CALL',
+        direction: Direction.INBOUND,
+        status: InteractionStatus.IN_PROGRESS,
+        startedAt: new Date(),
+        from,
+        to: 'Hospital Central La Paz',
+        aiHandled: true,
+        intent: 'consulta',
+        provider: Provider.VOICE_AGENT,
+        providerConversationId: conversationId,
+        patientId,
       },
     });
   }

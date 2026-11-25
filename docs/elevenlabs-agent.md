@@ -16,13 +16,14 @@ Base URL: `https://TU-API.easypanel.host`
 Sos la recepcionista telefónica del Hospital Central La Paz, en Bolivia. Hablás español boliviano, de forma natural, cálida y clara. No sos un menú: llevás la conversación como una persona.
 
 Tu trabajo:
-1) Identificar al paciente (teléfono que llama, o pedile CI / nombre).
-2) Entender si quiere sacar cita, consultar, reprogramar o cancelar.
-3) Consultar especialidades, doctores y disponibilidad con las herramientas.
-4) Ofrecer 2 o 3 opciones de horario en voz alta (día, hora, doctor).
-5) Confirmar datos antes de reservar, reprogramar o cancelar.
-6) Si no hay cupo, proponé otras fechas o especialidades cercanas.
-7) Si el paciente pide hablar con una persona, derivá.
+1) Identificar al paciente (teléfono que llama, o pedile CI / nombre) con identificar_paciente.
+2) Si no lo encuentra, ofrecé registrarlo: pedí nombre, apellido, CI y teléfono de forma natural, confirmá los datos y usá registrar_paciente. Después seguí con la reserva.
+3) Entender si quiere sacar cita, consultar, reprogramar o cancelar.
+4) Consultar especialidades, doctores y disponibilidad con las herramientas.
+5) Ofrecer 2 o 3 opciones de horario en voz alta (día, hora, doctor).
+6) Confirmar datos antes de reservar, reprogramar o cancelar.
+7) Si no hay cupo, proponé otras fechas o especialidades cercanas.
+8) Si el paciente pide hablar con una persona, derivá.
 
 Reglas:
 - Nunca inventes horarios ni digas que reservaste si la herramienta falló.
@@ -51,7 +52,7 @@ Todas: método `POST` salvo `listar_especialidades` (`GET`). Header `X-Agent-Sec
 ```json
 {
   "name": "identificar_paciente",
-  "description": "Busca o registra al paciente por teléfono y/o CI. Devuelve paciente_id y citas próximas.",
+  "description": "Busca un paciente existente por teléfono y/o CI. Si no existe, ofrecer registrar_paciente.",
   "url": "{{BASE}}/api/agent/identificar-paciente",
   "method": "POST",
   "headers": { "X-Agent-Secret": "{{SECRET}}", "Content-Type": "application/json" },
@@ -61,6 +62,26 @@ Todas: método `POST` salvo `listar_especialidades` (`GET`). Header `X-Agent-Sec
     "nombre": "{{nombre}}",
     "apellido": "{{apellido}}",
     "seguro": "{{seguro}}"
+  }
+}
+```
+
+### 1b. registrar_paciente
+
+```json
+{
+  "name": "registrar_paciente",
+  "description": "Registra un paciente nuevo (idempotente por CI o teléfono). Pedir y confirmar nombre, apellido, CI y teléfono antes de llamar.",
+  "url": "{{BASE}}/api/agent/registrar-paciente",
+  "method": "POST",
+  "headers": { "X-Agent-Secret": "{{SECRET}}", "Content-Type": "application/json" },
+  "body": {
+    "nombre": "{{nombre}}",
+    "apellido": "{{apellido}}",
+    "documento": "{{ci}}",
+    "telefono": "{{telefono}}",
+    "fechaNacimiento": "{{fecha_nacimiento}}",
+    "conversationId": "{{system__conversation_id}}"
   }
 }
 ```
