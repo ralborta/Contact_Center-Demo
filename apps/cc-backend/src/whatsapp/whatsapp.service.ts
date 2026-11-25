@@ -493,60 +493,56 @@ export class WhatsappService {
     const config = await this.getConfig();
     const now = new Date();
     let created = 0;
+    const errors: string[] = [];
 
-    // Asegurar citas próximas suficientes
-    const active = await this.prisma.appointment.findMany({
-      where: {
-        status: {
-          in: [
-            AppointmentStatus.RESERVED,
-            AppointmentStatus.CONFIRMED,
-            AppointmentStatus.RESCHEDULED,
-          ],
-        },
-        slot: { startsAt: { gt: now } },
-        whatsappConversation: null,
-      },
-      include: {
-        patient: true,
-        doctor: true,
-        specialty: true,
-        slot: true,
-      },
-      orderBy: { createdAt: 'asc' },
+    const patients = await this.prisma.patient.findMany({
       take: 12,
+      orderBy: { lastName: 'asc' },
     });
+    if (!patients.length) {
+      return { ok: false, created: 0, existing, error: 'Sin pacientes' };
+    }
 
-    // Si faltan citas, crear algunas con slots libres
-    const need = Math.max(0, 6 - active.length);
-    if (need > 0) {
-      const patients = await this.prisma.patient.findMany({ take: 10, orderBy: { createdAt: 'asc' } });
-      const freeSlots = await this.prisma.slot.findMany({
-        where: { status: SlotStatus.FREE, startsAt: { gt: now } },
-        include: { doctor: true },
-        orderBy: { startsAt: 'asc' },
-        take: need + 4,
-      });
-      for (let i = 0; i < Math.min(need, freeSlots.length); i++) {
-        const slot = freeSlots[i];
-        const patient = patients[i % patients.length];
-        if (!patient) break;
+    const scenarios: Array<'confirm' | 'cancel' | 'reschedule' | 'pending'> = [
+      'confirm',
+      'cancel',
+      'reschedule',
+      'pending',
+      'confirm',
+      'pending',
+    ];
+    const toCreate = Math.max(0, 6 - existing);
+
+    for (let i = 0; i < toCreate; i++) {
+      try {
+        const patient = patients[(existing + i) % patients.length];
+        const freeSlot = await this.prisma.slot.findFirst({
+          where: {
+            status: SlotStatus.FREE,
+            startsAt: { gt: new Date(now.getTime() + (i + 1) * 3600_000) },
+          },
+          include: { doctor: true },
+          orderBy: { startsAt: 'asc' },
+        });
+        if (!freeSlot) break;
+
         const claimed = await this.prisma.slot.updateMany({
-          where: { id: slot.id, status: SlotStatus.FREE },
+          where: { id: freeSlot.id, status: SlotStatus.FREE },
           data: { status: SlotStatus.RESERVED },
         });
         if (claimed.count !== 1) continue;
+
         const appt = await this.prisma.appointment.create({
           data: {
             patientId: patient.id,
-            doctorId: slot.doctorId,
-            specialtyId: slot.doctor.specialtyId,
-            slotId: slot.id,
+            doctorId: freeSlot.doctorId,
+            specialtyId: freeSlot.doctor.specialtyId,
+            slotId: freeSlot.id,
             status: AppointmentStatus.RESERVED,
             changes: {
               create: {
                 toStatus: AppointmentStatus.RESERVED,
-                toSlotId: slot.id,
+                toSlotId: freeSlot.id,
                 origin: ChangeOrigin.SYSTEM,
                 reason: 'Cita para demo WhatsApp',
               },
@@ -559,73 +555,65 @@ export class WhatsappService {
             slot: true,
           },
         });
-        active.push(appt as any);
-      }
-    }
 
-    const scenarios: Array<'confirm' | 'cancel' | 'reschedule' | 'pending' | 'pending2' | 'confirm2'> = [
-      'confirm',
-      'cancel',
-      'reschedule',
-      'pending',
-      'pending2',
-      'confirm2',
-    ];
-
-    for (let i = 0; i < Math.min(scenarios.length, active.length); i++) {
-      const appt = active[i];
-      const scenario = scenarios[i];
-      const body = this.buildConfirmMessage(config.messageTemplate, appt);
-      const conv = await this.prisma.whatsappConversation.create({
-        data: {
-          patientId: appt.patientId,
-          appointmentId: appt.id,
-          phone: appt.patient.phone,
-          status: WhatsappChatStatus.PENDING,
-          provider: 'simulated',
-          sentAt: new Date(Date.now() - (i + 1) * 3600_000),
-          lastMessageAt: new Date(Date.now() - (i + 1) * 3600_000),
-          lastMessagePreview: body.slice(0, 120),
-        },
-      });
-      await this.prisma.whatsappMessage.create({
-        data: {
-          conversationId: conv.id,
-          direction: WhatsappMessageDirection.OUTBOUND,
-          body,
-          simulated: true,
-          createdAt: new Date(Date.now() - (i + 1) * 3600_000),
-        },
-      });
-
-      if (scenario === 'confirm' || scenario === 'confirm2') {
-        await this.simulatePatientReply({ conversationId: conv.id, action: 'confirm' });
-      } else if (scenario === 'cancel') {
-        await this.simulatePatientReply({ conversationId: conv.id, action: 'cancel' });
-      } else if (scenario === 'reschedule') {
-        const opt = await this.prisma.slot.findFirst({
-          where: {
-            doctorId: appt.doctorId,
-            status: SlotStatus.FREE,
-            startsAt: { gt: now },
+        const scenario = scenarios[i % scenarios.length];
+        const body = this.buildConfirmMessage(config.messageTemplate, appt);
+        const conv = await this.prisma.whatsappConversation.create({
+          data: {
+            patientId: appt.patientId,
+            appointmentId: appt.id,
+            phone: appt.patient.phone,
+            status: WhatsappChatStatus.PENDING,
+            provider: 'simulated',
+            sentAt: new Date(Date.now() - (i + 2) * 3600_000),
+            lastMessageAt: new Date(Date.now() - (i + 2) * 3600_000),
+            lastMessagePreview: body.slice(0, 120),
           },
-          orderBy: { startsAt: 'asc' },
         });
-        if (opt) {
-          await this.simulatePatientReply({
+        await this.prisma.whatsappMessage.create({
+          data: {
             conversationId: conv.id,
-            action: 'reschedule',
-            newSlotId: opt.id,
+            direction: WhatsappMessageDirection.OUTBOUND,
+            body,
+            simulated: true,
+            createdAt: new Date(Date.now() - (i + 2) * 3600_000),
+          },
+        });
+
+        if (scenario === 'confirm') {
+          await this.simulatePatientReply({ conversationId: conv.id, action: 'confirm' });
+        } else if (scenario === 'cancel') {
+          await this.simulatePatientReply({ conversationId: conv.id, action: 'cancel' });
+        } else if (scenario === 'reschedule') {
+          const opt = await this.prisma.slot.findFirst({
+            where: {
+              doctorId: appt.doctorId,
+              status: SlotStatus.FREE,
+              startsAt: { gt: now },
+              NOT: { id: freeSlot.id },
+            },
+            orderBy: { startsAt: 'asc' },
           });
-        } else {
-          await this.simulatePatientReply({ conversationId: conv.id, action: 'reschedule' });
+          if (opt) {
+            await this.simulatePatientReply({
+              conversationId: conv.id,
+              action: 'reschedule',
+              newSlotId: opt.id,
+            });
+          }
         }
-      } else {
-        // pending: solo el mensaje saliente
+        created += 1;
+      } catch (e: any) {
+        errors.push(String(e?.message || e).slice(0, 160));
       }
-      created += 1;
     }
 
-    return { ok: true, created, existing };
+    return {
+      ok: true,
+      created,
+      existing,
+      total: existing + created,
+      errors: errors.slice(0, 5),
+    };
   }
 }
