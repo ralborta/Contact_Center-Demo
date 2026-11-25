@@ -47,7 +47,34 @@ export class AvailabilityService {
       return hour >= 12;
     });
 
-    return filtered.slice(0, limit).map((s) => this.formatSlot(s));
+    // Diversificar por día: 1–2 slots de días distintos para ofrecer
+    // opciones de la próxima semana, no solo la agenda de un día.
+    const byDay = new Map<string, typeof filtered>();
+    for (const s of filtered) {
+      const dayKey = s.startsAt.toLocaleDateString('en-CA', {
+        timeZone: 'America/La_Paz',
+      });
+      const list = byDay.get(dayKey) || [];
+      list.push(s);
+      byDay.set(dayKey, list);
+    }
+    const diversified: typeof filtered = [];
+    const dayKeys = [...byDay.keys()];
+    let round = 0;
+    while (diversified.length < limit && dayKeys.some((k) => (byDay.get(k) || []).length > 0)) {
+      for (const key of dayKeys) {
+        if (diversified.length >= limit) break;
+        const list = byDay.get(key) || [];
+        if (list.length > round) diversified.push(list[round]);
+      }
+      round++;
+      if (round > 3) break;
+    }
+    const chosen = diversified.length > 0 ? diversified : filtered.slice(0, limit);
+    return chosen
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+      .slice(0, limit)
+      .map((s) => this.formatSlot(s));
   }
 
   formatSlot(s: {

@@ -118,6 +118,7 @@ export class AppointmentsService {
     actorId?: string;
     reason?: string;
     notes?: string;
+    voiceConversationId?: string;
   }) {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -151,6 +152,7 @@ export class AppointmentsService {
             channel: params.channel,
             reason: params.reason,
             notes: params.notes,
+            voiceConversationId: params.voiceConversationId || null,
             changes: {
               create: {
                 toStatus: AppointmentStatus.RESERVED,
@@ -184,6 +186,7 @@ export class AppointmentsService {
     origin: ChangeOrigin;
     actorId?: string;
     reason?: string;
+    voiceConversationId?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const appt = await tx.appointment.findUnique({
@@ -228,6 +231,9 @@ export class AppointmentsService {
           specialtyId: newSlot.doctor.specialtyId,
           status: AppointmentStatus.RESCHEDULED,
           needsReschedule: false,
+          ...(params.voiceConversationId
+            ? { voiceConversationId: params.voiceConversationId }
+            : {}),
           changes: {
             create: {
               fromStatus: appt.status,
@@ -256,6 +262,7 @@ export class AppointmentsService {
     origin: ChangeOrigin;
     actorId?: string;
     reason?: string;
+    voiceConversationId?: string;
   }) {
     return this.cancelInternal({
       ...params,
@@ -387,6 +394,7 @@ export class AppointmentsService {
     toStatus: AppointmentStatus;
     blockSlot: boolean;
     markNeedsReschedule?: boolean;
+    voiceConversationId?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const appt = await tx.appointment.findUnique({
@@ -413,6 +421,9 @@ export class AppointmentsService {
           status: params.toStatus,
           needsReschedule: params.markNeedsReschedule ?? false,
           reason: params.reason ?? appt.reason,
+          ...(params.voiceConversationId
+            ? { voiceConversationId: params.voiceConversationId }
+            : {}),
           changes: {
             create: {
               fromStatus: appt.status,

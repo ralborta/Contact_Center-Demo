@@ -2,6 +2,8 @@ export type TranscriptTurn = {
   role: 'agent' | 'user' | 'tool';
   text: string;
   t?: number;
+  toolName?: string;
+  appointmentId?: string;
 };
 
 const TOOL_LABELS: Record<string, (args?: any) => string> = {
@@ -36,6 +38,29 @@ function toolLabel(name: string, args?: any) {
     : `Usó herramienta ${String(name || 'desconocida').replace(/_/g, ' ')}`;
 }
 
+function parseToolResultValue(raw: any) {
+  let val = raw;
+  if (typeof val === 'string') {
+    try {
+      val = JSON.parse(val);
+    } catch {
+      return null;
+    }
+  }
+  return val && typeof val === 'object' ? val : null;
+}
+
+function citaIdFromResult(val: any): string | null {
+  if (!val || typeof val !== 'object') return null;
+  const id =
+    val?.cita?.id ||
+    val?.citaId ||
+    val?.appointmentId ||
+    val?.appointment?.id ||
+    null;
+  return id ? String(id) : null;
+}
+
 /** Normaliza transcript ElevenLabs (array o string) a turns de chat + tools legibles. */
 export function parseConversationTranscript(data: any): TranscriptTurn[] {
   const raw = data?.transcript ?? data;
@@ -65,35 +90,48 @@ export function parseConversationTranscript(data: any): TranscriptTurn[] {
       for (const tc of item.tool_calls) {
         const name = tc?.tool_name || tc?.name || tc?.function?.name || 'herramienta';
         const args = parseArgs(tc?.params || tc?.arguments || tc?.function?.arguments);
-        turns.push({ role: 'tool', text: toolLabel(name, args).trim(), t });
+        turns.push({
+          role: 'tool',
+          text: toolLabel(name, args).trim(),
+          t,
+          toolName: String(name),
+        });
       }
     }
 
     if (Array.isArray(item.tool_results)) {
       for (const tr of item.tool_results) {
-        const name = tr?.tool_name || tr?.name || '';
-        let val = tr?.result_value ?? tr?.result;
-        if (typeof val === 'string') {
-          try {
-            val = JSON.parse(val);
-          } catch {
-            /* keep */
-          }
-        }
-        if (val && typeof val === 'object') {
-          const citaId = val?.cita?.id || val?.citaId || val?.appointmentId;
-          if (citaId && /reservar/i.test(name)) {
-            turns.push({
-              role: 'tool',
-              text: `Cita reservada · ${String(citaId).slice(0, 8)}…`,
-              t,
-            });
-          }
+        const name = String(tr?.tool_name || tr?.name || '');
+        const val = parseToolResultValue(tr?.result_value ?? tr?.result);
+        const citaId = citaIdFromResult(val);
+        if (citaId && /reservar/i.test(name) && val?.ok !== false) {
+          turns.push({
+            role: 'tool',
+            text: `Cita reservada · ${String(citaId).slice(0, 8)}…`,
+            t,
+            toolName: name || 'reservar_cita',
+            appointmentId: citaId,
+          });
+        } else if (citaId && /reprogram/i.test(name) && val?.ok !== false) {
+          turns.push({
+            role: 'tool',
+            text: `Cita reprogramada · ${String(citaId).slice(0, 8)}…`,
+            t,
+            toolName: name || 'reprogramar_cita',
+            appointmentId: citaId,
+          });
+        } else if (/cancelar/i.test(name) && val?.ok !== false) {
+          turns.push({
+            role: 'tool',
+            text: `Cita cancelada${citaId ? ` · ${String(citaId).slice(0, 8)}…` : ''}`,
+            t,
+            toolName: name || 'cancelar_cita',
+            appointmentId: citaId || undefined,
+          });
         }
       }
     }
 
-    // Already-normalized tool turn from our own storage
     if (roleRaw === 'tool' && message) {
       turns.push({ role: 'tool', text: String(message), t });
       continue;
@@ -112,44 +150,63 @@ export function parseConversationTranscript(data: any): TranscriptTurn[] {
   return turns;
 }
 
+/** Solo la cita creada/tocada por tools de ESA conversación (nunca “última del paciente”). */
 export function extractAppointmentIdFromTranscript(raw: any): string | null {
   const list = Array.isArray(raw) ? raw : raw?.transcript;
-  if (!Array.isArray(list)) return null;
-  for (const item of list) {
-    for (const tr of item.tool_results || []) {
-      const name = tr?.tool_name || '';
-      let val = tr?.result_value ?? tr?.result;
-      if (typeof val === 'string') {
-        try {
-          val = JSON.parse(val);
-        } catch {
-          continue;
-        }
-      }
-      if (val && typeof val === 'object') {
-        const citaId = val?.cita?.id || val?.citaId || val?.appointmentId;
-        if (citaId && /reservar|reprogram|cancel/i.test(name)) {
-          return String(citaId);
-        }
+  if (Array.isArray(list)) {
+    let found: string | null = null;
+    for (const item of list) {
+      for (const tr of item.tool_results || []) {
+        const name = String(tr?.tool_name || tr?.name || '');
+        if (!/reservar|reprogram|cancel/i.test(name)) continue;
+        const val = parseToolResultValue(tr?.result_value ?? tr?.result);
+        if (!val || val.ok === false) continue;
+        const citaId = citaIdFromResult(val) || (val.citaId ? String(val.citaId) : null);
+        if (citaId) found = citaId;
       }
     }
+    if (found) return found;
+  }
+
+  // turns ya normalizados
+  const turns = parseConversationTranscript(raw);
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i].appointmentId) return turns[i].appointmentId!;
   }
   return null;
 }
 
-export function inferResultCodeFromTurns(
-  turns: TranscriptTurn[],
-  summary?: string | null,
-): string | null {
-  const blob = `${turns.map((t) => t.text).join(' ')} ${summary || ''}`.toLowerCase();
-  if (turns.some((t) => t.role === 'tool' && /reserv/i.test(t.text)) || /reserv/.test(blob)) {
+/**
+ * resultCode SOLO a partir de tools realmente ejecutadas.
+ * No usar el summary (alucina “reservó” sin tool).
+ */
+export function inferResultCodeFromTurns(turns: TranscriptTurn[]): string | null {
+  const toolNames = turns
+    .filter((t) => t.role === 'tool')
+    .map((t) => (t.toolName || t.text || '').toLowerCase());
+
+  if (toolNames.some((n) => /reservar_cita|reservó cita|cita reservada/.test(n))) {
     return 'APPOINTMENT_BOOKED';
   }
-  if (turns.some((t) => t.role === 'tool' && /reprogram/i.test(t.text)) || /reprogram/.test(blob)) {
+  if (toolNames.some((n) => /reprogramar_cita|reprogramó|cita reprogramada/.test(n))) {
     return 'RESCHEDULED';
   }
-  if (turns.some((t) => t.role === 'tool' && /cancel/i.test(t.text)) || /cancel/.test(blob)) {
+  if (toolNames.some((n) => /cancelar_cita|canceló|cita cancelada/.test(n))) {
     return 'CANCELLED';
   }
   return 'RESOLVED';
+}
+
+/** Nombres de tools crudos del transcript ElevenLabs. */
+export function extractExecutedToolNames(raw: any): string[] {
+  const list = Array.isArray(raw) ? raw : raw?.transcript;
+  const names: string[] = [];
+  if (!Array.isArray(list)) return names;
+  for (const item of list) {
+    for (const tc of item.tool_calls || []) {
+      const n = tc?.tool_name || tc?.name;
+      if (n) names.push(String(n));
+    }
+  }
+  return names;
 }

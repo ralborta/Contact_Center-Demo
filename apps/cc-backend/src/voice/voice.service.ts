@@ -13,6 +13,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PatientsService } from '../patients/patients.service';
 import {
+  extractAppointmentIdFromTranscript,
+  extractExecutedToolNames,
   inferResultCodeFromTurns,
   parseConversationTranscript,
   type TranscriptTurn,
@@ -145,13 +147,46 @@ export class VoiceService {
     const from = String(params.callerPhone || phoneFromMeta || 'unknown');
     const patient = await this.patients.findByPhoneOrCi(from);
 
-    const resultCode = this.inferResultCode(turns, summary);
-    const outcome =
-      resultCode === 'APPOINTMENT_BOOKED' ||
-      resultCode === 'RESCHEDULED' ||
-      resultCode === 'CANCELLED'
-        ? Outcome.RESOLVED
-        : Outcome.RESOLVED;
+    const executedTools = extractExecutedToolNames(data);
+    let resultCode = inferResultCodeFromTurns(turns);
+    if (
+      executedTools.some((n) => /reservar_cita/i.test(n)) &&
+      resultCode === 'RESOLVED'
+    ) {
+      resultCode = 'APPOINTMENT_BOOKED';
+    }
+    if (
+      resultCode === 'APPOINTMENT_BOOKED' &&
+      !executedTools.some((n) => /reservar_cita/i.test(n))
+    ) {
+      resultCode = 'RESOLVED';
+    }
+
+    let appointmentId =
+      extractAppointmentIdFromTranscript(data) ||
+      (
+        await this.prisma.appointment.findFirst({
+          where: { voiceConversationId: conversationId },
+          orderBy: { createdAt: 'desc' },
+        })
+      )?.id ||
+      null;
+    if (resultCode !== 'APPOINTMENT_BOOKED' && resultCode !== 'RESCHEDULED' && resultCode !== 'CANCELLED') {
+      // sin tool de reserva/reprog/cancel no vincular cita
+      if (!executedTools.some((n) => /reservar_cita|reprogramar_cita|cancelar_cita/i.test(n))) {
+        appointmentId = null;
+      }
+    }
+
+    const outcome = Outcome.RESOLVED;
+    const intent =
+      resultCode === 'APPOINTMENT_BOOKED'
+        ? 'cita'
+        : resultCode === 'CANCELLED'
+          ? 'cancelar'
+          : resultCode === 'RESCHEDULED'
+            ? 'reprogramar'
+            : 'consulta';
 
     const startedAt = new Date(Date.now() - (durationSec || 0) * 1000);
     const endedAt = new Date();
@@ -174,16 +209,11 @@ export class VoiceService {
         patientId: patient?.id,
         aiHandled: true,
         outcome,
-        intent: resultCode?.startsWith('APPOINTMENT')
-          ? 'cita'
-          : resultCode === 'CANCELLED'
-            ? 'cancelar'
-            : resultCode === 'RESCHEDULED'
-              ? 'reprogramar'
-              : 'consulta',
+        intent,
         resultCode,
         provider: Provider.VOICE_AGENT,
         providerConversationId: conversationId,
+        appointmentId: appointmentId || undefined,
         callDetail: {
           create: {
             externalCallId: conversationId,
@@ -199,7 +229,9 @@ export class VoiceService {
         from,
         patientId: patient?.id || undefined,
         outcome,
+        intent,
         resultCode: resultCode || undefined,
+        appointmentId,
         callDetail: {
           upsert: {
             create: {
@@ -209,7 +241,10 @@ export class VoiceService {
               durationSec: durationSec ? Number(durationSec) : null,
             },
             update: {
-              transcriptText,
+              transcriptText:
+                transcriptText && transcriptText !== '[]'
+                  ? transcriptText
+                  : undefined,
               summary: typeof summary === 'string' ? summary : undefined,
               durationSec: durationSec ? Number(durationSec) : undefined,
             },
@@ -219,7 +254,6 @@ export class VoiceService {
       include: { callDetail: true },
     });
 
-    // Eventos de tools legibles
     await this.prisma.interactionEvent.deleteMany({
       where: { interactionId: interaction.id, type: 'TOOL' },
     });
@@ -229,28 +263,23 @@ export class VoiceService {
           interactionId: interaction.id,
           type: 'TOOL',
           provider: Provider.VOICE_AGENT,
-          ts: new Date(
-            startedAt.getTime() + (turn.t || 0) * 1000,
-          ),
-          payload: { label: turn.text },
+          ts: new Date(startedAt.getTime() + (turn.t || 0) * 1000),
+          payload: {
+            label: turn.text,
+            toolName: turn.toolName,
+            appointmentId: turn.appointmentId,
+          },
           idempotencyKey: `${conversationId}:tool:${turn.t}:${turn.text.slice(0, 40)}`,
         },
       });
     }
 
-    const linked = await this.linkAppointmentForCall({
-      interactionId: interaction.id,
-      patientId: patient?.id,
-      conversationId,
-      startedAt,
-      endedAt,
-    });
-
     return {
       ok: true,
       interactionId: interaction.id,
-      appointmentId: linked?.appointmentId || interaction.appointmentId,
+      appointmentId: appointmentId || null,
       turns: turns.length,
+      resultCode,
     };
   }
 
@@ -296,59 +325,6 @@ export class VoiceService {
     });
   }
 
-  private async linkAppointmentForCall(params: {
-    interactionId: string;
-    patientId?: string;
-    conversationId: string;
-    startedAt: Date;
-    endedAt: Date;
-  }) {
-    const existing = await this.prisma.interaction.findUnique({
-      where: { id: params.interactionId },
-    });
-    if (existing?.appointmentId) {
-      return { appointmentId: existing.appointmentId };
-    }
-
-    const windowStart = new Date(params.startedAt.getTime() - 5 * 60_000);
-    const windowEnd = new Date(params.endedAt.getTime() + 5 * 60_000);
-
-    // Prefer appointments touched by VOICE_AGENT in the call window
-    const change = await this.prisma.appointmentChange.findFirst({
-      where: {
-        origin: 'VOICE_AGENT',
-        createdAt: { gte: windowStart, lte: windowEnd },
-        ...(params.patientId
-          ? { appointment: { patientId: params.patientId } }
-          : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      include: { appointment: true },
-    });
-
-    let appointmentId = change?.appointmentId;
-    if (!appointmentId && params.patientId) {
-      const recent = await this.prisma.appointment.findFirst({
-        where: {
-          patientId: params.patientId,
-          channel: 'PHONE_IN',
-          updatedAt: { gte: windowStart, lte: windowEnd },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-      appointmentId = recent?.id;
-    }
-
-    if (appointmentId) {
-      await this.prisma.interaction.update({
-        where: { id: params.interactionId },
-        data: { appointmentId },
-      });
-      return { appointmentId };
-    }
-    return null;
-  }
-
   private parseTranscript(data: any): TranscriptTurn[] {
     return parseConversationTranscript(data);
   }
@@ -357,12 +333,5 @@ export class VoiceService {
     const times = turns.map((t) => t.t || 0).filter(Boolean);
     if (!times.length) return null;
     return Math.max(...times);
-  }
-
-  private inferResultCode(turns: TranscriptTurn[], summary: any): string | null {
-    return inferResultCodeFromTurns(
-      turns,
-      typeof summary === 'string' ? summary : null,
-    );
   }
 }
