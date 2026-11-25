@@ -1007,49 +1007,19 @@ export class WhatsappService {
         const patient = pickPatient();
         if (!patient) break;
 
-        const freeSlot = await this.prisma.slot.findFirst({
-          where: {
-            status: SlotStatus.FREE,
-            startsAt: { gt: new Date(now.getTime() + hourOffset * 3600_000) },
-          },
-          include: { doctor: true },
-          orderBy: { startsAt: 'asc' },
-        });
-        hourOffset += 1;
-        if (!freeSlot) {
-          errors.push('Sin slots libres');
+        let appt: Awaited<ReturnType<typeof this.createSeedAppointment>> | null =
+          null;
+        for (let attempt = 0; attempt < 5 && !appt; attempt++) {
+          appt = await this.createSeedAppointment({
+            patientId: patient.id,
+            after: new Date(now.getTime() + (hourOffset + attempt) * 3600_000),
+          });
+        }
+        hourOffset += 2;
+        if (!appt) {
+          errors.push('Sin slots libres disponibles');
           break;
         }
-
-        const claimed = await this.prisma.slot.updateMany({
-          where: { id: freeSlot.id, status: SlotStatus.FREE },
-          data: { status: SlotStatus.RESERVED },
-        });
-        if (claimed.count !== 1) continue;
-
-        const appt = await this.prisma.appointment.create({
-          data: {
-            patientId: patient.id,
-            doctorId: freeSlot.doctorId,
-            specialtyId: freeSlot.doctor.specialtyId,
-            slotId: freeSlot.id,
-            status: AppointmentStatus.RESERVED,
-            changes: {
-              create: {
-                toStatus: AppointmentStatus.RESERVED,
-                toSlotId: freeSlot.id,
-                origin: ChangeOrigin.SYSTEM,
-                reason: 'Cita demo WhatsApp bandeja',
-              },
-            },
-          },
-          include: {
-            patient: true,
-            doctor: true,
-            specialty: true,
-            slot: true,
-          },
-        });
 
         const sentAt = new Date(Date.now() - (created + 3) * 50 * 60_000);
 
@@ -1155,6 +1125,65 @@ export class WhatsappService {
       total: after,
       errors: errors.slice(0, 8),
     };
+  }
+
+  /** Reserva un slot libre sin cita previa y crea la cita demo. */
+  private async createSeedAppointment(params: {
+    patientId: string;
+    after: Date;
+  }) {
+    const freeSlot = await this.prisma.slot.findFirst({
+      where: {
+        status: SlotStatus.FREE,
+        startsAt: { gt: params.after },
+        appointment: null,
+      },
+      include: { doctor: true },
+      orderBy: { startsAt: 'asc' },
+    });
+    if (!freeSlot) return null;
+
+    const claimed = await this.prisma.slot.updateMany({
+      where: { id: freeSlot.id, status: SlotStatus.FREE },
+      data: { status: SlotStatus.RESERVED },
+    });
+    if (claimed.count !== 1) return null;
+
+    try {
+      return await this.prisma.appointment.create({
+        data: {
+          patientId: params.patientId,
+          doctorId: freeSlot.doctorId,
+          specialtyId: freeSlot.doctor.specialtyId,
+          slotId: freeSlot.id,
+          status: AppointmentStatus.RESERVED,
+          changes: {
+            create: {
+              toStatus: AppointmentStatus.RESERVED,
+              toSlotId: freeSlot.id,
+              origin: ChangeOrigin.SYSTEM,
+              reason: 'Cita demo WhatsApp bandeja',
+            },
+          },
+        },
+        include: {
+          patient: true,
+          doctor: true,
+          specialty: true,
+          slot: true,
+        },
+      });
+    } catch (e: any) {
+      // Liberar si falló el unique de slotId
+      await this.prisma.slot
+        .updateMany({
+          where: { id: freeSlot.id, status: SlotStatus.RESERVED },
+          data: { status: SlotStatus.FREE },
+        })
+        .catch(() => undefined);
+      this.logger.warn(`Seed slot ${freeSlot.id}: ${e?.message || e}`);
+      return null;
+    }
   }
 
   /** Archiva (no borra) chats duplicados de Juan Pérez de pruebas. */
