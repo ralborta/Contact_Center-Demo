@@ -87,6 +87,14 @@ const BADGE: Record<string, string> = {
   INACTIVE: 'bg-slate-100 text-slate-500 border-slate-200',
   FREE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   BLOCKED: 'bg-slate-100 text-slate-600 border-slate-300',
+  // campañas
+  DRAFT: 'bg-slate-100 text-slate-600 border-slate-200',
+  QUEUED: 'bg-sky-50 text-sky-700 border-sky-200',
+  RUNNING: 'bg-violet-50 text-violet-700 border-violet-200',
+  CALLING: 'bg-sky-50 text-sky-700 border-sky-200',
+  NO_ANSWER: 'bg-amber-50 text-amber-800 border-amber-200',
+  VOICEMAIL: 'bg-amber-50 text-amber-800 border-amber-200',
+  FAILED: 'bg-red-50 text-red-700 border-red-200',
 }
 
 const SPECIALTY_PALETTE = [
