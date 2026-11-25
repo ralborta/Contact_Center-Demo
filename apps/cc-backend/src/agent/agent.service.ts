@@ -11,6 +11,7 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { AvailabilityService } from '../appointments/availability.service';
 import { PatientsService } from '../patients/patients.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { doctorMatchesName, stripDoctorPrefix } from './doctor-name';
 
 @Injectable()
 export class AgentService {
@@ -76,7 +77,14 @@ export class AgentService {
     };
   }
 
-  async searchDoctors(body: { especialidad?: string; especialidadId?: string; nombre?: string }) {
+  async searchDoctors(body: {
+    especialidad?: string;
+    especialidadId?: string;
+    nombre?: string;
+    doctor?: string;
+    doctorId?: string;
+  }) {
+    const nameQuery = body.nombre || body.doctor;
     let specialtyId = body.especialidadId;
     if (!specialtyId && body.especialidad) {
       const sp = await this.prisma.specialty.findFirst({
@@ -90,23 +98,52 @@ export class AgentService {
       });
       specialtyId = sp?.id;
     }
-    const doctors = await this.prisma.doctor.findMany({
+
+    if (body.doctorId) {
+      const one = await this.prisma.doctor.findFirst({
+        where: {
+          id: body.doctorId,
+          status: 'ACTIVE',
+          ...(specialtyId ? { specialtyId } : {}),
+        },
+        include: { specialty: true },
+      });
+      const doctors = one ? [one] : [];
+      return this.formatDoctorSearch(doctors, nameQuery);
+    }
+
+    const candidates = await this.prisma.doctor.findMany({
       where: {
         status: 'ACTIVE',
         ...(specialtyId ? { specialtyId } : {}),
-        ...(body.nombre
-          ? {
-              OR: [
-                { firstName: { contains: body.nombre, mode: 'insensitive' } },
-                { lastName: { contains: body.nombre, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
       },
       include: { specialty: true },
       orderBy: { lastName: 'asc' },
-      take: 15,
     });
+    const doctors = nameQuery
+      ? candidates.filter((d) => doctorMatchesName(d, nameQuery)).slice(0, 15)
+      : candidates.slice(0, 15);
+    return this.formatDoctorSearch(doctors, nameQuery);
+  }
+
+  private formatDoctorSearch(
+    doctors: Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      consultorio: string | null;
+      defaultDurationMin: number;
+      specialty: { name: string };
+    }>,
+    nameQuery?: string,
+  ) {
+    if (doctors.length === 0 && stripDoctorPrefix(nameQuery || '')) {
+      return {
+        ok: true,
+        doctores: [],
+        mensaje: 'No encontré un médico con ese nombre',
+      };
+    }
     return {
       ok: true,
       doctores: doctors.map((d) => ({
@@ -127,10 +164,13 @@ export class AgentService {
     especialidad?: string;
     especialidadId?: string;
     doctorId?: string;
+    doctor?: string;
+    nombre?: string;
     desde?: string;
     hasta?: string;
     periodo?: 'manana' | 'tarde' | 'cualquiera';
   }) {
+    const nameQuery = body.doctor || body.nombre;
     let specialtyId = body.especialidadId;
     if (!specialtyId && body.especialidad) {
       const sp = await this.prisma.specialty.findFirst({
@@ -143,6 +183,63 @@ export class AgentService {
       });
       specialtyId = sp?.id;
     }
+
+    let doctorId = body.doctorId;
+    if (!doctorId && nameQuery) {
+      const candidates = await this.prisma.doctor.findMany({
+        where: {
+          status: 'ACTIVE',
+          ...(specialtyId ? { specialtyId } : {}),
+        },
+      });
+      const matched = candidates.filter((d) => doctorMatchesName(d, nameQuery));
+      if (matched.length === 0) {
+        return {
+          ok: true,
+          disponibles: [],
+          mensaje: 'No encontré un médico con ese nombre',
+        };
+      }
+      // Si hay varios con el mismo apellido, devolvemos slots de todos (límite global abajo)
+      if (matched.length === 1) {
+        doctorId = matched[0].id;
+      } else {
+        const from = body.desde ? new Date(body.desde) : new Date();
+        const to = body.hasta
+          ? new Date(body.hasta)
+          : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const periodMap = {
+          manana: 'morning' as const,
+          tarde: 'afternoon' as const,
+          cualquiera: 'any' as const,
+        };
+        const allSlots = [];
+        for (const d of matched) {
+          const slots = await this.availability.findAvailable({
+            specialtyId,
+            doctorId: d.id,
+            from,
+            to,
+            period: periodMap[body.periodo || 'cualquiera'],
+            limit: 5,
+          });
+          allSlots.push(...slots);
+          if (allSlots.length >= 5) break;
+        }
+        const slots = allSlots
+          .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+          .slice(0, 5);
+        return {
+          ok: true,
+          disponibles: slots,
+          mensaje:
+            slots.length === 0
+              ? 'No hay horarios libres en ese rango. ¿Quiere que busque en otras fechas?'
+              : `Tengo estas opciones: ${slots.map((s, i) => `${i + 1}) ${s.mensaje}`).join('; ')}.`,
+        };
+      }
+    }
+
     const from = body.desde ? new Date(body.desde) : new Date();
     const to = body.hasta
       ? new Date(body.hasta)
@@ -155,7 +252,7 @@ export class AgentService {
     };
     const slots = await this.availability.findAvailable({
       specialtyId,
-      doctorId: body.doctorId,
+      doctorId,
       from,
       to,
       period: periodMap[body.periodo || 'cualquiera'],
@@ -251,11 +348,15 @@ export class AgentService {
   }
 
   async handleCallInit(payload: any) {
+    const dyn = payload?.dynamic_variables || payload?.dynamicVariables || {};
     const phone =
       payload?.caller_id ||
       payload?.from ||
       payload?.phone ||
       payload?.metadata?.phone ||
+      dyn?.caller_phone ||
+      dyn?.telefono ||
+      dyn?.system__caller_id ||
       '';
     const patient = phone
       ? await this.patients.findByPhoneOrCi(String(phone))

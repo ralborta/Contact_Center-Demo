@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Phone,
+  Smartphone,
   CalendarDays,
   Stethoscope,
   Users,
@@ -22,6 +23,7 @@ import { resetApiInstance } from '@/lib/api'
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, match: (p: string) => p === '/' },
   { href: '/llamadas', label: 'Llamadas', icon: Phone, match: (p: string) => p.startsWith('/llamadas') },
+  { href: '/telefono', label: 'Simulador', icon: Smartphone, match: (p: string) => p.startsWith('/telefono') },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays, match: (p: string) => p.startsWith('/agenda') },
   { href: '/citas', label: 'Citas', icon: ClipboardList, match: (p: string) => p.startsWith('/citas') },
   { href: '/doctores', label: 'Doctores', icon: Stethoscope, match: (p: string) => p.startsWith('/doctores') || p.startsWith('/especialidades') },

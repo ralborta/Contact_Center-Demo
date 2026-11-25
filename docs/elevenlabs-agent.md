@@ -89,7 +89,8 @@ Todas: método `POST` salvo `listar_especialidades` (`GET`). Header `X-Agent-Sec
   "body": {
     "especialidad": "{{especialidad}}",
     "especialidadId": "{{especialidadId}}",
-    "nombre": "{{nombre_doctor}}"
+    "nombre": "{{nombre_doctor}}",
+    "doctor": "{{doctor}}"
   }
 }
 ```
@@ -106,6 +107,7 @@ Todas: método `POST` salvo `listar_especialidades` (`GET`). Header `X-Agent-Sec
   "body": {
     "especialidad": "{{especialidad}}",
     "especialidadId": "{{especialidadId}}",
+    "doctor": "{{doctor}}",
     "doctorId": "{{doctorId}}",
     "desde": "{{desde_iso}}",
     "hasta": "{{hasta_iso}}",
@@ -200,3 +202,11 @@ Guarda transcripción, resumen, duración, grabación y vincula paciente por tel
 Alias: `/api/webhooks/elevenlabs/call`
 
 Preferir webhook **del agente** (override), no el global del workspace.
+
+---
+
+## Simulador en el panel (`/telefono`)
+
+El frontend pide `GET /api/voice/signed-url` (JWT del operador). El backend usa `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` y devuelve la signed URL sin exponer la key.
+
+Al iniciar, el cliente envía `dynamicVariables.caller_phone` (demo Juan Pérez: `59170111222`). El webhook `call-init` también lee ese valor para identificar al paciente.

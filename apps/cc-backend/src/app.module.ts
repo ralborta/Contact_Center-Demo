@@ -14,6 +14,7 @@ import { SpecialtiesModule } from './specialties/specialties.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AgentConfigModule } from './agent-config/agent-config.module';
+import { VoiceModule } from './voice/voice.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AgentConfigModule } from './agent-config/agent-config.module';
     CampaignsModule,
     AnalyticsModule,
     AgentConfigModule,
+    VoiceModule,
   ],
 })
 export class AppModule {}

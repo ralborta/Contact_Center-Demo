@@ -121,6 +121,10 @@ export const agentConfigApi = {
   update: async (body: any) => (await getApi().patch('/api/agent-config', body)).data,
 }
 
+export const voiceApi = {
+  signedUrl: async () => (await getApi().get('/api/voice/signed-url')).data,
+}
+
 export const usersApi = {
   list: async () => (await getApi().get('/api/users')).data,
   create: async (body: any) => (await getApi().post('/api/users', body)).data,
