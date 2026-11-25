@@ -1,4 +1,4 @@
-import type { TranscriptTurn } from './transcript';
+import { stripExpressiveTags, type TranscriptTurn } from './transcript';
 
 const EN_MARKERS =
   /\b(the user|the agent|the conversation|successfully|requested|provided|initiated|greeting|appointment assistant|hospital central)\b/i;
@@ -22,7 +22,9 @@ export function ensureSpanishSummary(params: {
   resultCode?: string | null;
   patientName?: string | null;
 }): string {
-  const incoming = params.summary ? String(params.summary).trim() : '';
+  const incoming = params.summary
+    ? stripExpressiveTags(String(params.summary))
+    : '';
   if (incoming && !looksEnglish(incoming)) return incoming;
 
   const tools = (params.toolNames || [])

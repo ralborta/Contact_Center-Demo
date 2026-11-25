@@ -43,4 +43,15 @@ export class VoiceController {
       durationSec: body.durationSec,
     });
   }
+
+  @Post('cleanup-transcripts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Limpia tags [warm] y re-sincroniza textos truncados en llamadas ya guardadas',
+  })
+  cleanupTranscripts() {
+    return this.voice.cleanupStoredTranscripts();
+  }
 }

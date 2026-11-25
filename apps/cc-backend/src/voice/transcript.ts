@@ -6,6 +6,26 @@ export type TranscriptTurn = {
   appointmentId?: string;
 };
 
+/** Quita tags expresivos tipo [warm], [happy], [slow] del texto (no toca TTS). */
+export function stripExpressiveTags(text: string): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/** IDs técnicos de pruebas / stubs que no deben verse en el panel. */
+export function isTestConversationId(id?: string | null): boolean {
+  const s = String(id || '').trim();
+  if (!s) return false;
+  if (/^test[-_]/i.test(s)) return true;
+  if (/^conv_test/i.test(s)) return true;
+  return false;
+}
+
 const TOOL_LABELS: Record<string, (args?: any) => string> = {
   consultar_disponibilidad: (a) =>
     `Buscó disponibilidad${a?.especialidad ? ` en ${a.especialidad}` : a?.doctor ? ` con ${a.doctor}` : ''}`,
@@ -13,6 +33,7 @@ const TOOL_LABELS: Record<string, (args?: any) => string> = {
     `Buscó médicos${a?.especialidad ? ` de ${a.especialidad}` : a?.nombre || a?.doctor ? `: ${a.nombre || a.doctor}` : ''}`,
   listar_especialidades: () => 'Consultó especialidades',
   identificar_paciente: () => 'Identificó al paciente',
+  registrar_paciente: () => 'Registró paciente nuevo',
   reservar_cita: () => 'Reservó cita',
   reprogramar_cita: () => 'Reprogramó cita',
   cancelar_cita: () => 'Canceló cita',
@@ -84,7 +105,13 @@ export function parseConversationTranscript(data: any): TranscriptTurn[] {
   for (const item of raw) {
     const t = item.time_in_call_secs ?? item.time_in_call ?? item.t ?? undefined;
     const roleRaw = String(item.role || item.speaker || '').toLowerCase();
-    const message = item.message || item.text || '';
+    // Preferir original_message: ElevenLabs trunca `message` con "..." si hubo interrupción
+    const rawMessage =
+      item.original_message ||
+      item.original_text ||
+      item.message ||
+      item.text ||
+      '';
 
     if (Array.isArray(item.tool_calls)) {
       for (const tc of item.tool_calls) {
@@ -132,18 +159,19 @@ export function parseConversationTranscript(data: any): TranscriptTurn[] {
       }
     }
 
-    if (roleRaw === 'tool' && message) {
-      turns.push({ role: 'tool', text: String(message), t });
+    if (roleRaw === 'tool' && rawMessage) {
+      turns.push({ role: 'tool', text: stripExpressiveTags(String(rawMessage)), t });
       continue;
     }
 
-    if (message && !/^\[.*\]$/.test(String(message).trim())) {
-      if (String(message).trim().startsWith('{') && String(message).trim().endsWith('}')) {
+    const message = stripExpressiveTags(String(rawMessage));
+    if (message && !/^\[.*\]$/.test(message.trim())) {
+      if (message.trim().startsWith('{') && message.trim().endsWith('}')) {
         continue;
       }
       const role: 'agent' | 'user' =
         roleRaw === 'user' || roleRaw === 'paciente' ? 'user' : 'agent';
-      turns.push({ role, text: String(message), t });
+      turns.push({ role, text: message, t });
     }
   }
 

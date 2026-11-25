@@ -23,6 +23,17 @@ const TOOL_LABELS: Record<string, (args?: any) => string> = {
   listar_citas_paciente: () => 'Consultó citas del paciente',
 }
 
+/** Quita tags expresivos tipo [warm] al mostrar (defensa; el backend ya limpia al guardar). */
+function stripExpressiveTags(text: string): string {
+  if (!text) return ''
+  return String(text)
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
 function parseArgs(raw: any) {
   if (raw == null) return {}
   if (typeof raw === 'string') {
@@ -56,16 +67,19 @@ function parseTurns(raw?: string | null): Turn[] {
             turns.push({ role: 'tool', text: toolLabel(name, args).trim(), t })
           }
         }
-        const text = x.text || x.message || ''
+        // Preferir original_message si quedó guardado crudo de ElevenLabs
+        const text = stripExpressiveTags(
+          String(x.original_message || x.original_text || x.text || x.message || ''),
+        )
         const roleRaw = String(x.role || x.speaker || '').toLowerCase()
         if (roleRaw === 'tool' && text) {
-          turns.push({ role: 'tool', text: String(text), t })
+          turns.push({ role: 'tool', text, t })
           continue
         }
-        if (text && !(String(text).trim().startsWith('{') && String(text).trim().endsWith('}'))) {
+        if (text && !(text.trim().startsWith('{') && text.trim().endsWith('}'))) {
           const role: 'user' | 'agent' =
             roleRaw === 'user' || roleRaw === 'paciente' ? 'user' : 'agent'
-          turns.push({ role, text: String(text), t })
+          turns.push({ role, text, t })
         }
       }
       return turns
@@ -81,9 +95,9 @@ function parseTurns(raw?: string | null): Turn[] {
       const m = line.match(/^(agent|user|assistant|paciente|agente)\s*[:\-]\s*(.*)$/i)
       if (m) {
         const role = /user|paciente/i.test(m[1]) ? 'user' : 'agent'
-        return { role: role as 'user' | 'agent', text: m[2] }
+        return { role: role as 'user' | 'agent', text: stripExpressiveTags(m[2]) }
       }
-      return { role: 'agent' as const, text: line }
+      return { role: 'agent' as const, text: stripExpressiveTags(line) }
     })
 }
 
@@ -139,8 +153,9 @@ export default function LlamadaDetallePage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="label-caps mb-1">Resumen</p>
-                <p className="text-sm text-on-surface leading-relaxed">
-                  {call.callDetail?.summary || 'Sin resumen disponible'}
+                <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">
+                  {stripExpressiveTags(call.callDetail?.summary || '') ||
+                    'Sin resumen disponible'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -275,7 +290,7 @@ export default function LlamadaDetallePage() {
                           </span>
                         )}
                       </p>
-                      {turn.text}
+                      <p className="whitespace-pre-wrap break-words">{turn.text}</p>
                     </div>
                   </div>
                 )

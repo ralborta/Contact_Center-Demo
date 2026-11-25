@@ -17,7 +17,9 @@ import {
   extractAppointmentIdFromTranscript,
   extractExecutedToolNames,
   inferResultCodeFromTurns,
+  isTestConversationId,
   parseConversationTranscript,
+  stripExpressiveTags,
   type TranscriptTurn,
 } from './transcript';
 
@@ -311,6 +313,109 @@ export class VoiceService {
       turns: turns.length,
       resultCode,
     };
+  }
+
+  /**
+   * Limpia tags [warm]/etc. en transcripts/summaries ya guardados.
+   * Si un turno del agente termina en "..." (truncado por interrupción),
+   * re-sincroniza desde ElevenLabs usando original_message.
+   * No borra filas de prueba; solo reescribe texto.
+   */
+  async cleanupStoredTranscripts() {
+    const rows = await this.prisma.interaction.findMany({
+      where: { provider: Provider.VOICE_AGENT },
+      include: { callDetail: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+
+    let stripped = 0;
+    let resynced = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const row of rows) {
+      const detail = row.callDetail;
+      if (!detail?.transcriptText) {
+        skipped += 1;
+        continue;
+      }
+
+      let needsResync = false;
+      let changed = false;
+      let turns: any[] = [];
+      try {
+        const parsed = JSON.parse(detail.transcriptText);
+        if (!Array.isArray(parsed)) {
+          skipped += 1;
+          continue;
+        }
+        turns = parsed.map((t) => {
+          if (!t || typeof t !== 'object') return t;
+          const next = { ...t };
+          if (typeof next.text === 'string') {
+            const cleaned = stripExpressiveTags(next.text);
+            if (cleaned !== next.text) {
+              next.text = cleaned;
+              changed = true;
+            }
+            if (
+              next.role === 'agent' &&
+              /\.\.\.\s*$/.test(String(next.text || ''))
+            ) {
+              needsResync = true;
+            }
+          }
+          return next;
+        });
+      } catch {
+        skipped += 1;
+        continue;
+      }
+
+      const summaryClean = detail.summary
+        ? stripExpressiveTags(detail.summary)
+        : detail.summary;
+      if (summaryClean && summaryClean !== detail.summary) changed = true;
+
+      if (
+        needsResync &&
+        row.providerConversationId &&
+        !isTestConversationId(row.providerConversationId)
+      ) {
+        try {
+          await this.syncFromConversation({
+            conversationId: row.providerConversationId,
+            callerPhone: row.from !== 'unknown' && row.from !== 'pending' ? row.from : undefined,
+            durationSec: detail.durationSec ?? undefined,
+          });
+          resynced += 1;
+          continue;
+        } catch (e: any) {
+          errors.push(
+            `${row.providerConversationId}: ${e?.message || String(e)}`.slice(
+              0,
+              160,
+            ),
+          );
+        }
+      }
+
+      if (changed) {
+        await this.prisma.callDetail.update({
+          where: { id: detail.id },
+          data: {
+            transcriptText: JSON.stringify(turns),
+            summary: summaryClean || detail.summary,
+          },
+        });
+        stripped += 1;
+      } else {
+        skipped += 1;
+      }
+    }
+
+    return { ok: true, scanned: rows.length, stripped, resynced, skipped, errors };
   }
 
   async linkAppointmentToConversation(

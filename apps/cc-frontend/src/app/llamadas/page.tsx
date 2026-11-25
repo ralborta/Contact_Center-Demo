@@ -10,7 +10,25 @@ export default function LlamadasPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    callsApi.list({ limit: '50' }).then(setItems).finally(() => setLoading(false))
+    callsApi
+      .list({ limit: '50' })
+      .then((rows) =>
+        // Defensa UI: ocultar stubs técnicos aunque el API no los filtre
+        setItems(
+          (rows || []).filter((c: any) => {
+            const id = String(c.providerConversationId || '')
+            if (/^test[-_]/i.test(id) || /^conv_test/i.test(id)) return false
+            if (
+              !c.patient &&
+              (c.from === 'unknown' || c.from === 'pending')
+            ) {
+              return false
+            }
+            return true
+          }),
+        ),
+      )
+      .finally(() => setLoading(false))
   }, [])
 
   return (
