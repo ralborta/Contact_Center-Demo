@@ -12,7 +12,10 @@ export class DoctorsService {
 
   list(specialtyId?: string) {
     return this.prisma.doctor.findMany({
-      where: specialtyId ? { specialtyId } : undefined,
+      where: {
+        status: DoctorStatus.ACTIVE,
+        ...(specialtyId ? { specialtyId } : {}),
+      },
       include: {
         specialty: true,
         schedules: { where: { active: true }, orderBy: { dayOfWeek: 'asc' } },
