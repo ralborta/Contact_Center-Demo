@@ -3,41 +3,51 @@
 @tailwind utilities;
 
 :root {
-  --foreground: #151c27;
-  --background: #f3f4f6;
+  --foreground: #1a202c;
+  --background: #eef3f6;
+  --primary: #0f5c5c;
+  --accent: #c45c26;
 }
 
 html,
 body {
   color: var(--foreground);
   background: var(--background);
-  font-feature-settings: 'tnum' 1, 'cv11' 1;
+  font-feature-settings: 'tnum' 1;
 }
 
-input,
-textarea,
-select {
-  color: #151c27;
-  background-color: #ffffff;
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: #737686;
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.45s ease-out both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
 }
 
 @layer components {
   .surface-card {
-    @apply bg-surface-card rounded-lg border border-[#E5E7EB] shadow-card;
-  }
-
-  .hover-elevate {
-    @apply transition-all duration-200;
-  }
-
-  .hover-elevate:hover {
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-    transform: translateY(-2px);
+    @apply bg-surface-card rounded-xl border border-outline-variant/60 shadow-card;
   }
 
   .field-input {
@@ -45,22 +55,30 @@ textarea::placeholder {
   }
 
   .field-input:focus {
-    @apply border-primary-container ring-2 ring-primary-container/20;
+    @apply border-primary-container ring-2 ring-primary/15;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-primary-container hover:bg-primary text-on-primary font-semibold text-xs tracking-wider uppercase px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-600 text-on-primary font-semibold text-xs tracking-wide px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 border border-primary-container text-primary-container bg-transparent hover:bg-primary-fixed font-semibold text-xs tracking-wider uppercase px-5 py-2.5 rounded-lg transition-all;
+    @apply inline-flex items-center justify-center gap-2 border border-primary text-primary bg-transparent hover:bg-primary-50 font-semibold text-xs tracking-wide px-5 py-2.5 rounded-lg transition-all;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 bg-status-error hover:bg-red-700 text-white font-semibold text-xs tracking-wide px-5 py-2.5 rounded-lg transition-all;
   }
 
   .status-pill {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase;
   }
 
   .label-caps {
-    @apply text-[12px] leading-4 font-semibold tracking-wider uppercase text-on-surface-variant;
+    @apply text-[11px] leading-4 font-semibold tracking-wider uppercase text-on-surface-variant;
+  }
+
+  .page-title {
+    @apply font-display text-2xl md:text-3xl font-semibold text-on-surface tracking-tight;
   }
 }

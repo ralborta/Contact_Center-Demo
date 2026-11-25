@@ -1,0 +1,33 @@
+# Easypanel: servicio API — build desde la raíz del repo (rama citas-hospital)
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+COPY package.json package-lock.json ./
+COPY apps/cc-backend/package.json ./apps/cc-backend/
+COPY packages/core/package.json ./packages/core/
+COPY packages/adapters/package.json ./packages/adapters/
+COPY prisma ./prisma
+RUN npm ci --workspace=apps/cc-backend --include-workspace-root
+COPY apps/cc-backend ./apps/cc-backend
+COPY packages ./packages
+COPY tsconfig.json ./
+RUN npx prisma generate --schema=prisma/schema.prisma
+WORKDIR /app/apps/cc-backend
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+ENV NODE_ENV=production
+ENV APP_PORT=3000
+COPY package.json package-lock.json ./
+COPY apps/cc-backend/package.json ./apps/cc-backend/
+COPY packages/core/package.json ./packages/core/
+COPY packages/adapters/package.json ./packages/adapters/
+COPY prisma ./prisma
+RUN npm ci --workspace=apps/cc-backend --include-workspace-root --omit=dev \
+  && npx prisma generate --schema=prisma/schema.prisma
+COPY --from=builder /app/apps/cc-backend/dist ./apps/cc-backend/dist
+WORKDIR /app/apps/cc-backend
+EXPOSE 3000
+CMD ["node", "dist/main.js"]

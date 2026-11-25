@@ -7,10 +7,7 @@ import * as winston from 'winston';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { PrismaClient } from '@prisma/client';
-import * as argon2 from 'argon2';
 
-// Asegurar que crypto esté disponible globalmente para @nestjs/schedule
 if (typeof globalThis.crypto === 'undefined') {
   const crypto = require('crypto');
   (globalThis as any).crypto = {
@@ -19,98 +16,56 @@ if (typeof globalThis.crypto === 'undefined') {
 }
 
 async function runMigrations() {
-  console.log('==========================================');
-  console.log('EJECUTANDO MIGRACIONES DE PRISMA');
-  console.log('==========================================');
-  
-  try {
-    // En Railway, __dirname = /app/apps/cc-backend/dist
-    // Necesitamos ir a /app (3 niveles arriba)
-    const projectRoot = path.join(__dirname, '../../..');
-    const schemaPath = path.join(projectRoot, 'prisma/schema.prisma');
-
-    console.log(`Working directory: ${process.cwd()}`);
-    console.log(`__dirname: ${__dirname}`);
-    console.log(`DATABASE_URL configurada: ${process.env.DATABASE_URL ? 'SÍ' : 'NO'}`);
-    console.log(`Schema path: ${schemaPath}`);
-    console.log(`Schema exists: ${fs.existsSync(schemaPath) ? 'SÍ' : 'NO'}`);
-
-    if (!fs.existsSync(schemaPath)) {
-      throw new Error(`Schema no encontrado en ${schemaPath}`);
-    }
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL no configurada');
-    }
-
-    console.log('Ejecutando: npx prisma migrate deploy...');
-    const result = execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-      cwd: projectRoot,
-      env: { ...process.env },
-      stdio: 'inherit',
-      timeout: 120000,
-    });
-
-    console.log('==========================================');
-    console.log('MIGRACIONES COMPLETADAS EXITOSAMENTE');
-    console.log('==========================================');
-  } catch (error: any) {
-    console.error('==========================================');
-    console.error('ERROR CRÍTICO EN MIGRACIONES');
-    console.error('==========================================');
-    console.error('Mensaje de error:', error.message);
-    if (error.stdout) console.error('stdout:', error.stdout.toString());
-    if (error.stderr) console.error('stderr:', error.stderr.toString());
-    console.error('La aplicación no puede iniciar sin las tablas de la base de datos.');
-    console.error('Por favor, verifica la configuración de DATABASE_URL y los logs de Prisma.');
-    process.exit(1);
+  console.log('Ejecutando migraciones Prisma...');
+  const projectRoot = path.join(__dirname, '../../..');
+  const schemaPath = path.join(projectRoot, 'prisma/schema.prisma');
+  if (!fs.existsSync(schemaPath)) {
+    throw new Error(`Schema no encontrado en ${schemaPath}`);
   }
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL no configurada');
+  }
+  execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+    cwd: projectRoot,
+    env: { ...process.env },
+    stdio: 'inherit',
+    timeout: 120000,
+  });
+  console.log('Migraciones OK');
 }
 
-async function runSeed() {
-  console.log('Ejecutando seed inicial (perfiles y usuario admin)...');
-  const prisma = new PrismaClient();
+async function maybeSeed() {
+  const flag = (process.env.RUN_SEED || '').toLowerCase();
+  if (flag !== 'true' && flag !== '1' && flag !== 'always') {
+    console.log('Seed omitido (RUN_SEED no activo)');
+    return;
+  }
+  console.log('Ejecutando seed hospitalario (RUN_SEED)...');
   try {
-    const profiles = [
-      { name: 'Administrador', slug: 'ADMIN', description: 'Acceso total' },
-      { name: 'Agente', slug: 'AGENT', description: 'Operador del contact center' },
-      { name: 'Solo lectura', slug: 'VIEWER', description: 'Solo consulta' },
-    ];
-    for (const p of profiles) {
-      await prisma.profile.upsert({
-        where: { slug: p.slug },
-        update: { name: p.name },
-        create: p,
-      });
-    }
-    const adminProfile = await prisma.profile.findUnique({ where: { slug: 'ADMIN' } });
-    if (!adminProfile) throw new Error('Perfil ADMIN no encontrado después del seed');
-
-    const existing = await prisma.user.findUnique({ where: { username: 'admin' } });
-    if (!existing) {
-      const hash = await argon2.hash('Admin123!');
-      await prisma.user.create({
-        data: { username: 'admin', passwordHash: hash, profileId: adminProfile.id, active: true },
-      });
-      console.log('Usuario admin creado: admin / Admin123!');
+    const seedPath = path.join(__dirname, 'seed.js');
+    const seedTs = path.join(__dirname, 'seed.ts');
+    if (fs.existsSync(seedPath)) {
+      require(seedPath);
     } else {
-      console.log('Usuario admin ya existe, saltando creación.');
+      execSync(
+        `npx ts-node -r tsconfig-paths/register ${seedTs}`,
+        {
+          cwd: path.join(__dirname, '..'),
+          env: { ...process.env },
+          stdio: 'inherit',
+          timeout: 300000,
+        },
+      );
     }
-    console.log('Seed completado.');
   } catch (e: any) {
-    console.error('Error en seed (no crítico):', e.message);
-  } finally {
-    await prisma.$disconnect();
+    console.error('Error en seed (no bloqueante):', e.message);
   }
 }
 
 async function bootstrap() {
-  // Ejecutar migraciones ANTES de iniciar la app
   await runMigrations();
+  await maybeSeed();
 
-  // Crear perfiles y usuario admin si no existen
-  await runSeed();
-
-  console.log('\nIniciando aplicación NestJS...');
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({
       transports: [
@@ -128,12 +83,11 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
     }),
   );
 
-  // CORS: frontend en Vercel o EasyPanel. Permitir orígenes explícitos (CORS_ORIGIN) o dominios conocidos
   const corsOrigin = process.env.CORS_ORIGIN;
   const allowedOrigins = corsOrigin
     ? corsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
@@ -141,11 +95,10 @@ async function bootstrap() {
 
   app.enableCors({
     origin: allowedOrigins.length
-      ? (origin, callback) => {
+      ? (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
           if (!origin) return callback(null, true);
           const allowed =
             allowedOrigins.includes(origin) ||
-            origin.endsWith('.vercel.app') ||
             origin.endsWith('.easypanel.host');
           callback(null, allowed);
         }
@@ -154,19 +107,19 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle('Contact Center API')
-    .setDescription('API para Centro de Gestión - Contact Center Bancario')
-    .setVersion('1.0')
+    .setTitle('Centro de Citas Hospitalarias API')
+    .setDescription('API para gestión de citas médicas y agente de voz')
+    .setVersion('2.0')
     .addBearerAuth()
+    .addApiKey({ type: 'apiKey', name: 'X-Agent-Secret', in: 'header' }, 'agent-secret')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || process.env.APP_PORT || 3000;
   await app.listen(port, '0.0.0.0');
-  console.log(`Application is running on: http://0.0.0.0:${port}`);
-  console.log(`Swagger docs available at: http://0.0.0.0:${port}/api/docs`);
-  console.log(`[Deploy] Version: 1.0.1 - WhatsApp OUTBOUND support enabled`);
+  console.log(`API citas hospitalarias en http://0.0.0.0:${port}`);
+  console.log(`Docs: http://0.0.0.0:${port}/api/docs`);
 }
 
 bootstrap();

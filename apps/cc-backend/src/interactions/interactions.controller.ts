@@ -1,204 +1,61 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   Query,
-  Delete,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
-import { InteractionsService } from './interactions.service';
-import { AISummaryService } from './ai-summary.service';
-import { PiiMasker } from '../adapters/pii-masker';
-import { Channel, Direction, InteractionStatus } from '@prisma/client';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Direction, InteractionStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import { RequestUser } from '../auth/jwt.strategy';
+import { RolesGuard } from '../auth/roles.guard';
+import { InteractionsService } from './interactions.service';
 
-@ApiTags('Interactions')
+@ApiTags('Llamadas')
 @ApiBearerAuth()
 @Controller('interactions')
 @UseGuards(JwtAuthGuard)
 export class InteractionsController {
-  constructor(
-    private interactionsService: InteractionsService,
-    private aiSummaryService: AISummaryService,
-  ) {}
+  constructor(private interactions: InteractionsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar interacciones' })
-  @ApiQuery({ name: 'channel', required: false, enum: Channel })
-  @ApiQuery({ name: 'direction', required: false, enum: Direction })
-  @ApiQuery({ name: 'status', required: false, enum: InteractionStatus })
-  @ApiQuery({ name: 'from', required: false })
-  @ApiQuery({ name: 'to', required: false })
-  @ApiQuery({ name: 'dateFrom', required: false })
-  @ApiQuery({ name: 'dateTo', required: false })
-  @ApiQuery({ name: 'agent', required: false })
-  @ApiQuery({ name: 'provider', required: false })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'skip', required: false, type: Number })
-  @ApiQuery({ name: 'includeAllEvents', required: false, type: Boolean })
-  @ApiQuery({ name: 'includeAllMessages', required: false, type: Boolean })
-  @ApiQuery({ name: 'includePII', required: false, type: Boolean })
-  async findAll(
-    @Query('channel') channel?: Channel,
+  @ApiOperation({ summary: 'Listar llamadas' })
+  findAll(
     @Query('direction') direction?: Direction,
     @Query('status') status?: InteractionStatus,
     @Query('from') from?: string,
-    @Query('to') to?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
-    @Query('agent') agent?: string,
-    @Query('provider') provider?: string,
     @Query('limit') limit?: string,
     @Query('skip') skip?: string,
-    @Query('includeAllEvents') includeAllEvents?: string,
-    @Query('includeAllMessages') includeAllMessages?: string,
-    @Query('includePII') includePII?: string,
-    @CurrentUser() user?: RequestUser,
   ) {
-    const isAdmin = user?.profile === 'ADMIN';
-    const shouldMaskPII = process.env.PII_MASKING_ENABLED === 'true' && 
-                         includePII !== 'true' && 
-                         !isAdmin;
-
-    const interactions = await this.interactionsService.findAll({
-      channel,
+    return this.interactions.findAll({
       direction,
       status,
       from,
-      to,
       dateFrom,
       dateTo,
-      agent,
-      provider,
-      limit: limit ? parseInt(limit) : undefined,
-      skip: skip ? parseInt(skip) : undefined,
-      includeAllEvents: includeAllEvents === 'true',
-      includeAllMessages: includeAllMessages === 'true',
+      limit: limit ? parseInt(limit, 10) : undefined,
+      skip: skip ? parseInt(skip, 10) : undefined,
     });
-
-    if (shouldMaskPII) {
-      return interactions.map((interaction) => ({
-        ...interaction,
-        from: PiiMasker.maskPhone(interaction.from),
-        to: PiiMasker.maskPhone(interaction.to),
-      }));
-    }
-
-    return interactions;
   }
 
-  @Get('count')
-  @ApiOperation({ summary: 'Contar interacciones' })
-  @ApiQuery({ name: 'channel', required: false, enum: Channel })
-  @ApiQuery({ name: 'direction', required: false, enum: Direction })
-  @ApiQuery({ name: 'status', required: false, enum: InteractionStatus })
-  @ApiQuery({ name: 'from', required: false })
-  @ApiQuery({ name: 'to', required: false })
-  @ApiQuery({ name: 'dateFrom', required: false })
-  @ApiQuery({ name: 'dateTo', required: false })
-  @ApiQuery({ name: 'agent', required: false })
-  @ApiQuery({ name: 'provider', required: false })
-  async count(
-    @Query('channel') channel?: Channel,
-    @Query('direction') direction?: Direction,
-    @Query('status') status?: InteractionStatus,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-    @Query('agent') agent?: string,
-    @Query('provider') provider?: string,
-  ) {
-    const count = await this.interactionsService.count({
-      channel,
-      direction,
-      status,
-      from,
-      to,
-      dateFrom,
-      dateTo,
-      agent,
-      provider,
-    });
-
-    return { count };
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Eliminar interacción (solo admin)' })
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
-  async remove(@Param('id') id: string) {
-    return this.interactionsService.delete(id);
+  @Get('metrics')
+  metrics() {
+    return this.interactions.getMetrics();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener detalle de interacción' })
-  @ApiQuery({ name: 'includePII', required: false, type: Boolean })
-  @ApiQuery({ name: 'refreshDetails', required: false, type: Boolean })
-  async findOne(
-    @Param('id') id: string,
-    @Query('includePII') includePII?: string,
-    @Query('refreshDetails') refreshDetails?: string,
-    @CurrentUser() user?: RequestUser,
-  ) {
-    const isAdmin = user?.profile === 'ADMIN';
-    const shouldMaskPII = process.env.PII_MASKING_ENABLED === 'true' && 
-                         includePII !== 'true' && 
-                         !isAdmin;
-
-    let interaction = await this.interactionsService.findOne(id);
-
-    if (!interaction) {
-      return null;
-    }
-
-    // Si se solicita refrescar detalles y es una llamada de ElevenLabs, obtener datos actualizados
-    if (refreshDetails === 'true' && 
-        interaction.provider === 'ELEVENLABS' && 
-        interaction.callDetail?.elevenCallId) {
-      try {
-        await this.interactionsService.refreshCallDetails(
-          interaction.id,
-          interaction.callDetail.elevenCallId
-        );
-        // Recargar la interacción con los datos actualizados
-        interaction = await this.interactionsService.findOne(id);
-      } catch (error) {
-        console.error('Error refreshing call details:', error);
-        // Continuar con los datos existentes si falla
-      }
-    }
-
-    if (shouldMaskPII) {
-      return {
-        ...interaction,
-        from: PiiMasker.maskPhone(interaction.from),
-        to: PiiMasker.maskPhone(interaction.to),
-        messages: interaction.messages.map((msg) => ({
-          ...msg,
-          text: msg.text ? PiiMasker.maskPhone(msg.text) : msg.text,
-        })),
-      };
-    }
-
-    return interaction;
+  findOne(@Param('id') id: string) {
+    return this.interactions.findOne(id);
   }
 
-  @Get('client/:phone')
-  @ApiOperation({ summary: 'Obtener perfil completo del cliente con estadísticas' })
-  async getClientProfile(@Param('phone') phone: string) {
-    return this.interactionsService.getClientProfile(phone);
-  }
-
-  @Get('client/:phone/ai-summary')
-  @ApiOperation({ summary: 'Obtener resumen inteligente generado por IA del cliente' })
-  async getClientAISummary(@Param('phone') phone: string) {
-    return this.aiSummaryService.generateClientSummary(phone);
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  remove(@Param('id') id: string) {
+    return this.interactions.delete(id);
   }
 }

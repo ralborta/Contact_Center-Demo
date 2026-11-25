@@ -1,18 +1,19 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { InteractionsModule } from './interactions/interactions.module';
-import { OtpModule } from './otp/otp.module';
-import { WebhooksModule } from './webhooks/webhooks.module';
 import { AuditModule } from './audit/audit.module';
-import { PiiModule } from './pii/pii.module';
-import { SyncModule } from './sync/sync.module';
-import { SmsModule } from './sms/sms.module';
-import { CustomersModule } from './customers/customers.module';
+import { AgentModule } from './agent/agent.module';
+import { AppointmentsModule } from './appointments/appointments.module';
+import { PatientsModule } from './patients/patients.module';
+import { DoctorsModule } from './doctors/doctors.module';
+import { SpecialtiesModule } from './specialties/specialties.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AgentConfigModule } from './agent-config/agent-config.module';
 
 @Module({
   imports: [
@@ -20,46 +21,20 @@ import { CustomersModule } from './customers/customers.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    BullModule.forRoot({
-      connection: (() => {
-        // Si hay REDIS_URL, parsearla
-        if (process.env.REDIS_URL) {
-          try {
-            const url = new URL(process.env.REDIS_URL);
-            return {
-              host: url.hostname,
-              port: parseInt(url.port || '6379'),
-              password: url.password || undefined,
-              maxRetriesPerRequest: null,
-            };
-          } catch (e) {
-            console.warn('Error parsing REDIS_URL, usando valores individuales');
-          }
-        }
-        // Valores individuales
-        return {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD || undefined,
-          maxRetriesPerRequest: null, // Requerido por BullMQ
-        };
-      })(),
-    }),
-    BullModule.registerQueue({
-      name: 'sms',
-    }),
     PrismaModule,
     HealthModule,
     AuthModule,
     UsersModule,
     InteractionsModule,
-    OtpModule,
-    WebhooksModule,
     AuditModule,
-    PiiModule,
-    SyncModule,
-    SmsModule,
-    CustomersModule,
+    AgentModule,
+    AppointmentsModule,
+    PatientsModule,
+    DoctorsModule,
+    SpecialtiesModule,
+    CampaignsModule,
+    AnalyticsModule,
+    AgentConfigModule,
   ],
 })
 export class AppModule {}

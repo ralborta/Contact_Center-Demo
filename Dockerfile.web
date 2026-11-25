@@ -1,0 +1,28 @@
+# Easypanel: servicio WEB — build desde la raíz del repo (rama citas-hospital)
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json ./
+COPY apps/cc-frontend/package.json ./apps/cc-frontend/
+RUN npm ci --workspace=apps/cc-frontend --include-workspace-root
+COPY apps/cc-frontend ./apps/cc-frontend
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+WORKDIR /app/apps/cc-frontend
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+# Monorepo standalone: server.js queda bajo apps/cc-frontend/
+COPY --from=builder /app/apps/cc-frontend/.next/standalone ./
+COPY --from=builder /app/apps/cc-frontend/.next/static ./apps/cc-frontend/.next/static
+COPY --from=builder /app/apps/cc-frontend/public ./apps/cc-frontend/public
+WORKDIR /app/apps/cc-frontend
+EXPOSE 3000
+CMD ["node", "server.js"]

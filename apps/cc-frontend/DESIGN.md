@@ -1,32 +1,11 @@
----
-name: Nexus Financial Interface
-colors:
-  surface: '#f9f9ff'
-  surface-base: '#F3F4F6'
-  surface-card: '#FFFFFF'
-  on-surface: '#151c27'
-  on-surface-variant: '#434655'
-  primary: '#004ac6'
-  primary-container: '#2563eb'
-  on-primary: '#ffffff'
-  secondary: '#555f6f'
-  outline: '#737686'
-  outline-variant: '#c3c6d7'
-  status-success: '#10B981'
-  status-error: '#EF4444'
-typography:
-  family: Inter
-rounded:
-  DEFAULT: 0.5rem
----
+# Diseño — Centro de Citas Hospitalarias
 
-# Pulso Platform Redesign
+Dirección visual hospitalaria (no plantilla genérica de IA, no branding bancario).
 
-Sistema de diseño extraído de Stitch ("Pulso Platform Redesign") para el Centro de Gestión bancario.
-
-- Fondo canvas: `#F3F4F6`
-- Cards blancas con borde `#E5E7EB` y sombra suave
-- Primario: `#2563EB` / `#004ac6`
-- Tipografía: Inter, 14px body, labels uppercase
-- Radio estándar: 8px
-- Barra superior azul profundo con navegación existente
+- Primario: teal `#0F5C5C` / `#147A7A`
+- Acento cálido contenido: `#C45C26` (alertas / CTAs secundarios)
+- Fondo: mesh suave `#EEF3F6` → `#F7FAFC`
+- Tipografía: Manrope (UI) + Source Serif 4 (títulos)
+- Cards: blancas, radio 12px, sombra teal suave
+- Sin nombres de proveedores de stack/IA en la interfaz
+- Zona: America/La_Paz · moneda Bs
