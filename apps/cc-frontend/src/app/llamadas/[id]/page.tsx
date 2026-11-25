@@ -141,11 +141,6 @@ export default function LlamadaDetallePage() {
                 <p className="text-sm text-on-surface leading-relaxed">
                   {call.callDetail?.summary || 'Sin resumen disponible'}
                 </p>
-                {call.providerConversationId && (
-                  <p className="mt-2 text-[11px] text-on-surface-variant font-mono break-all">
-                    {call.providerConversationId}
-                  </p>
-                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <span className="status-pill bg-primary-50 text-primary border border-primary/20">

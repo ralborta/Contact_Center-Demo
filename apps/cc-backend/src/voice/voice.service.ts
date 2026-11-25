@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PatientsService } from '../patients/patients.service';
+import { ensureSpanishSummary } from './summary-es';
 import {
   extractAppointmentIdFromTranscript,
   extractExecutedToolNames,
@@ -127,7 +128,7 @@ export class VoiceService {
 
     const turns = this.parseTranscript(data);
     const transcriptText = JSON.stringify(turns);
-    const summary =
+    const rawSummary =
       data?.analysis?.transcript_summary ||
       data?.analysis?.call_summary_title ||
       data?.analysis?.call_successful_result ||
@@ -188,6 +189,17 @@ export class VoiceService {
             ? 'reprogramar'
             : 'consulta';
 
+    const patientName = patient
+      ? `${patient.firstName} ${patient.lastName}`.trim()
+      : null;
+    const summary = ensureSpanishSummary({
+      summary: typeof rawSummary === 'string' ? rawSummary : null,
+      turns,
+      toolNames: executedTools,
+      resultCode,
+      patientName,
+    });
+
     const startedAt = new Date(Date.now() - (durationSec || 0) * 1000);
     const endedAt = new Date();
 
@@ -218,7 +230,7 @@ export class VoiceService {
           create: {
             externalCallId: conversationId,
             transcriptText,
-            summary: typeof summary === 'string' ? summary : null,
+            summary,
             durationSec: durationSec ? Number(durationSec) : null,
           },
         },
@@ -237,7 +249,7 @@ export class VoiceService {
             create: {
               externalCallId: conversationId,
               transcriptText,
-              summary: typeof summary === 'string' ? summary : null,
+              summary,
               durationSec: durationSec ? Number(durationSec) : null,
             },
             update: {
@@ -245,7 +257,7 @@ export class VoiceService {
                 transcriptText && transcriptText !== '[]'
                   ? transcriptText
                   : undefined,
-              summary: typeof summary === 'string' ? summary : undefined,
+              summary,
               durationSec: durationSec ? Number(durationSec) : undefined,
             },
           },

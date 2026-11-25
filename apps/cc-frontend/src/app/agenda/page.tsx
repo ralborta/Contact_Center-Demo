@@ -1,19 +1,36 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays } from 'lucide-react'
+import Link from 'next/link'
+import { CalendarDays, Phone, X } from 'lucide-react'
 import PageShell from '@/components/PageShell'
-import { doctorsApi, formatLaPaz, specialtiesApi } from '@/lib/api'
+import { APPT_STATUS_LABEL, doctorsApi, formatLaPaz, specialtiesApi } from '@/lib/api'
+
+type AgendaAppointment = {
+  id: string
+  status?: string
+  voiceConversationId?: string | null
+  patient?: {
+    firstName: string
+    lastName: string
+    documentId?: string
+    phone?: string | null
+  } | null
+  specialty?: { name: string } | null
+  interactions?: Array<{
+    id: string
+    providerConversationId?: string | null
+    resultCode?: string | null
+    startedAt?: string
+  }>
+}
 
 type Slot = {
   id: string
   startsAt: string
   endsAt: string
   status: string
-  appointment?: {
-    status?: string
-    patient?: { firstName: string; lastName: string; documentId: string }
-  } | null
+  appointment?: AgendaAppointment | null
 }
 
 function isCancelledAppt(status?: string) {
@@ -36,6 +53,14 @@ function dayLabel(iso: string) {
   })
 }
 
+function linkedCall(appt?: AgendaAppointment | null) {
+  if (!appt) return null
+  const byVoice = appt.voiceConversationId
+    ? appt.interactions?.find((i) => i.providerConversationId === appt.voiceConversationId)
+    : null
+  return byVoice || appt.interactions?.[0] || null
+}
+
 export default function AgendaPage() {
   const [doctors, setDoctors] = useState<any[]>([])
   const [specialties, setSpecialties] = useState<any[]>([])
@@ -44,6 +69,7 @@ export default function AgendaPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [view, setView] = useState<'day' | 'week'>('week')
   const [loading, setLoading] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
 
   useEffect(() => {
     Promise.all([doctorsApi.list(), specialtiesApi.list()]).then(([d, s]) => {
@@ -56,6 +82,7 @@ export default function AgendaPage() {
   useEffect(() => {
     if (!doctorId) return
     setLoading(true)
+    setSelectedSlot(null)
     const from = new Date()
     from.setHours(0, 0, 0, 0)
     const to = new Date(from)
@@ -111,6 +138,13 @@ export default function AgendaPage() {
     }),
     [slots],
   )
+
+  const detailAppt = selectedSlot?.appointment
+  const detailPatient = detailAppt?.patient
+  const detailCall = linkedCall(detailAppt)
+  const detailName = detailPatient
+    ? `${detailPatient.firstName} ${detailPatient.lastName}`
+    : null
 
   return (
     <PageShell
@@ -255,6 +289,8 @@ export default function AgendaPage() {
                   {day.items.map((s) => {
                     const appt = s.appointment
                     const cancelled = isCancelledAppt(appt?.status)
+                    const clickable =
+                      !cancelled && s.status === 'RESERVED' && Boolean(appt)
                     const tone = cancelled
                       ? 'border-l-status-error bg-red-50/40'
                       : s.status === 'FREE'
@@ -273,9 +309,16 @@ export default function AgendaPage() {
                       ? `${appt.patient.firstName} ${appt.patient.lastName}`
                       : null
                     return (
-                      <div
+                      <button
                         key={s.id}
-                        className={`border-l-4 px-4 py-3 flex flex-wrap justify-between gap-2 ${tone}`}
+                        type="button"
+                        disabled={!clickable}
+                        onClick={() => clickable && setSelectedSlot(s)}
+                        className={`w-full text-left border-l-4 px-4 py-3 flex flex-wrap justify-between gap-2 ${tone} ${
+                          clickable
+                            ? 'cursor-pointer hover:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                            : 'cursor-default'
+                        } ${selectedSlot?.id === s.id ? 'ring-1 ring-inset ring-primary/30' : ''}`}
                       >
                         <div>
                           <p className="font-semibold text-sm text-on-surface">
@@ -288,16 +331,12 @@ export default function AgendaPage() {
                               <>
                                 Cancelado
                                 {patientName && <> · {patientName}</>}
-                                {appt?.patient?.documentId && <> · CI {appt.patient.documentId}</>}
                               </>
                             )}
                             {!cancelled && s.status === 'FREE' && 'Disponible'}
                             {!cancelled && s.status === 'BLOCKED' && 'Bloqueado'}
                             {!cancelled && s.status === 'RESERVED' && patientName && (
-                              <>
-                                Reservado · {patientName}
-                                {appt?.patient?.documentId && <> · CI {appt.patient.documentId}</>}
-                              </>
+                              <>Reservado · {patientName}</>
                             )}
                             {!cancelled && s.status === 'RESERVED' && !patientName && 'Reservado'}
                           </p>
@@ -305,7 +344,7 @@ export default function AgendaPage() {
                         <span className="status-pill bg-white/90 text-on-surface-variant self-center border border-outline-variant/40">
                           {pill}
                         </span>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -313,6 +352,97 @@ export default function AgendaPage() {
             ))}
         </div>
       </div>
+
+      {selectedSlot && detailAppt && (
+        <div
+          className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/35 p-4"
+          onClick={() => setSelectedSlot(null)}
+        >
+          <div
+            className="surface-card w-full max-w-md p-5 space-y-4 shadow-xl"
+            role="dialog"
+            aria-label="Detalle de cita"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="label-caps mb-1">Detalle de cita</p>
+                <h3 className="font-display text-xl font-semibold text-on-surface">
+                  {detailName || 'Paciente'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary !px-2 !py-2"
+                aria-label="Cerrar"
+                onClick={() => setSelectedSlot(null)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="label-caps">Teléfono</p>
+                <p className="font-medium tabular-nums">
+                  {detailPatient?.phone || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">Documento</p>
+                <p className="font-medium">
+                  {detailPatient?.documentId ? `CI ${detailPatient.documentId}` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">Especialidad</p>
+                <p className="font-medium">
+                  {detailAppt.specialty?.name || selected?.specialty?.name || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">Estado</p>
+                <p className="font-medium">
+                  {APPT_STATUS_LABEL[detailAppt.status || ''] ||
+                    detailAppt.status ||
+                    'Reservada'}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <p className="label-caps">Fecha y hora</p>
+                <p className="font-medium">
+                  {formatLaPaz(selectedSlot.startsAt, {
+                    dateStyle: 'full',
+                    timeStyle: 'short',
+                  })}
+                </p>
+              </div>
+              {selected && (
+                <div className="col-span-2">
+                  <p className="label-caps">Médico</p>
+                  <p className="font-medium">
+                    Dr(a). {selected.firstName} {selected.lastName}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {detailCall ? (
+              <Link
+                href={`/llamadas/${detailCall.id}`}
+                className="btn-primary w-full inline-flex items-center justify-center gap-2"
+              >
+                <Phone className="w-4 h-4" />
+                Ver llamada que reservó
+              </Link>
+            ) : (
+              <p className="text-xs text-on-surface-variant">
+                Esta cita no está vinculada a una llamada del agente.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </PageShell>
   )
 }

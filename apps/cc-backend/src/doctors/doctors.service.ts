@@ -114,7 +114,23 @@ export class DoctorsService {
         startsAt: { gte: new Date(from), lte: new Date(to) },
       },
       include: {
-        appointment: { include: { patient: true } },
+        appointment: {
+          include: {
+            patient: true,
+            specialty: true,
+            interactions: {
+              where: { provider: 'VOICE_AGENT' },
+              select: {
+                id: true,
+                providerConversationId: true,
+                resultCode: true,
+                startedAt: true,
+              },
+              orderBy: { startedAt: 'desc' },
+              take: 3,
+            },
+          },
+        },
       },
       orderBy: { startsAt: 'asc' },
     });

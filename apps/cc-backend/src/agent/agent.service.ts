@@ -11,6 +11,7 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { AvailabilityService } from '../appointments/availability.service';
 import { PatientsService } from '../patients/patients.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ensureSpanishSummary } from '../voice/summary-es';
 import {
   extractAppointmentIdFromTranscript,
   extractExecutedToolNames,
@@ -535,14 +536,10 @@ export class AgentService {
 
     const transcript = data?.transcript ?? payload?.transcript ?? null;
     const analysis = data?.analysis || payload?.analysis || {};
-    const summary =
+    const rawSummary =
       analysis?.transcript_summary ||
       analysis?.call_summary_title ||
       payload?.summary ||
-      null;
-    const callSuccessful =
-      analysis?.call_successful ||
-      data?.call_successful ||
       null;
 
     const durationSec =
@@ -621,6 +618,17 @@ export class AgentService {
             ? 'reprogramar'
             : 'consulta';
 
+    const patientName = patient
+      ? `${patient.firstName} ${patient.lastName}`.trim()
+      : null;
+    const summary = ensureSpanishSummary({
+      summary: typeof rawSummary === 'string' ? rawSummary : null,
+      turns,
+      toolNames: executedTools,
+      resultCode,
+      patientName,
+    });
+
     const interaction = await this.prisma.interaction.upsert({
       where: {
         provider_providerConversationId: {
@@ -648,7 +656,7 @@ export class AgentService {
           create: {
             externalCallId: conversationId,
             transcriptText,
-            summary: typeof summary === 'string' ? summary : null,
+            summary,
             durationSec: durationSec ? Number(durationSec) : null,
             recordingUrl,
           },
@@ -668,7 +676,7 @@ export class AgentService {
             create: {
               externalCallId: conversationId,
               transcriptText,
-              summary: typeof summary === 'string' ? summary : null,
+              summary,
               durationSec: durationSec ? Number(durationSec) : null,
               recordingUrl,
             },
@@ -677,7 +685,7 @@ export class AgentService {
                 transcriptText && transcriptText !== '[]'
                   ? transcriptText
                   : undefined,
-              summary: typeof summary === 'string' ? summary : undefined,
+              summary,
               durationSec: durationSec ? Number(durationSec) : undefined,
               recordingUrl: recordingUrl || undefined,
             },
