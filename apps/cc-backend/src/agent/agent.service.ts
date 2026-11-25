@@ -457,17 +457,27 @@ export class AgentService {
     };
   }
 
+  /**
+   * Payload real ElevenLabs: { type: 'post_call_transcription', event_timestamp, data: {
+   *   agent_id, conversation_id, status, transcript[], analysis{}, metadata{}, ... } }
+   */
   async handlePostCall(payload: any) {
-    const data = payload?.data || payload;
+    const type = payload?.type || payload?.event || null;
+    const data =
+      payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+
     const conversationId =
       data?.conversation_id ||
       payload?.conversation_id ||
       payload?.cid ||
       null;
+
     const dyn =
       data?.conversation_initiation_client_data?.dynamic_variables ||
       data?.dynamic_variables ||
+      payload?.dynamic_variables ||
       {};
+
     const from =
       data?.metadata?.phone_call?.external_number ||
       data?.metadata?.caller_id ||
@@ -480,18 +490,26 @@ export class AgentService {
       data?.metadata?.phone_call?.agent_number ||
       payload?.to ||
       'Hospital Central La Paz';
-    const transcript = data?.transcript || payload?.transcript || null;
+
+    const transcript = data?.transcript ?? payload?.transcript ?? null;
+    const analysis = data?.analysis || payload?.analysis || {};
     const summary =
-      data?.analysis?.transcript_summary ||
-      data?.analysis?.call_summary_title ||
+      analysis?.transcript_summary ||
+      analysis?.call_summary_title ||
       payload?.summary ||
       null;
+    const callSuccessful =
+      analysis?.call_successful ||
+      data?.call_successful ||
+      null;
+
     const durationSec =
       data?.metadata?.call_duration_secs ||
       payload?.duration_secs ||
       null;
     const recordingUrl =
       data?.metadata?.recording_url ||
+      data?.metadata?.feedback?.recording_url ||
       payload?.recording_url ||
       null;
     const direction =
@@ -499,18 +517,60 @@ export class AgentService {
         ? Direction.OUTBOUND
         : Direction.INBOUND;
 
+    // Prefer structured JSON turns (incluye tool_calls) para el detalle de Llamadas
     let transcriptText = '';
-    if (typeof transcript === 'string') transcriptText = transcript;
-    else if (Array.isArray(transcript)) {
-      transcriptText = JSON.stringify(
-        transcript.map((t: any) => ({
-          role: t.role || t.speaker || 'agent',
-          text: t.message || t.text || '',
-          t: t.time_in_call_secs,
-          tool_calls: t.tool_calls,
-        })),
-      );
+    let resultCode: string | null = null;
+    let appointmentIdFromTools: string | null = null;
+
+    if (typeof transcript === 'string') {
+      transcriptText = transcript;
+    } else if (Array.isArray(transcript)) {
+      const turns = transcript.map((t: any) => ({
+        role: t.role || t.speaker || 'agent',
+        text: t.message || t.text || '',
+        t: t.time_in_call_secs,
+        tool_calls: t.tool_calls,
+        tool_results: t.tool_results,
+      }));
+      transcriptText = JSON.stringify(turns);
+
+      for (const t of transcript) {
+        for (const tc of t.tool_calls || []) {
+          const name = tc?.tool_name || tc?.name || '';
+          if (/reservar/i.test(name)) resultCode = 'APPOINTMENT_BOOKED';
+          if (/reprogram/i.test(name)) resultCode = 'RESCHEDULED';
+          if (/cancel/i.test(name)) resultCode = 'CANCELLED';
+        }
+        for (const tr of t.tool_results || []) {
+          const name = tr?.tool_name || '';
+          let val = tr?.result_value ?? tr?.result;
+          if (typeof val === 'string') {
+            try {
+              val = JSON.parse(val);
+            } catch {
+              /* keep string */
+            }
+          }
+          if (val && typeof val === 'object') {
+            const citaId = val?.cita?.id || val?.citaId || val?.appointmentId;
+            if (citaId && /reservar|reprogram|cancel/i.test(name)) {
+              appointmentIdFromTools = String(citaId);
+              if (/reservar/i.test(name)) resultCode = 'APPOINTMENT_BOOKED';
+              if (/reprogram/i.test(name)) resultCode = 'RESCHEDULED';
+              if (/cancel/i.test(name)) resultCode = 'CANCELLED';
+            }
+          }
+        }
+      }
     }
+
+    if (!resultCode && typeof summary === 'string') {
+      const s = summary.toLowerCase();
+      if (/reserv/.test(s)) resultCode = 'APPOINTMENT_BOOKED';
+      else if (/reprogram/.test(s)) resultCode = 'RESCHEDULED';
+      else if (/cancel/.test(s)) resultCode = 'CANCELLED';
+    }
+    if (!resultCode && callSuccessful === 'success') resultCode = 'RESOLVED';
 
     const patient = await this.patients.findByPhoneOrCi(String(from));
     const startedAt = new Date(Date.now() - (durationSec || 0) * 1000);
@@ -535,8 +595,17 @@ export class AgentService {
         patientId: patient?.id,
         aiHandled: true,
         outcome: Outcome.RESOLVED,
+        intent: resultCode?.startsWith('APPOINTMENT')
+          ? 'cita'
+          : resultCode === 'CANCELLED'
+            ? 'cancelar'
+            : resultCode === 'RESCHEDULED'
+              ? 'reprogramar'
+              : 'consulta',
+        resultCode: resultCode || undefined,
         provider: Provider.VOICE_AGENT,
         providerConversationId,
+        appointmentId: appointmentIdFromTools || undefined,
         callDetail: {
           create: {
             externalCallId: conversationId,
@@ -552,6 +621,8 @@ export class AgentService {
         endedAt,
         from: String(from),
         patientId: patient?.id || undefined,
+        resultCode: resultCode || undefined,
+        appointmentId: appointmentIdFromTools || undefined,
         callDetail: {
           upsert: {
             create: {
@@ -572,17 +643,21 @@ export class AgentService {
       },
     });
 
-    const appointmentId = await this.resolveAppointmentForCall({
-      interactionId: interaction.id,
-      patientId: patient?.id,
-      startedAt,
-      endedAt,
-    });
+    const appointmentId =
+      appointmentIdFromTools ||
+      (await this.resolveAppointmentForCall({
+        interactionId: interaction.id,
+        patientId: patient?.id,
+        startedAt,
+        endedAt,
+      }));
 
     return {
       ok: true,
+      type: type || 'post_call_transcription',
       interactionId: interaction.id,
       appointmentId: appointmentId || interaction.appointmentId || null,
+      conversationId: providerConversationId,
     };
   }
 
