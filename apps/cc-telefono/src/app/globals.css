@@ -6,6 +6,7 @@
   --cream: #eef5f4;
   --ink: #102222;
   --danger: #c44536;
+  --success: #1f8a5b;
   --phone-w: 360px;
   --phone-h: 720px;
 }
@@ -98,7 +99,11 @@ body {
 
 .call-hero {
   text-align: center;
-  padding: 28px 20px 12px;
+  padding: 28px 20px 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .hospital-eyebrow {
@@ -123,37 +128,134 @@ body {
   font-size: 14px;
   color: var(--mint);
   font-variant-numeric: tabular-nums;
+  min-height: 1.25em;
 }
 
-.pulse {
+.orb {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 36px auto 12px;
+  display: grid;
+  place-items: center;
+}
+
+.orb-core {
   width: 72px;
   height: 72px;
-  margin: 22px auto 0;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #7ad9cb, var(--teal) 55%, var(--teal-deep));
   opacity: 0.55;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+  z-index: 2;
 }
 
-.pulse.on {
+.orb-ring {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(94, 200, 184, 0.35);
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.orb-on .orb-core {
   opacity: 1;
-  animation: pulse 1.8s ease-in-out infinite;
 }
 
-@keyframes pulse {
+.orb-connecting .orb-core {
+  opacity: 0.85;
+  animation: breathe 1.2s ease-in-out infinite;
+}
+
+.orb-listening .orb-core {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}
+
+.orb-speaking .orb-core {
+  animation: speak 0.7s ease-in-out infinite;
+  box-shadow: 0 0 28px rgba(94, 200, 184, 0.55);
+}
+
+.orb-speaking .orb-ring,
+.orb-listening .orb-ring {
+  opacity: 1;
+  animation: ring-out 1.6s ease-out infinite;
+}
+
+.orb-speaking .orb-ring.delay,
+.orb-listening .orb-ring.delay {
+  animation-delay: 0.55s;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes pulse-soft {
   0%,
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(94, 200, 184, 0.45);
+    box-shadow: 0 0 0 0 rgba(94, 200, 184, 0.35);
   }
   50% {
     transform: scale(1.05);
-    box-shadow: 0 0 0 18px rgba(94, 200, 184, 0);
+    box-shadow: 0 0 0 14px rgba(94, 200, 184, 0);
   }
 }
 
-.settings-panel {
+@keyframes speak {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes ring-out {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+.mode-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(238, 245, 244, 0.55);
+}
+
+.error-hint {
+  margin: 10px 16px 0;
+  font-size: 12px;
+  color: #ffb4a8;
+  max-width: 280px;
+}
+
+.conv-hint {
   margin: 8px 16px 0;
+  font-size: 10px;
+  color: rgba(238, 245, 244, 0.35);
+  word-break: break-all;
+  max-width: 280px;
+}
+
+.settings-panel {
+  margin: 0 16px 12px;
   padding: 14px;
   border-radius: 16px;
   background: rgba(7, 22, 22, 0.92);
@@ -189,23 +291,60 @@ body {
   cursor: pointer;
 }
 
-.widget-host {
-  flex: 1;
-  min-height: 220px;
-  position: relative;
-  margin-top: 8px;
+.call-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 20px 8px;
 }
 
-.widget-host elevenlabs-convai {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
+.btn-call,
+.btn-hang {
+  width: 88px;
+  height: 88px;
+  border: 0;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn-call {
+  background: radial-gradient(circle at 35% 30%, #3ecf8e, var(--success) 60%, #146b45);
+}
+
+.btn-hang {
+  background: radial-gradient(circle at 35% 30%, #e36a5a, var(--danger) 60%, #8f2a1f);
+}
+
+.btn-call:hover,
+.btn-hang:hover {
+  transform: scale(1.04);
+}
+
+.btn-call:active,
+.btn-hang:active {
+  transform: scale(0.97);
+}
+
+.btn-icon {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .caller-hint {
   margin: 0;
-  padding: 10px 16px 18px;
+  padding: 10px 16px 22px;
   text-align: center;
   font-size: 12px;
   color: rgba(238, 245, 244, 0.45);

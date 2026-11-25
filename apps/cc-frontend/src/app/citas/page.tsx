@@ -14,6 +14,7 @@ export default function CitasPage() {
   const [items, setItems] = useState<any[]>([])
   const [filter, setFilter] = useState('')
   const [needsOnly, setNeedsOnly] = useState(false)
+  const [highlightId, setHighlightId] = useState('')
   const [doctors, setDoctors] = useState<any[]>([])
   const [patients, setPatients] = useState<any[]>([])
   const [availability, setAvailability] = useState<any[]>([])
@@ -33,9 +34,17 @@ export default function CitasPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('needsReschedule') === 'true') setNeedsOnly(true)
+    const cita = params.get('cita')
+    if (cita) setHighlightId(cita)
     doctorsApi.list().then(setDoctors)
     patientsApi.list().then(setPatients)
   }, [])
+
+  useEffect(() => {
+    if (!highlightId || items.length === 0) return
+    const el = document.getElementById(`cita-${highlightId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightId, items])
 
   useEffect(() => {
     void load()
@@ -110,7 +119,13 @@ export default function CitasPage() {
           </thead>
           <tbody>
             {items.map((a) => (
-              <tr key={a.id} className="border-t border-outline-variant/40">
+              <tr
+                key={a.id}
+                id={`cita-${a.id}`}
+                className={`border-t border-outline-variant/40 ${
+                  highlightId === a.id ? 'bg-primary-50/80 ring-2 ring-inset ring-primary/30' : ''
+                }`}
+              >
                 <td className="px-4 py-3 whitespace-nowrap">
                   {a.slot ? formatLaPaz(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                 </td>

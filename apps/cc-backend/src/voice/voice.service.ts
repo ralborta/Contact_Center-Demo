@@ -12,25 +12,13 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PatientsService } from '../patients/patients.service';
+import {
+  inferResultCodeFromTurns,
+  parseConversationTranscript,
+  type TranscriptTurn,
+} from './transcript';
 
-export type TranscriptTurn = {
-  role: 'agent' | 'user' | 'tool';
-  text: string;
-  t?: number;
-};
-
-const TOOL_LABELS: Record<string, (args?: any) => string> = {
-  consultar_disponibilidad: (a) =>
-    `Buscó disponibilidad${a?.especialidad ? ` en ${a.especialidad}` : a?.doctor ? ` con ${a.doctor}` : ''}`,
-  buscar_doctores: (a) =>
-    `Buscó médicos${a?.especialidad ? ` de ${a.especialidad}` : a?.nombre || a?.doctor ? `: ${a.nombre || a.doctor}` : ''}`,
-  listar_especialidades: () => 'Consultó especialidades',
-  identificar_paciente: () => 'Identificó al paciente',
-  reservar_cita: () => 'Reservó cita',
-  reprogramar_cita: () => 'Reprogramó cita',
-  cancelar_cita: () => 'Canceló cita',
-  listar_citas_paciente: () => 'Consultó citas del paciente',
-};
+export type { TranscriptTurn };
 
 @Injectable()
 export class VoiceService {
@@ -362,58 +350,7 @@ export class VoiceService {
   }
 
   private parseTranscript(data: any): TranscriptTurn[] {
-    const raw = data?.transcript;
-    const turns: TranscriptTurn[] = [];
-    if (!Array.isArray(raw)) {
-      if (typeof raw === 'string' && raw.trim()) {
-        for (const line of raw.split('\n')) {
-          const m = line.match(/^(agent|user|assistant|paciente|agente)\s*[:\-]\s*(.*)$/i);
-          if (m) {
-            const role = /user|paciente/i.test(m[1]) ? 'user' : 'agent';
-            turns.push({ role, text: m[2] });
-          } else if (line.trim()) {
-            turns.push({ role: 'agent', text: line.trim() });
-          }
-        }
-      }
-      return turns;
-    }
-
-    for (const item of raw) {
-      const t = item.time_in_call_secs ?? item.time_in_call ?? undefined;
-      const roleRaw = (item.role || item.speaker || '').toLowerCase();
-      const message = item.message || item.text || '';
-
-      if (Array.isArray(item.tool_calls)) {
-        for (const tc of item.tool_calls) {
-          const name = tc?.tool_name || tc?.name || tc?.function?.name || 'herramienta';
-          let args = tc?.params || tc?.arguments || tc?.function?.arguments;
-          if (typeof args === 'string') {
-            try {
-              args = JSON.parse(args);
-            } catch {
-              args = {};
-            }
-          }
-          const labelFn = TOOL_LABELS[name];
-          const label = labelFn
-            ? labelFn(args)
-            : `Usó herramienta ${name.replace(/_/g, ' ')}`;
-          turns.push({ role: 'tool', text: label.trim(), t });
-        }
-      }
-
-      if (message && !/^\[.*\]$/.test(message.trim())) {
-        // Skip pure tool result dumps / JSON blobs
-        if (message.trim().startsWith('{') && message.trim().endsWith('}')) {
-          continue;
-        }
-        const role: 'agent' | 'user' =
-          roleRaw === 'user' || roleRaw === 'paciente' ? 'user' : 'agent';
-        turns.push({ role, text: message, t });
-      }
-    }
-    return turns;
+    return parseConversationTranscript(data);
   }
 
   private inferDuration(turns: TranscriptTurn[]) {
@@ -423,16 +360,9 @@ export class VoiceService {
   }
 
   private inferResultCode(turns: TranscriptTurn[], summary: any): string | null {
-    const blob = `${turns.map((t) => t.text).join(' ')} ${summary || ''}`.toLowerCase();
-    if (turns.some((t) => t.role === 'tool' && /reserv/i.test(t.text)) || /reserv/.test(blob)) {
-      return 'APPOINTMENT_BOOKED';
-    }
-    if (turns.some((t) => t.role === 'tool' && /reprogram/i.test(t.text)) || /reprogram/.test(blob)) {
-      return 'RESCHEDULED';
-    }
-    if (turns.some((t) => t.role === 'tool' && /cancel/i.test(t.text)) || /cancel/.test(blob)) {
-      return 'CANCELLED';
-    }
-    return 'RESOLVED';
+    return inferResultCodeFromTurns(
+      turns,
+      typeof summary === 'string' ? summary : null,
+    );
   }
 }

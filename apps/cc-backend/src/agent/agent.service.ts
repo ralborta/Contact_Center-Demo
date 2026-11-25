@@ -11,6 +11,11 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { AvailabilityService } from '../appointments/availability.service';
 import { PatientsService } from '../patients/patients.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  extractAppointmentIdFromTranscript,
+  inferResultCodeFromTurns,
+  parseConversationTranscript,
+} from '../voice/transcript';
 import { doctorMatchesName, stripDoctorPrefix } from './doctor-name';
 
 @Injectable()
@@ -517,52 +522,21 @@ export class AgentService {
         ? Direction.OUTBOUND
         : Direction.INBOUND;
 
-    // Prefer structured JSON turns (incluye tool_calls) para el detalle de Llamadas
-    let transcriptText = '';
-    let resultCode: string | null = null;
-    let appointmentIdFromTools: string | null = null;
+    // Turns normalizados (chat + tools legibles) para el detalle de Llamadas
+    const turns = parseConversationTranscript({ transcript });
+    const transcriptText =
+      turns.length > 0
+        ? JSON.stringify(turns)
+        : typeof transcript === 'string'
+          ? transcript
+          : '';
 
-    if (typeof transcript === 'string') {
-      transcriptText = transcript;
-    } else if (Array.isArray(transcript)) {
-      const turns = transcript.map((t: any) => ({
-        role: t.role || t.speaker || 'agent',
-        text: t.message || t.text || '',
-        t: t.time_in_call_secs,
-        tool_calls: t.tool_calls,
-        tool_results: t.tool_results,
-      }));
-      transcriptText = JSON.stringify(turns);
-
-      for (const t of transcript) {
-        for (const tc of t.tool_calls || []) {
-          const name = tc?.tool_name || tc?.name || '';
-          if (/reservar/i.test(name)) resultCode = 'APPOINTMENT_BOOKED';
-          if (/reprogram/i.test(name)) resultCode = 'RESCHEDULED';
-          if (/cancel/i.test(name)) resultCode = 'CANCELLED';
-        }
-        for (const tr of t.tool_results || []) {
-          const name = tr?.tool_name || '';
-          let val = tr?.result_value ?? tr?.result;
-          if (typeof val === 'string') {
-            try {
-              val = JSON.parse(val);
-            } catch {
-              /* keep string */
-            }
-          }
-          if (val && typeof val === 'object') {
-            const citaId = val?.cita?.id || val?.citaId || val?.appointmentId;
-            if (citaId && /reservar|reprogram|cancel/i.test(name)) {
-              appointmentIdFromTools = String(citaId);
-              if (/reservar/i.test(name)) resultCode = 'APPOINTMENT_BOOKED';
-              if (/reprogram/i.test(name)) resultCode = 'RESCHEDULED';
-              if (/cancel/i.test(name)) resultCode = 'CANCELLED';
-            }
-          }
-        }
-      }
-    }
+    let appointmentIdFromTools = extractAppointmentIdFromTranscript(transcript);
+    let resultCode =
+      inferResultCodeFromTurns(
+        turns,
+        typeof summary === 'string' ? summary : null,
+      ) || null;
 
     if (!resultCode && typeof summary === 'string') {
       const s = summary.toLowerCase();
@@ -642,6 +616,23 @@ export class AgentService {
         },
       },
     });
+
+    // Eventos de tools legibles en el timeline
+    await this.prisma.interactionEvent.deleteMany({
+      where: { interactionId: interaction.id, type: 'TOOL' },
+    });
+    for (const turn of turns.filter((t) => t.role === 'tool')) {
+      await this.prisma.interactionEvent.create({
+        data: {
+          interactionId: interaction.id,
+          type: 'TOOL',
+          provider: Provider.VOICE_AGENT,
+          ts: new Date(startedAt.getTime() + (turn.t || 0) * 1000),
+          payload: { label: turn.text },
+          idempotencyKey: `${providerConversationId}:tool:${turn.t}:${turn.text.slice(0, 40)}`,
+        },
+      });
+    }
 
     const appointmentId =
       appointmentIdFromTools ||

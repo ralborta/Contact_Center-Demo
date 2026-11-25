@@ -3,24 +3,71 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, Phone } from 'lucide-react'
+import { CalendarDays, Phone, Wrench } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { APPT_STATUS_LABEL, callsApi, formatLaPaz } from '@/lib/api'
 
 type Turn = { role: 'agent' | 'user' | 'tool'; text: string; t?: number }
+
+const TOOL_LABELS: Record<string, (args?: any) => string> = {
+  consultar_disponibilidad: (a) =>
+    `Buscó disponibilidad${a?.especialidad ? ` en ${a.especialidad}` : a?.doctor ? ` con ${a.doctor}` : ''}`,
+  buscar_doctores: (a) =>
+    `Buscó médicos${a?.especialidad ? ` de ${a.especialidad}` : a?.nombre || a?.doctor ? `: ${a.nombre || a.doctor}` : ''}`,
+  listar_especialidades: () => 'Consultó especialidades',
+  identificar_paciente: () => 'Identificó al paciente',
+  reservar_cita: () => 'Reservó cita',
+  reprogramar_cita: () => 'Reprogramó cita',
+  cancelar_cita: () => 'Canceló cita',
+  listar_citas_paciente: () => 'Consultó citas del paciente',
+}
+
+function parseArgs(raw: any) {
+  if (raw == null) return {}
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return {}
+    }
+  }
+  return raw
+}
+
+function toolLabel(name: string, args?: any) {
+  const fn = TOOL_LABELS[name]
+  return fn ? fn(args) : `Usó herramienta ${String(name || '').replace(/_/g, ' ')}`
+}
 
 function parseTurns(raw?: string | null): Turn[] {
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed)) {
-      return parsed
-        .filter((x) => x && x.text)
-        .map((x) => ({
-          role: x.role === 'user' || x.role === 'tool' ? x.role : 'agent',
-          text: String(x.text),
-          t: typeof x.t === 'number' ? x.t : undefined,
-        }))
+      const turns: Turn[] = []
+      for (const x of parsed) {
+        if (!x) continue
+        const t = typeof x.t === 'number' ? x.t : typeof x.time_in_call_secs === 'number' ? x.time_in_call_secs : undefined
+        if (Array.isArray(x.tool_calls)) {
+          for (const tc of x.tool_calls) {
+            const name = tc?.tool_name || tc?.name || 'herramienta'
+            const args = parseArgs(tc?.params || tc?.arguments)
+            turns.push({ role: 'tool', text: toolLabel(name, args).trim(), t })
+          }
+        }
+        const text = x.text || x.message || ''
+        const roleRaw = String(x.role || x.speaker || '').toLowerCase()
+        if (roleRaw === 'tool' && text) {
+          turns.push({ role: 'tool', text: String(text), t })
+          continue
+        }
+        if (text && !(String(text).trim().startsWith('{') && String(text).trim().endsWith('}'))) {
+          const role: 'user' | 'agent' =
+            roleRaw === 'user' || roleRaw === 'paciente' ? 'user' : 'agent'
+          turns.push({ role, text: String(text), t })
+        }
+      }
+      return turns
     }
   } catch {
     /* plain text fallback */
@@ -69,6 +116,9 @@ export default function LlamadaDetallePage() {
   )
 
   const toolEvents = (call?.events || []).filter((e: any) => e.type === 'TOOL')
+  const toolFromTurns = turns.filter((t) => t.role === 'tool')
+  const showToolStrip =
+    toolFromTurns.length === 0 && toolEvents.length > 0
 
   return (
     <PageShell
@@ -91,6 +141,11 @@ export default function LlamadaDetallePage() {
                 <p className="text-sm text-on-surface leading-relaxed">
                   {call.callDetail?.summary || 'Sin resumen disponible'}
                 </p>
+                {call.providerConversationId && (
+                  <p className="mt-2 text-[11px] text-on-surface-variant font-mono break-all">
+                    {call.providerConversationId}
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <span className="status-pill bg-primary-50 text-primary border border-primary/20">
@@ -133,10 +188,10 @@ export default function LlamadaDetallePage() {
             </div>
           </section>
 
-          {call.appointment && (
+          {call.appointment ? (
             <Link
-              href={`/citas`}
-              className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 hover:border-primary/40 transition-colors border-l-4 border-l-primary"
+              href={`/citas?cita=${call.appointment.id}`}
+              className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 hover:border-primary/40 transition-colors border-l-4 border-l-primary block"
             >
               <div className="flex items-start gap-3">
                 <div className="bg-primary-50 text-primary p-2 rounded-lg">
@@ -165,6 +220,13 @@ export default function LlamadaDetallePage() {
                 {APPT_STATUS_LABEL[call.appointment.status] || call.appointment.status}
               </span>
             </Link>
+          ) : (
+            <section className="surface-card p-4 border-dashed border border-outline-variant/60">
+              <p className="label-caps mb-1">Cita vinculada</p>
+              <p className="text-sm text-on-surface-variant">
+                Esta llamada aún no tiene una cita asociada.
+              </p>
+            </section>
           )}
 
           <section className="surface-card overflow-hidden">
@@ -172,18 +234,19 @@ export default function LlamadaDetallePage() {
               <Phone className="w-3.5 h-3.5 text-primary" />
               <p className="label-caps">Conversación</p>
             </header>
-            <div className="p-4 space-y-3 max-h-[560px] overflow-y-auto">
+            <div className="p-4 space-y-3 max-h-[560px] overflow-y-auto bg-gradient-to-b from-surface-muted/30 to-transparent">
               {turns.length === 0 && (
                 <p className="text-sm text-outline">Sin transcripción</p>
               )}
               {turns.map((turn, i) => {
                 if (turn.role === 'tool') {
                   return (
-                    <div key={i} className="flex justify-center">
-                      <span className="text-[11px] font-semibold tracking-wide uppercase text-on-surface-variant bg-surface-muted border border-outline-variant/50 rounded-md px-3 py-1">
-                        {turn.text}
+                    <div key={i} className="flex justify-center py-1">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-on-surface-variant bg-surface-muted border border-outline-variant/50 rounded-full px-3 py-1.5 max-w-[90%]">
+                        <Wrench className="w-3 h-3 shrink-0 text-primary" />
+                        <span>{turn.text}</span>
                         {turn.t != null && (
-                          <span className="ml-2 tabular-nums opacity-70">
+                          <span className="ml-1 tabular-nums opacity-70">
                             {formatRel(turn.t)}
                           </span>
                         )}
@@ -198,10 +261,10 @@ export default function LlamadaDetallePage() {
                     className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
                         isUser
                           ? 'bg-primary text-on-primary rounded-br-md'
-                          : 'bg-primary-50 text-on-surface rounded-bl-md border border-primary/10'
+                          : 'bg-white text-on-surface rounded-bl-md border border-primary/10'
                       }`}
                     >
                       <p
@@ -221,12 +284,16 @@ export default function LlamadaDetallePage() {
                   </div>
                 )
               })}
-              {toolEvents.length > 0 && turns.every((t) => t.role !== 'tool') && (
-                <div className="pt-2 space-y-1 border-t border-outline-variant/40">
+              {showToolStrip && (
+                <div className="pt-3 space-y-2 border-t border-outline-variant/40">
+                  <p className="label-caps text-center">Herramientas</p>
                   {toolEvents.map((e: any) => (
-                    <p key={e.id} className="text-[11px] text-center text-on-surface-variant">
-                      {(e.payload as any)?.label || e.type}
-                    </p>
+                    <div key={e.id} className="flex justify-center">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-on-surface-variant bg-surface-muted border border-outline-variant/50 rounded-full px-3 py-1.5">
+                        <Wrench className="w-3 h-3 text-primary" />
+                        {(e.payload as any)?.label || e.type}
+                      </span>
+                    </div>
                   ))}
                 </div>
               )}
