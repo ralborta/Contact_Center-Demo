@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { CalendarDays, Phone } from 'lucide-react'
+import { CalendarDays } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { doctorsApi, formatLaPaz, specialtiesApi } from '@/lib/api'
 
@@ -125,10 +124,6 @@ export default function AgendaPage() {
       }
       actions={
         <div className="flex flex-wrap gap-2">
-          <Link href="/telefono" className="btn-secondary">
-            <Phone className="w-3.5 h-3.5" />
-            Simulador
-          </Link>
           <button
             className={view === 'day' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setView('day')}

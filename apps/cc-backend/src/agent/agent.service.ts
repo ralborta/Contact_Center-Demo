@@ -273,6 +273,7 @@ export class AgentService {
     pacienteId: string;
     slotId: string;
     motivo?: string;
+    conversationId?: string;
   }) {
     try {
       const appt = await this.appointments.reserve({
@@ -282,6 +283,11 @@ export class AgentService {
         origin: ChangeOrigin.VOICE_AGENT,
         reason: body.motivo,
       });
+      await this.linkConversationToAppointment(
+        body.conversationId,
+        appt.id,
+        'APPOINTMENT_BOOKED',
+      );
       const voice = this.appointments.formatForVoice(appt);
       return {
         ok: true,
@@ -312,6 +318,7 @@ export class AgentService {
     citaId: string;
     nuevoSlotId: string;
     motivo?: string;
+    conversationId?: string;
   }) {
     try {
       const appt = await this.appointments.reschedule({
@@ -320,6 +327,11 @@ export class AgentService {
         origin: ChangeOrigin.VOICE_AGENT,
         reason: body.motivo,
       });
+      await this.linkConversationToAppointment(
+        body.conversationId,
+        appt.id,
+        'RESCHEDULED',
+      );
       const voice = this.appointments.formatForVoice(appt);
       return {
         ok: true,
@@ -331,13 +343,22 @@ export class AgentService {
     }
   }
 
-  async cancel(body: { citaId: string; motivo?: string }) {
+  async cancel(body: {
+    citaId: string;
+    motivo?: string;
+    conversationId?: string;
+  }) {
     try {
       const appt = await this.appointments.cancelByPatient({
         appointmentId: body.citaId,
         origin: ChangeOrigin.VOICE_AGENT,
         reason: body.motivo || 'Cancelada por el paciente vía teléfono',
       });
+      await this.linkConversationToAppointment(
+        body.conversationId,
+        appt.id,
+        'CANCELLED',
+      );
       return {
         ok: true,
         citaId: appt.id,
@@ -346,6 +367,45 @@ export class AgentService {
     } catch (e: any) {
       return { ok: false, mensaje: e.message || 'No pude cancelar la cita.' };
     }
+  }
+
+  /** Vincula la conversación del agente con la cita (y viceversa). */
+  private async linkConversationToAppointment(
+    conversationId: string | undefined,
+    appointmentId: string,
+    resultCode: string,
+  ) {
+    if (!conversationId) return;
+    const existing = await this.prisma.interaction.findUnique({
+      where: {
+        provider_providerConversationId: {
+          provider: Provider.VOICE_AGENT,
+          providerConversationId: conversationId,
+        },
+      },
+    });
+    if (existing) {
+      await this.prisma.interaction.update({
+        where: { id: existing.id },
+        data: { appointmentId, resultCode },
+      });
+      return;
+    }
+    await this.prisma.interaction.create({
+      data: {
+        channel: 'CALL',
+        direction: Direction.INBOUND,
+        status: InteractionStatus.IN_PROGRESS,
+        startedAt: new Date(),
+        from: 'pending',
+        to: 'Hospital Central La Paz',
+        aiHandled: true,
+        resultCode,
+        provider: Provider.VOICE_AGENT,
+        providerConversationId: conversationId,
+        appointmentId,
+      },
+    });
   }
 
   async handleCallInit(payload: any) {

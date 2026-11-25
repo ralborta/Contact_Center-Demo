@@ -91,6 +91,11 @@ export class PatientsService {
             doctor: { include: { specialty: true } },
             specialty: true,
             slot: true,
+            interactions: {
+              select: { id: true, startedAt: true, resultCode: true },
+              take: 1,
+              orderBy: { startedAt: 'desc' },
+            },
           },
           orderBy: { createdAt: 'desc' },
           take: 50,

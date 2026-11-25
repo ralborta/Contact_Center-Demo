@@ -58,6 +58,11 @@ export class AppointmentsService {
         specialty: true,
         slot: true,
         changes: { orderBy: { createdAt: 'desc' }, take: 5 },
+        interactions: {
+          select: { id: true, startedAt: true, resultCode: true, outcome: true },
+          orderBy: { startedAt: 'desc' },
+          take: 3,
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -73,6 +78,10 @@ export class AppointmentsService {
         specialty: true,
         slot: true,
         changes: { orderBy: { createdAt: 'desc' } },
+        interactions: {
+          include: { callDetail: true },
+          orderBy: { startedAt: 'desc' },
+        },
       },
     });
     if (!appt) throw new NotFoundException('Cita no encontrada');

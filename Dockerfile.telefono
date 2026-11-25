@@ -1,0 +1,26 @@
+# Easypanel: servicio TELÉFONO — webapp pública del paciente
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json ./
+COPY apps/cc-telefono/package.json ./apps/cc-telefono/
+RUN npm ci --workspace=apps/cc-telefono --include-workspace-root
+COPY apps/cc-telefono ./apps/cc-telefono
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+WORKDIR /app/apps/cc-telefono
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+COPY --from=builder /app/apps/cc-telefono/.next/standalone ./
+COPY --from=builder /app/apps/cc-telefono/.next/static ./apps/cc-telefono/.next/static
+WORKDIR /app/apps/cc-telefono
+EXPOSE 3000
+CMD ["node", "server.js"]

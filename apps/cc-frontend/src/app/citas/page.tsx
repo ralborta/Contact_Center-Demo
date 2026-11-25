@@ -122,6 +122,11 @@ export default function CitasPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 space-x-2 whitespace-nowrap">
+                  {a.interactions?.[0]?.id && (
+                    <a href={`/llamadas/${a.interactions[0].id}`} className="text-primary font-semibold">
+                      Llamada
+                    </a>
+                  )}
                   <button className="text-status-error font-semibold" onClick={() => cancel(a.id, false)}>Cancelar</button>
                   <button className="text-accent font-semibold" onClick={() => cancel(a.id, true)}>Cancelar doctor</button>
                 </td>

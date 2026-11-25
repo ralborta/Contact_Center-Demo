@@ -44,6 +44,14 @@ export default function PacienteFichaPage() {
                   <p className="text-xs text-on-surface-variant">
                     {a.slot ? formatLaPaz(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                   </p>
+                  {a.interactions?.[0] && (
+                    <Link
+                      href={`/llamadas/${a.interactions[0].id}`}
+                      className="text-xs font-semibold text-primary hover:underline mt-1 inline-block"
+                    >
+                      Ver llamada que la originó
+                    </Link>
+                  )}
                 </div>
                 <span className="status-pill bg-primary-100 text-primary h-fit">
                   {APPT_STATUS_LABEL[a.status] || a.status}
