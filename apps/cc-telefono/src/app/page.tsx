@@ -128,16 +128,17 @@ export default function TelefonoPage() {
         throw new Error('Sesión de voz incompleta')
       }
 
-      const dynamicVariables = {
-        caller_phone: callerPhone,
-        telefono: callerPhone,
-        system__caller_id: callerPhone,
-        paciente_nombre_simulado: callerName,
+      const dynamicVariables: Record<string, string> = {
+        caller_phone: String(callerPhone),
+        telefono: String(callerPhone),
+        system__caller_id: String(callerPhone),
+        paciente_nombre_simulado: String(callerName),
       }
 
-      const sessionOpts = session.signedUrl
-        ? { signedUrl: String(session.signedUrl) }
-        : { agentId: String(session.agentId) }
+      // Preferir agentId público: signed URL a veces cierra con "Invalid message".
+      const sessionOpts = session.agentId
+        ? { agentId: String(session.agentId) }
+        : { signedUrl: String(session.signedUrl) }
 
       if (session.conversationId) {
         setConversationId(String(session.conversationId))
@@ -145,7 +146,6 @@ export default function TelefonoPage() {
 
       const conv = await Conversation.startSession({
         ...sessionOpts,
-        connectionType: 'websocket',
         dynamicVariables,
         onConnect: ({ conversationId: id }) => {
           if (id) setConversationId(id)
