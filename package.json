@@ -1,16 +1,16 @@
 {
-  "name": "contact-center-demo",
-  "version": "1.0.0",
+  "name": "citas-hospital",
+  "version": "2.0.0",
   "private": true,
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace=apps/cc-backend && npm run build --workspace=apps/cc-frontend",
+    "test": "npm test --workspace=apps/cc-backend",
     "db:seed": "npm run seed --workspace=apps/cc-backend",
     "dev:backend": "npm run dev --workspace=apps/cc-backend",
-    "dev:worker": "npm run dev --workspace=apps/cc-worker",
     "dev:frontend": "npm run dev --workspace=apps/cc-frontend",
     "prisma:generate": "npm run prisma:generate --workspace=apps/cc-backend",
     "prisma:migrate": "npm run prisma:migrate --workspace=apps/cc-backend",

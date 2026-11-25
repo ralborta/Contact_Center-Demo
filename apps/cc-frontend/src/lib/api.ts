@@ -1,20 +1,15 @@
 import axios, { AxiosInstance } from 'axios'
 import { getToken, clearAuth } from './auth'
 
-// Get API URL - only available on client side
 const getApiUrl = () => {
-  if (typeof window === 'undefined') {
-    return 'http://localhost:3000' // Fallback for SSR (shouldn't happen)
-  }
+  if (typeof window === 'undefined') return 'http://localhost:3000'
   const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-  // Ensure URL has protocol
   if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
     return `https://${url}`
   }
   return url
 }
 
-// Create axios instance lazily to avoid SSR issues
 let apiInstance: AxiosInstance | null = null
 
 export function resetApiInstance() {
@@ -25,598 +20,132 @@ const getApi = (): AxiosInstance => {
   if (!apiInstance) {
     apiInstance = axios.create({
       baseURL: getApiUrl(),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      timeout: 10000, // 10 seconds timeout
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 20000,
     })
-
-    // Request: add JWT
     apiInstance.interceptors.request.use((config) => {
       const token = getToken()
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
+      if (token) config.headers.Authorization = `Bearer ${token}`
       return config
     })
-
-    // Response: 401 -> logout and redirect to login (excepto el propio login)
     apiInstance.interceptors.response.use(
-      (response) => response,
+      (r) => r,
       (error) => {
         const status = error.response?.status
         const reqUrl = String(error.config?.url || '')
-        const isLoginAttempt = reqUrl.includes('/auth/login')
-        if (status === 401 && !isLoginAttempt) {
+        if (status === 401 && !reqUrl.includes('/auth/login')) {
           clearAuth()
           if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
             window.location.href = '/login'
           }
         }
-        console.error('API Error:', error.message)
         return Promise.reject(error)
-      }
+      },
     )
   }
   return apiInstance
 }
 
-export interface Interaction {
-  id: string
-  channel: 'CALL' | 'WHATSAPP' | 'SMS'
-  direction: 'INBOUND' | 'OUTBOUND'
-  status: 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'FAILED'
-  startedAt: string | null
-  endedAt: string | null
-  from: string
-  to: string
-  assignedAgent: string | null
-  outcome: 'RESOLVED' | 'ESCALATED' | 'TICKETED' | 'TRANSFERRED' | 'UNKNOWN' | null
-  intent: string | null
-  provider: string
-  providerConversationId?: string | null
-  createdAt: string
-  updatedAt?: string | null
-  customerRef?: string | null
-  queue?: string | null
-  events?: InteractionEvent[]
-  messages?: Message[]
-  callDetail?: CallDetail
-}
-
-export interface InteractionEvent {
-  id: string
-  type: string
-  ts: string
-  payload: any
-}
-
-export interface Message {
-  id: string
-  text: string | null
-  direction: 'INBOUND' | 'OUTBOUND'
-  sentAt: string | null
-}
-
-export interface CallDetail {
-  id: string
-  elevenCallId: string | null
-  recordingUrl: string | null
-  transcriptText: string | null
-  summary: string | null
-  durationSec: number | null
-}
-
 export const authApi = {
   login: async (username: string, password: string) => {
-    const api = getApi()
-    const { data } = await api.post<{
-      accessToken: string
-      user: { id: string; username: string; profile: string; profileName: string }
-    }>('/api/auth/login', { username, password })
+    const { data } = await getApi().post('/api/auth/login', { username, password })
     return data
   },
+}
+
+export const analyticsApi = {
+  dashboard: async () => (await getApi().get('/api/analytics/dashboard')).data,
+  kpis: async (days = 30) => (await getApi().get('/api/analytics/kpis', { params: { days } })).data,
+}
+
+export const callsApi = {
+  list: async (params?: Record<string, string>) =>
+    (await getApi().get('/api/interactions', { params })).data,
+  get: async (id: string) => (await getApi().get(`/api/interactions/${id}`)).data,
+}
+
+export const specialtiesApi = {
+  list: async () => (await getApi().get('/api/specialties')).data,
+  create: async (body: any) => (await getApi().post('/api/specialties', body)).data,
+  update: async (id: string, body: any) => (await getApi().patch(`/api/specialties/${id}`, body)).data,
+}
+
+export const doctorsApi = {
+  list: async (specialtyId?: string) =>
+    (await getApi().get('/api/doctors', { params: { specialtyId } })).data,
+  get: async (id: string) => (await getApi().get(`/api/doctors/${id}`)).data,
+  create: async (body: any) => (await getApi().post('/api/doctors', body)).data,
+  update: async (id: string, body: any) => (await getApi().patch(`/api/doctors/${id}`, body)).data,
+  agenda: async (id: string, from: string, to: string) =>
+    (await getApi().get(`/api/doctors/${id}/agenda`, { params: { from, to } })).data,
+  setSchedules: async (id: string, schedules: any[]) =>
+    (await getApi().post(`/api/doctors/${id}/schedules`, { schedules })).data,
+  generateSlots: async (id: string, weeks = 4) =>
+    (await getApi().post(`/api/doctors/${id}/generate-slots`, { weeks })).data,
+}
+
+export const patientsApi = {
+  list: async (q?: string) => (await getApi().get('/api/patients', { params: { q } })).data,
+  get: async (id: string) => (await getApi().get(`/api/patients/${id}`)).data,
+  create: async (body: any) => (await getApi().post('/api/patients', body)).data,
+  update: async (id: string, body: any) => (await getApi().patch(`/api/patients/${id}`, body)).data,
+}
+
+export const appointmentsApi = {
+  list: async (params?: Record<string, any>) =>
+    (await getApi().get('/api/appointments', { params })).data,
+  get: async (id: string) => (await getApi().get(`/api/appointments/${id}`)).data,
+  create: async (body: any) => (await getApi().post('/api/appointments', body)).data,
+  reschedule: async (id: string, body: any) =>
+    (await getApi().post(`/api/appointments/${id}/reschedule`, body)).data,
+  cancel: async (id: string, body: any) =>
+    (await getApi().post(`/api/appointments/${id}/cancel`, body)).data,
+  blockDoctor: async (doctorId: string, body: any) =>
+    (await getApi().post(`/api/appointments/doctor/${doctorId}/block`, body)).data,
+  availability: async (params: Record<string, string>) =>
+    (await getApi().get('/api/appointments/availability/search', { params })).data,
+}
+
+export const campaignsApi = {
+  list: async () => (await getApi().get('/api/campaigns')).data,
+  get: async (id: string) => (await getApi().get(`/api/campaigns/${id}`)).data,
+  createReminders: async (hoursAhead = 24) =>
+    (await getApi().post('/api/campaigns/reminders', { hoursAhead })).data,
+  start: async (id: string) => (await getApi().post(`/api/campaigns/${id}/start`)).data,
+  updateJob: async (jobId: string, body: any) =>
+    (await getApi().patch(`/api/campaigns/jobs/${jobId}`, body)).data,
+}
+
+export const agentConfigApi = {
+  get: async () => (await getApi().get('/api/agent-config')).data,
+  update: async (body: any) => (await getApi().patch('/api/agent-config', body)).data,
+}
+
+export const voiceApi = {
+  signedUrl: async () => (await getApi().get('/api/voice/signed-url')).data,
 }
 
 export const usersApi = {
-  getAll: async () => {
-    const api = getApi()
-    const { data } = await api.get('/api/users')
-    return data
-  },
-  getById: async (id: string) => {
-    const api = getApi()
-    const { data } = await api.get(`/api/users/${id}`)
-    return data
-  },
-  create: async (body: { username: string; password: string; profileId: string; active?: boolean }) => {
-    const api = getApi()
-    const { data } = await api.post('/api/users', body)
-    return data
-  },
-  update: async (id: string, body: { password?: string; profileId?: string; active?: boolean }) => {
-    const api = getApi()
-    const { data } = await api.put(`/api/users/${id}`, body)
-    return data
-  },
-  delete: async (id: string) => {
-    const api = getApi()
-    await api.delete(`/api/users/${id}`)
-  },
+  list: async () => (await getApi().get('/api/users')).data,
+  create: async (body: any) => (await getApi().post('/api/users', body)).data,
+  profiles: async () => (await getApi().get('/api/profiles')).data,
 }
 
-export const profilesApi = {
-  getAll: async () => {
-    const api = getApi()
-    const { data } = await api.get('/api/profiles')
-    return data
-  },
-  getById: async (id: string) => {
-    const api = getApi()
-    const { data } = await api.get(`/api/profiles/${id}`)
-    return data
-  },
+export function formatLaPaz(iso: string | Date, opts?: Intl.DateTimeFormatOptions) {
+  const d = typeof iso === 'string' ? new Date(iso) : iso
+  return d.toLocaleString('es-BO', {
+    timeZone: 'America/La_Paz',
+    ...opts,
+  })
 }
 
-export const elevenlabsApi = {
-  sync: async (options?: { syncDetails?: boolean; limit?: number }) => {
-    const api = getApi()
-    const { data } = await api.post('/api/elevenlabs/sync', options ?? { syncDetails: true, limit: 100 })
-    return data
-  },
-  getConfig: async () => {
-    const api = getApi()
-    const { data } = await api.get('/api/elevenlabs/config')
-    return data
-  },
+export const APPT_STATUS_LABEL: Record<string, string> = {
+  RESERVED: 'Reservada',
+  CONFIRMED: 'Confirmada',
+  RESCHEDULED: 'Reprogramada',
+  CANCELLED_BY_PATIENT: 'Cancelada (paciente)',
+  CANCELLED_BY_DOCTOR: 'Cancelada (doctor)',
+  COMPLETED: 'Atendida',
+  NO_SHOW: 'No asistió',
+  NEEDS_RESCHEDULE: 'Requiere reprogramar',
 }
-
-export const interactionsApi = {
-  getAll: async (filters?: {
-    channel?: string
-    direction?: string
-    status?: string
-    dateFrom?: string
-    dateTo?: string
-  }): Promise<Interaction[]> => {
-    // Only execute on client side
-    if (typeof window === 'undefined') {
-      return []
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.get('/api/interactions', { params: filters })
-      return Array.isArray(data) ? data : []
-    } catch (error) {
-      console.error('Error fetching interactions:', error)
-      return [] // Return empty array on error
-    }
-  },
-
-  getById: async (id: string): Promise<Interaction | null> => {
-    // Only execute on client side
-    if (typeof window === 'undefined') {
-      return null
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.get(`/api/interactions/${id}`)
-      
-      // Debug: Log mensajes para verificar qué viene del backend
-      if (data && data.messages) {
-        const inboundCount = data.messages.filter((m: any) => m.direction === 'INBOUND').length;
-        const outboundCount = data.messages.filter((m: any) => m.direction === 'OUTBOUND').length;
-        console.log(`[API] getById: Interaction ${id} - Total messages: ${data.messages.length}, INBOUND: ${inboundCount}, OUTBOUND: ${outboundCount}`, data.messages);
-      }
-      
-      return data
-    } catch (error) {
-      console.error('Error fetching interaction:', error)
-      return null // Return null on error
-    }
-  },
-
-  delete: async (id: string) => {
-    const api = getApi()
-    await api.delete(`/api/interactions/${id}`)
-  },
-
-  getByPhone: async (phone: string): Promise<Interaction[]> => {
-    // Only execute on client side
-    if (typeof window === 'undefined') {
-      return []
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.get('/api/interactions', { 
-        params: { from: phone } 
-      })
-      return Array.isArray(data) ? data : []
-    } catch (error) {
-      console.error('Error fetching interactions by phone:', error)
-      return [] // Return empty array on error
-    }
-  },
-
-  getClientAISummary: async (phone: string): Promise<{
-    summary: string
-    keyPoints: string[]
-    suggestedActions: string[]
-    sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
-    generatedAt: string
-  }> => {
-    if (typeof window === 'undefined') {
-      return {
-        summary: '',
-        keyPoints: [],
-        suggestedActions: [],
-        sentiment: 'NEUTRAL',
-        generatedAt: new Date().toISOString(),
-      }
-    }
-    try {
-      const api = getApi()
-      const decodedPhone = decodeURIComponent(phone)
-      const { data } = await api.get(`/api/interactions/client/${encodeURIComponent(decodedPhone)}/ai-summary`)
-      return data
-    } catch (error) {
-      console.error('Error fetching AI summary:', error)
-      throw error
-    }
-  },
-
-  getClientProfile: async (phone: string): Promise<{
-    phone: string
-    normalizedPhone: string
-    interactions: Interaction[]
-    stats: {
-      totalInteractions: number
-      inboundCalls: number
-      whatsappInteractions: number
-      whatsappMessages: { inbound: number; outbound: number; total: number }
-      smsOtpConfirmed: number
-      resolvedInteractions: number
-      resolvedPercentage: number
-    }
-    lastInteraction: { id: string; channel: string; startedAt: string | null; createdAt: string } | null
-    customerRef: string | null
-  }> => {
-    // Only execute on client side
-    if (typeof window === 'undefined') {
-      return {
-        phone,
-        normalizedPhone: phone,
-        interactions: [],
-        stats: {
-          totalInteractions: 0,
-          inboundCalls: 0,
-          whatsappInteractions: 0,
-          whatsappMessages: { inbound: 0, outbound: 0, total: 0 },
-          smsOtpConfirmed: 0,
-          resolvedInteractions: 0,
-          resolvedPercentage: 0,
-        },
-        lastInteraction: null,
-        customerRef: null,
-      }
-    }
-    try {
-      const api = getApi()
-      // Decodificar el número si está URL-encoded
-      const decodedPhone = decodeURIComponent(phone)
-      const { data } = await api.get(`/api/interactions/client/${encodeURIComponent(decodedPhone)}`)
-      return data
-    } catch (error) {
-      console.error('Error fetching client profile:', error)
-      return {
-        phone,
-        normalizedPhone: phone,
-        interactions: [],
-        stats: {
-          totalInteractions: 0,
-          inboundCalls: 0,
-          whatsappInteractions: 0,
-          whatsappMessages: { inbound: 0, outbound: 0, total: 0 },
-          smsOtpConfirmed: 0,
-          resolvedInteractions: 0,
-          resolvedPercentage: 0,
-        },
-        lastInteraction: null,
-        customerRef: null,
-      }
-    }
-  },
-}
-
-export const smsApi = {
-  send: async (to: string, message: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
-    if (typeof window === 'undefined') {
-      throw new Error('SMS API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post('/api/sms/send', { to, message, customerRef })
-      return data
-    } catch (error) {
-      console.error('Error sending SMS:', error)
-      throw error
-    }
-  },
-
-  sendOtp: async (phone: string, purpose?: string, customerRef?: string): Promise<{ success: boolean; correlationId?: string }> => {
-    if (typeof window === 'undefined') {
-      throw new Error('SMS API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post('/api/sms/otp', { phone, purpose, customerRef })
-      return data
-    } catch (error) {
-      console.error('Error sending OTP:', error)
-      throw error
-    }
-  },
-
-  sendVerificationLink: async (to: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
-    if (typeof window === 'undefined') {
-      throw new Error('SMS API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post('/api/sms/verification-link', { to, customerRef })
-      return data
-    } catch (error) {
-      console.error('Error sending verification link:', error)
-      throw error
-    }
-  },
-
-  sendOnboarding: async (to: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
-    if (typeof window === 'undefined') {
-      throw new Error('SMS API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post('/api/sms/onboarding', { to, customerRef })
-      return data
-    } catch (error) {
-      console.error('Error sending onboarding link:', error)
-      throw error
-    }
-  },
-
-  sendActivateCard: async (to: string, customerRef?: string): Promise<{ success: boolean; messageId?: string }> => {
-    if (typeof window === 'undefined') {
-      throw new Error('SMS API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post('/api/sms/activate-card', { to, customerRef })
-      return data
-    } catch (error) {
-      console.error('Error sending activate card SMS:', error)
-      throw error
-    }
-  },
-}
-
-export const whatsappApi = {
-  send: async (
-    providerConversationId: string,
-    to: string,
-    text: string,
-    assignedAgent?: string
-  ): Promise<{ success: boolean; messageId?: string; interactionId?: string }> => {
-    if (typeof window === 'undefined') {
-      throw new Error('WhatsApp API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post('/api/whatsapp/send', {
-        providerConversationId,
-        to,
-        text,
-        assignedAgent,
-      })
-      return data
-    } catch (error) {
-      console.error('Error sending WhatsApp message:', error)
-      throw error
-    }
-  },
-}
-
-export const customersApi = {
-  getAll: async (filters?: {
-    status?: string
-    segment?: string
-    search?: string
-    limit?: number
-    skip?: number
-  }) => {
-    if (typeof window === 'undefined') {
-      return { customers: [], total: 0, limit: 100, skip: 0 }
-    }
-    try {
-      const api = getApi()
-      const params = new URLSearchParams()
-      if (filters?.status) params.append('status', filters.status)
-      if (filters?.segment) params.append('segment', filters.segment)
-      if (filters?.search) params.append('search', filters.search)
-      if (filters?.limit) params.append('limit', filters.limit.toString())
-      if (filters?.skip) params.append('skip', filters.skip.toString())
-      
-      const { data } = await api.get(`/api/customers?${params.toString()}`)
-      return data
-    } catch (error) {
-      console.error('Error fetching customers:', error)
-      throw error
-    }
-  },
-
-  getByPhone: async (phone: string) => {
-    if (typeof window === 'undefined') {
-      return null
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.get(`/api/customers/phone/${encodeURIComponent(phone)}`)
-      return data
-    } catch (error) {
-      console.error('Error fetching customer by phone:', error)
-      return null
-    }
-  },
-
-  getById: async (id: string) => {
-    if (typeof window === 'undefined') {
-      return null
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.get(`/api/customers/${id}`)
-      return data
-    } catch (error) {
-      console.error('Error fetching customer:', error)
-      throw error
-    }
-  },
-
-  create: async (data: {
-    phone: string
-    name?: string
-    email?: string
-    dni?: string
-    status?: string
-    segment?: string
-    preferredChannel?: string
-  }) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data: result } = await api.post('/api/customers', data)
-      return result
-    } catch (error) {
-      console.error('Error creating customer:', error)
-      throw error
-    }
-  },
-
-  update: async (id: string, data: {
-    name?: string
-    email?: string
-    dni?: string
-    status?: string
-    segment?: string
-    preferredChannel?: string
-  }) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data: result } = await api.put(`/api/customers/${id}`, data)
-      return result
-    } catch (error) {
-      console.error('Error updating customer:', error)
-      throw error
-    }
-  },
-
-  delete: async (id: string) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.delete(`/api/customers/${id}`)
-      return data
-    } catch (error) {
-      console.error('Error deleting customer:', error)
-      throw error
-    }
-  },
-
-  block: async (id: string) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post(`/api/customers/${id}/block`, {})
-      return data
-    } catch (error) {
-      console.error('Error blocking customer:', error)
-      throw error
-    }
-  },
-
-  addTag: async (id: string, tag: {
-    type: string
-    label: string
-    description?: string
-    color?: string
-  }) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post(`/api/customers/${id}/tags`, tag)
-      return data
-    } catch (error) {
-      console.error('Error adding tag:', error)
-      throw error
-    }
-  },
-
-  removeTag: async (id: string, tagId: string) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.delete(`/api/customers/${id}/tags/${tagId}`)
-      return data
-    } catch (error) {
-      console.error('Error removing tag:', error)
-      throw error
-    }
-  },
-
-  addNote: async (id: string, note: {
-    title?: string
-    content: string
-    isInternal?: boolean
-  }) => {
-    if (typeof window === 'undefined') {
-      throw new Error('Customers API only available on client side')
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.post(`/api/customers/${id}/notes`, note)
-      return data
-    } catch (error) {
-      console.error('Error adding note:', error)
-      throw error
-    }
-  },
-
-  getStats: async (id: string) => {
-    if (typeof window === 'undefined') {
-      return null
-    }
-    try {
-      const api = getApi()
-      const { data } = await api.get(`/api/customers/${id}/stats`)
-      return data
-    } catch (error) {
-      console.error('Error fetching customer stats:', error)
-      throw error
-    }
-  },
-}
-
-export default getApi

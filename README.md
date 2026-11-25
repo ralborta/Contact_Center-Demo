@@ -1,435 +1,54 @@
-# Contact Center - Backend API
+# Centro de Citas Médicas — Hospital Central La Paz
 
-Backend para Centro de Gestión de Contact Center Bancario con soporte para llamadas (ElevenLabs), WhatsApp (builderbot.cloud) y SMS transaccional (Twilio).
+Producto de demos en la rama **`citas-hospital`**: call center de citas por teléfono con agente de voz y consola de gestión hospitalaria (Bolivia, español, Bs, `America/La_Paz`).
 
-## Stack Tecnológico
+> Esta rama **no** es el contact center bancario. No mergear a `master` sin revisión explícita.
 
-- **Runtime**: Node.js + TypeScript
-- **Framework**: NestJS
-- **ORM**: Prisma
-- **Base de Datos**: PostgreSQL
-- **Cola de Trabajos**: Redis + BullMQ
-- **Documentación**: Swagger OpenAPI
-- **Logging**: Winston (JSON estructurado)
+## Stack
 
-## Estructura del Proyecto
+- `apps/cc-frontend` — consola Next.js
+- `apps/cc-backend` — API NestJS + Prisma
+- `prisma/` — PostgreSQL
 
-```
-/
-  apps/
-    cc-backend/          # API NestJS
-    cc-worker/           # Worker BullMQ para procesar jobs SMS
-  packages/
-    core/                # Dominio y utilidades (PII masking, enums)
-    adapters/            # Integraciones: ElevenLabs, BuilderBot, Twilio
-  prisma/
-    schema.prisma        # Schema de base de datos
-  docker/
-    docker-compose.yml   # Postgres + Redis local
-```
+Deploy: **Easypanel** (web + api + Postgres). Ver [README_DEPLOY.md](./README_DEPLOY.md).
 
-## Configuración Local
+Agente de voz: [docs/elevenlabs-agent.md](./docs/elevenlabs-agent.md).
 
-### Prerrequisitos
-
-- Node.js 18+
-- Docker y Docker Compose
-- npm o yarn
-
-### Pasos
-
-1. **Clonar e instalar dependencias**
+## Desarrollo local
 
 ```bash
-npm install
-```
-
-2. **Configurar variables de entorno**
-
-Copia `.env.example` a `.env` y completa las variables:
-
-```bash
-cp .env.example .env
-```
-
-Variables importantes:
-- `DATABASE_URL`: URL de conexión a PostgreSQL
-- `REDIS_HOST`, `REDIS_PORT`: Configuración de Redis
-- `JWT_SECRET`: Clave secreta para firmar tokens JWT (ej. una cadena aleatoria larga). Obligatoria en producción.
-- `JWT_EXPIRES_IN`: (opcional) Expiración del token, ej. `7d` (por defecto).
-- `CORS_ORIGIN`: (opcional) Para frontend en Vercel, ej. `https://tu-proyecto.vercel.app`. Ver sección Railway más abajo.
-- `ELEVENLABS_WEBHOOK_TOKEN`: Token para validar webhooks de ElevenLabs
-- `BUILDERBOT_WEBHOOK_TOKEN`, `BUILDERBOT_API_URL`, `BUILDERBOT_API_KEY`: Configuración de builderbot
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`: Credenciales de Twilio
-- `OTP_TTL_SECONDS`, `OTP_MAX_ATTEMPTS`, `OTP_RATE_LIMIT_*`: Configuración de OTP
-
-3. **Levantar servicios con Docker**
-
-```bash
-cd docker
-docker-compose up -d
-```
-
-Esto levanta:
-- PostgreSQL en puerto 5432
-- Redis en puerto 6379
-
-4. **Generar cliente Prisma**
-
-```bash
-npm run prisma:generate
-```
-
-5. **Ejecutar migraciones**
-
-```bash
-npm run prisma:migrate
-```
-
-6. **Crear perfiles y usuario admin inicial (seed)**
-
-```bash
+# Postgres local y:
+export DATABASE_URL=postgresql://citas:citas@localhost:5432/citas_hospital?schema=public
+npx prisma migrate deploy --schema=prisma/schema.prisma
 npm run db:seed
+npm run dev:backend   # :3000
+npm run dev:frontend  # :3001 (o next default)
 ```
 
-Esto crea los perfiles **ADMIN**, **AGENT** y **VIEWER**, y un usuario `admin` con contraseña `Admin123!`. **Cambiar la contraseña** después del primer acceso.
+Login seed: usuario `admin` con contraseña definida en `SEED_ADMIN_PASSWORD` (ver `env.example`).
 
-7. **Iniciar backend**
+## API del agente (resumen)
 
-En una terminal:
-```bash
-npm run dev:backend
-```
+| Endpoint | Uso |
+|---|---|
+| `POST /api/agent/identificar-paciente` | Teléfono/CI |
+| `GET  /api/agent/especialidades` | Listado |
+| `POST /api/agent/buscar-doctores` | Por especialidad/nombre |
+| `POST /api/agent/disponibilidad` | Slots libres |
+| `POST /api/agent/reservar` | Reserva atómica |
+| `POST /api/agent/citas-paciente` | Citas activas |
+| `POST /api/agent/reprogramar` | Cambio de slot |
+| `POST /api/agent/cancelar` | Cancelación paciente |
+| `POST /api/webhooks/voice/call-init` | Variables dinámicas |
+| `POST /api/webhooks/voice/post-call` | Transcripción/resumen |
 
-En otra terminal (para el worker):
-```bash
-npm run dev:worker
-```
+Auth: header `X-Agent-Secret`.
 
-El API estará disponible en `http://localhost:3000`
-La documentación Swagger en `http://localhost:3000/api/docs`
-
-**Autenticación:** La consola (frontend) y la mayoría de endpoints requieren login. Use `POST /api/auth/login` con `{ "username": "admin", "password": "Admin123!" }` para obtener el JWT y enviarlo en el header `Authorization: Bearer <token>`. El perfil **ADMIN** puede ver todos los registros, borrarlos y gestionar usuarios y perfiles en `/usuarios`.
-
-## Deploy en Railway
-
-**Redeploy tras un push:** Si el repo está conectado a Railway, cada `git push` suele disparar un deploy automático. Si no se desplegó:
-1. Entrá a [railway.app](https://railway.app) → tu proyecto → servicio **cc-backend**.
-2. Pestaña **Deployments** → **Deploy** o **Redeploy** (o en **Settings** → **Redeploy**).
-3. Si agregaste tablas (User, Profile), las migraciones se ejecutan al arrancar el backend. Después ejecutá el seed desde tu máquina: `railway run --service cc-backend npm run seed` (con Railway CLI vinculado al proyecto), o creá el usuario admin desde la API/consola.
-
-### 1. Crear Proyecto en Railway
-
-1. Ve a [Railway](https://railway.app) y crea una cuenta
-2. Crea un nuevo proyecto
-3. Conecta tu repositorio Git
-
-### 2. Agregar Servicios de Base de Datos
-
-#### PostgreSQL
-
-1. En tu proyecto Railway, haz clic en "New" → "Database" → "Add PostgreSQL"
-2. Railway creará automáticamente una instancia de PostgreSQL
-3. Copia la variable `DATABASE_URL` que Railway genera automáticamente
-
-#### Redis
-
-1. En tu proyecto Railway, haz clic en "New" → "Database" → "Add Redis"
-2. Railway creará automáticamente una instancia de Redis
-3. Copia las variables `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` que Railway genera
-
-### 3. Configurar Variables de Entorno
-
-En Railway, ve a tu proyecto → "Variables" y agrega todas las variables del `.env.example`:
-
-**Base de datos y Redis:**
-- `DATABASE_URL`: (generado automáticamente por Railway para PostgreSQL)
-- `REDIS_HOST`: (generado automáticamente por Railway para Redis)
-- `REDIS_PORT`: (generado automáticamente por Railway para Redis)
-- `REDIS_PASSWORD`: (generado automáticamente por Railway para Redis)
-
-**App:**
-- `APP_PORT=3000`
-- `JWT_SECRET`: Clave secreta para JWT (generar con `openssl rand -base64 64`). **Obligatoria** para que el login funcione.
-- `CORS_ORIGIN`: Orígenes permitidos para CORS, separados por coma. Si el frontend está en **Vercel**, poné la URL (ej. `https://tu-proyecto.vercel.app`). Cualquier `*.vercel.app` también se permite. Si no se define, se permiten todos los orígenes.
-
-**ElevenLabs:**
-- `ELEVENLABS_WEBHOOK_TOKEN`: Tu token de webhook de ElevenLabs
-- `ELEVENLABS_PROVIDER_NAME=elevenlabs`
-
-**BuilderBot:**
-- `BUILDERBOT_WEBHOOK_TOKEN`: Token para validar webhooks
-- `BUILDERBOT_API_URL`: URL de la API de builderbot (ej: `https://api.builderbot.cloud`)
-- `BUILDERBOT_API_KEY`: API key de builderbot
-
-**Twilio:**
-- `TWILIO_ACCOUNT_SID`: Tu Account SID de Twilio
-- `TWILIO_AUTH_TOKEN`: Tu Auth Token de Twilio
-- `TWILIO_FROM_NUMBER`: Número de teléfono de Twilio (formato: `+1234567890`)
-- `TWILIO_WEBHOOK_TOKEN`: Token para validar webhooks de Twilio
-
-**OTP:**
-- `OTP_TTL_SECONDS=300` (5 minutos)
-- `OTP_MAX_ATTEMPTS=5`
-- `OTP_RATE_LIMIT_WINDOW_SECONDS=900` (15 minutos)
-- `OTP_RATE_LIMIT_MAX=3`
-
-**PII:**
-- `PII_MASKING_ENABLED=true`
-
-### 4. Deploy del Backend (API)
-
-1. En Railway, haz clic en "New" → "GitHub Repo" (o conecta tu repo)
-2. Selecciona el directorio raíz del proyecto (o `apps/cc-backend` si Railway lo permite)
-3. Railway detectará automáticamente que es un proyecto Node.js
-4. Si usas el directorio raíz, Railway usará el `railway.json` o puedes configurar manualmente:
-   - **Root Directory**: `apps/cc-backend` (si Railway lo permite)
-   - **Build Command**: `npm install && npm run build --workspace=apps/cc-backend`
-   - **Start Command**: `cd apps/cc-backend && node dist/main.js`
-5. Railway generará automáticamente un dominio público (ej: `your-app.up.railway.app`)
-6. Guarda este dominio para configurar los webhooks
-
-**Nota**: Si Railway no detecta correctamente el workspace, puedes crear un servicio separado apuntando a `apps/cc-backend` o usar el `railway.json` en la raíz.
-
-### 5. Deploy del Worker
-
-1. En Railway, dentro del mismo proyecto, haz clic en "New" → "GitHub Repo" (o "New Service")
-2. Selecciona el mismo repositorio pero apunta al directorio `apps/cc-worker`
-3. Configura el comando de build:
-   - **Root Directory**: `apps/cc-worker` (si Railway lo permite)
-   - **Build Command**: `npm install && npm run build --workspace=apps/cc-worker`
-   - **Start Command**: `cd apps/cc-worker && node dist/worker.js`
-4. **IMPORTANTE**: Asegúrate de que tenga acceso a las mismas variables de entorno (DATABASE_URL, REDIS_*, etc.)
-   - En Railway, puedes compartir variables entre servicios del mismo proyecto
-
-### 6. Ejecutar Migraciones
-
-Antes de que el backend esté completamente funcional, necesitas ejecutar las migraciones de Prisma:
-
-1. En Railway, ve a tu servicio del backend
-2. Abre la pestaña "Deployments"
-3. Haz clic en el deployment más reciente → "View Logs"
-4. O puedes usar Railway CLI:
+## Tests
 
 ```bash
-railway run --service cc-backend npx prisma migrate deploy
+export DATABASE_URL=...
+npm test --workspace=apps/cc-backend
 ```
 
-O conectarte vía SSH y ejecutar:
-
-```bash
-railway shell
-cd apps/cc-backend
-npx prisma migrate deploy
-```
-
-### 7. Configurar Webhooks
-
-Una vez que tengas el dominio público de Railway (ej: `https://your-app.up.railway.app`), configura los webhooks:
-
-#### ElevenLabs
-
-1. Ve a la configuración de Webhook Tools en ElevenLabs
-2. URL: `https://your-app.up.railway.app/api/webhooks/elevenlabs/call`
-3. Header: `X-Webhook-Token: <tu ELEVENLABS_WEBHOOK_TOKEN>`
-
-#### BuilderBot
-
-1. Ve a la configuración de webhooks en builderbot.cloud
-2. URL: `https://your-app.up.railway.app/webhooks/builderbot/whatsapp`
-3. Header: `X-Webhook-Token: <tu BUILDERBOT_WEBHOOK_TOKEN>`
-
-#### Twilio (Status Callback)
-
-1. En Twilio Console, configura el status callback URL para tus mensajes SMS
-2. URL: `https://your-app.up.railway.app/webhooks/twilio/sms/status`
-3. Header: `X-Webhook-Token: <tu TWILIO_WEBHOOK_TOKEN>` (opcional, Twilio también puede usar firma)
-
-### 8. Verificar Deploy
-
-1. Verifica que el backend esté corriendo:
-   ```bash
-   curl https://your-app.up.railway.app/api/health
-   ```
-
-2. Verifica Swagger:
-   - Abre `https://your-app.up.railway.app/api/docs`
-
-3. Verifica logs:
-   - En Railway, ve a cada servicio → "View Logs"
-
-## Endpoints Principales
-
-### Health
-- `GET /api/health` - Health check (público)
-
-### Auth
-- `POST /api/auth/login` - Login con usuario y contraseña; devuelve JWT y datos del usuario. Resto de endpoints requieren `Authorization: Bearer <token>`.
-
-### Users (solo perfil ADMIN)
-- `GET /api/users` - Listar usuarios
-- `POST /api/users` - Crear usuario
-- `GET /api/users/:id` - Obtener usuario
-- `PUT /api/users/:id` - Actualizar usuario
-- `DELETE /api/users/:id` - Eliminar usuario
-
-### Profiles
-- `GET /api/profiles` - Listar perfiles (ADMIN, AGENT, VIEWER)
-
-### Interactions
-- `GET /api/interactions` - Listar interacciones (con filtros)
-- `GET /api/interactions/:id` - Detalle de interacción
-- `DELETE /api/interactions/:id` - Eliminar interacción (solo ADMIN)
-
-### OTP
-- `POST /api/otp` - Crear OTP challenge y encolar envío SMS
-- `POST /api/otp/verify` - Verificar código OTP
-
-### Webhooks
-- `POST /api/webhooks/elevenlabs/call` - Webhook de llamadas ElevenLabs
-- `POST /webhooks/builderbot/whatsapp` - Webhook de WhatsApp builderbot
-- `POST /webhooks/twilio/sms/status` - Webhook de status SMS Twilio
-
-## Modelo de Datos
-
-### Interaction
-Registra todas las interacciones (llamadas, WhatsApp, SMS) con estado, timestamps, agente asignado, etc.
-
-### InteractionEvent
-Eventos asociados a cada interacción (raw JSONB + normalizado).
-
-### Message
-Mensajes individuales dentro de una interacción (WhatsApp, SMS).
-
-### CallDetail
-Detalles específicos de llamadas: grabación, transcripción, duración.
-
-### OtpChallenge
-Desafíos OTP para autenticación/verificación con rate limiting y expiración.
-
-### AuditLog
-Logs de auditoría para todas las acciones importantes.
-
-## Seguridad
-
-- **Webhooks**: Validación de tokens en todos los webhooks
-- **Idempotencia**: Los eventos tienen `idempotencyKey` único
-- **PII Masking**: Por defecto se enmascaran teléfonos en listados (configurable)
-- **Rate Limiting**: OTP tiene rate limiting por teléfono + propósito
-- **Audit Logs**: Todas las acciones críticas se registran
-
-## Desarrollo
-
-### Scripts Disponibles
-
-```bash
-# Desarrollo
-npm run dev:backend    # Iniciar backend en modo watch
-npm run dev:worker     # Iniciar worker en modo watch
-
-# Build
-npm run build          # Build de todos los workspaces
-
-# Prisma
-npm run prisma:generate  # Generar cliente Prisma
-npm run prisma:migrate   # Ejecutar migraciones
-npm run prisma:studio    # Abrir Prisma Studio
-```
-
-### Estructura de Adapters
-
-Los adapters en `packages/adapters` normalizan los payloads de diferentes proveedores:
-
-- **ElevenLabsAdapter**: Normaliza eventos de llamadas (tolerante a diferentes formatos)
-- **BuilderBotAdapter**: Normaliza mensajes WhatsApp y permite enviar mensajes
-- **TwilioAdapter**: Envía SMS y normaliza status callbacks
-
-## Notas Importantes
-
-1. **Worker separado**: El worker BullMQ debe correr en un proceso separado (servicio separado en Railway)
-2. **Migraciones**: Ejecutar migraciones antes del primer deploy
-3. **Variables de entorno**: Todas las variables deben estar configuradas en Railway
-4. **HTTPS**: Railway proporciona HTTPS automáticamente
-5. **Logs**: Los logs están en formato JSON estructurado para fácil parsing
-
-## Troubleshooting
-
-### El worker no procesa jobs
-- Verifica que Redis esté conectado correctamente
-- Verifica las variables `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
-- Revisa los logs del worker en Railway
-
-### Webhooks no llegan
-- Verifica que el dominio público esté correcto
-- Verifica que el token en el header coincida con la variable de entorno
-- Revisa los logs del backend para ver errores de autenticación
-
-### OTP no se envía
-- Verifica credenciales de Twilio
-- Verifica que el worker esté corriendo
-- Revisa los logs del worker para errores de Twilio
-
-## Despliegue en Vercel (Frontend)
-
-**Redeploy tras un push:** Con el repo conectado, un `git push` suele generar un deploy automático. Si no:
-1. Entrá a [vercel.com](https://vercel.com) → tu proyecto (Contact_Center-Demo o el que sea).
-2. Pestaña **Deployments** → en el último deployment, los tres puntos **⋯** → **Redeploy**, o **Deploy** desde la pestaña **Git**.
-
-### 1. Crear Proyecto en Vercel
-
-1. Ve a [Vercel](https://vercel.com) y crea una cuenta
-2. Haz clic en "Add New" → "Project"
-3. Conecta tu repositorio GitHub: `ralborta/Contact_Center-Demo`
-4. Vercel detectará automáticamente que es un proyecto Next.js
-
-### 2. Configurar el Proyecto
-
-1. **Root Directory**: Selecciona `apps/cc-frontend`
-2. **Framework Preset**: Next.js (debería detectarse automáticamente)
-3. **Build Command**: `npm install && npm run build` (o dejar por defecto)
-4. **Output Directory**: `.next` (por defecto)
-
-### 3. Configurar Variables de Entorno
-
-En Vercel, ve a "Settings" → "Environment Variables" y agrega:
-
-```bash
-NEXT_PUBLIC_API_URL=https://tu-backend-railway.up.railway.app
-```
-
-**Importante**: Reemplaza `https://tu-backend-railway.up.railway.app` con la URL real de tu backend en Railway.
-
-### 4. Deploy
-
-1. Haz clic en "Deploy"
-2. Vercel construirá y desplegará automáticamente
-3. Obtendrás una URL como: `https://tu-proyecto.vercel.app`
-
-### 5. Verificar
-
-1. Abre la URL de Vercel
-2. Deberías ver el dashboard del Contact Center
-3. El dashboard consumirá datos de tu API en Railway
-
-## Desarrollo Local del Frontend
-
-```bash
-# Instalar dependencias
-cd apps/cc-frontend
-npm install
-
-# Configurar .env.local
-echo "NEXT_PUBLIC_API_URL=http://localhost:3000" > .env.local
-
-# Iniciar servidor de desarrollo
-npm run dev
-```
-
-El frontend estará disponible en `http://localhost:3001` (o el puerto que Next.js asigne)
-
-## Próximos Pasos
-
-- [x] Implementar UI en Next.js (Vercel) consumiendo esta API
-- [ ] Agregar autenticación JWT para endpoints de consola
-- [ ] Implementar métricas agregadas (endpoints de dashboard)
-- [ ] Agregar más validaciones y tests
+Cubre disponibilidad, doble reserva, reprogramar y cancelación por doctor.

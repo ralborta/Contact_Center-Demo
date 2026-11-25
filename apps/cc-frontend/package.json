@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@elevenlabs/client": "^1.38.0",
     "axios": "^1.7.0",
     "lucide-react": "^0.562.0",
     "next": "^14.2.0",

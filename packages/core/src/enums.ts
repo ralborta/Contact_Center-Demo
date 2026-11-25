@@ -1,7 +1,5 @@
 export enum Channel {
   CALL = 'CALL',
-  WHATSAPP = 'WHATSAPP',
-  SMS = 'SMS',
 }
 
 export enum Direction {
@@ -20,36 +18,47 @@ export enum InteractionStatus {
 export enum Outcome {
   RESOLVED = 'RESOLVED',
   ESCALATED = 'ESCALATED',
-  TICKETED = 'TICKETED',
   TRANSFERRED = 'TRANSFERRED',
+  NO_ANSWER = 'NO_ANSWER',
+  VOICEMAIL = 'VOICEMAIL',
   UNKNOWN = 'UNKNOWN',
 }
 
 export enum Provider {
-  ELEVENLABS = 'ELEVENLABS',
-  BUILDERBOT = 'BUILDERBOT',
-  TWILIO = 'TWILIO',
+  VOICE_AGENT = 'VOICE_AGENT',
   GENERIC = 'GENERIC',
-}
-
-export enum OtpPurpose {
-  PASSWORD_RESET = 'PASSWORD_RESET',
-  TX_CONFIRMATION = 'TX_CONFIRMATION',
-  IDENTITY_VERIFICATION = 'IDENTITY_VERIFICATION',
-  LOGIN_2FA = 'LOGIN_2FA',
-}
-
-export enum OtpStatus {
-  PENDING = 'PENDING',
-  SENT = 'SENT',
-  VERIFIED = 'VERIFIED',
-  EXPIRED = 'EXPIRED',
-  LOCKED = 'LOCKED',
-  FAILED = 'FAILED',
 }
 
 export enum ActorType {
   USER = 'USER',
   SYSTEM = 'SYSTEM',
   AGENT = 'AGENT',
+  PATIENT = 'PATIENT',
+  DOCTOR = 'DOCTOR',
+}
+
+export enum AppointmentStatus {
+  RESERVED = 'RESERVED',
+  CONFIRMED = 'CONFIRMED',
+  RESCHEDULED = 'RESCHEDULED',
+  CANCELLED_BY_PATIENT = 'CANCELLED_BY_PATIENT',
+  CANCELLED_BY_DOCTOR = 'CANCELLED_BY_DOCTOR',
+  COMPLETED = 'COMPLETED',
+  NO_SHOW = 'NO_SHOW',
+  NEEDS_RESCHEDULE = 'NEEDS_RESCHEDULE',
+}
+
+export enum ChangeOrigin {
+  PATIENT = 'PATIENT',
+  DOCTOR = 'DOCTOR',
+  VOICE_AGENT = 'VOICE_AGENT',
+  OPERATOR = 'OPERATOR',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum SlotStatus {
+  FREE = 'FREE',
+  RESERVED = 'RESERVED',
+  BLOCKED = 'BLOCKED',
+  EXPIRED = 'EXPIRED',
 }

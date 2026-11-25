@@ -1,36 +1,55 @@
+# Desarrollo local / referencia Easypanel
+# En Easypanel: servicios web + api + postgres (+ redis opcional)
 version: '3.8'
 
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: cc-postgres
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: contact_center
+      POSTGRES_USER: citas
+      POSTGRES_DB: citas_hospital
+      # Definir en el entorno local; no hardcodear credenciales en el repo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U citas -d citas_hospital"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: cc-redis
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      AGENT_API_SECRET: ${AGENT_API_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      RUN_SEED: ${RUN_SEED:-true}
+      APP_PORT: "3000"
+      TZ: America/La_Paz
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    environment:
+      PORT: "3000"
+    ports:
+      - "3001:3000"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
-  redis_data:
