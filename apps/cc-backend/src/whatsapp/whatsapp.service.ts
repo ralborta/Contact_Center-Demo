@@ -91,6 +91,7 @@ export class WhatsappService {
   }
 
   async metrics() {
+    const active = { archived: false };
     const [
       confirmed,
       cancelled,
@@ -100,20 +101,25 @@ export class WhatsappService {
       doctorChanges,
     ] = await Promise.all([
       this.prisma.whatsappConversation.count({
-        where: { status: WhatsappChatStatus.CONFIRMED },
+        where: { ...active, status: WhatsappChatStatus.CONFIRMED },
       }),
       this.prisma.whatsappConversation.count({
-        where: { status: WhatsappChatStatus.CANCELLED },
+        where: { ...active, status: WhatsappChatStatus.CANCELLED },
       }),
       this.prisma.whatsappConversation.count({
-        where: { status: WhatsappChatStatus.RESCHEDULED },
+        where: { ...active, status: WhatsappChatStatus.RESCHEDULED },
       }),
       this.prisma.whatsappConversation.count({
-        where: { status: WhatsappChatStatus.PENDING },
+        where: { ...active, status: WhatsappChatStatus.PENDING },
       }),
-      this.prisma.whatsappConversation.count(),
+      this.prisma.whatsappConversation.count({ where: active }),
       this.prisma.appointmentChange.count({
-        where: { origin: ChangeOrigin.DOCTOR },
+        where: {
+          origin: ChangeOrigin.DOCTOR,
+          appointment: {
+            whatsappConversation: { is: { archived: false } },
+          },
+        },
       }),
     ]);
     return {
@@ -390,7 +396,10 @@ export class WhatsappService {
 
   async listConversations(status?: WhatsappChatStatus) {
     return this.prisma.whatsappConversation.findMany({
-      where: status ? { status } : undefined,
+      where: {
+        archived: false,
+        ...(status ? { status } : {}),
+      },
       include: {
         patient: true,
         appointment: {
@@ -404,6 +413,12 @@ export class WhatsappService {
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
       take: 100,
     });
+  }
+
+  private pickReply(pool: string[], salt: string) {
+    let h = 0;
+    for (let i = 0; i < salt.length; i++) h = (h * 31 + salt.charCodeAt(i)) >>> 0;
+    return pool[h % pool.length];
   }
 
   async getConversation(id: string) {
@@ -708,7 +723,15 @@ export class WhatsappService {
       await this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.INBOUND,
-        body: 'Sí, confirmo mi cita. Ahí estaré, gracias.',
+        body: this.pickReply(
+          [
+            'Sí, confirmo mi cita. Ahí estaré, gracias.',
+            'CONFIRMAR. Todo bien, nos vemos ese día.',
+            'Dale, confirmo. Gracias por el recordatorio.',
+            'Sí, confirmo asistencia. ¡Gracias!',
+          ],
+          conv.id + ':confirm',
+        ),
         responded: true,
       });
       await this.appointments.confirmByPatient({
@@ -719,7 +742,14 @@ export class WhatsappService {
       return this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.OUTBOUND,
-        body: `Perfecto, ${conv.patient.firstName}. Tu cita quedó confirmada. Te esperamos.`,
+        body: this.pickReply(
+          [
+            `Perfecto, ${conv.patient.firstName}. Tu cita quedó confirmada. Te esperamos.`,
+            `Listo, ${conv.patient.firstName}. Quedó confirmada. ¡Hasta pronto!`,
+            `Gracias, ${conv.patient.firstName}. Anotamos tu confirmación. Te esperamos.`,
+          ],
+          conv.id + ':confirm-out',
+        ),
         status: WhatsappChatStatus.CONFIRMED,
       });
     }
@@ -728,7 +758,15 @@ export class WhatsappService {
       await this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.INBOUND,
-        body: 'No voy a poder asistir, por favor cancelen la cita.',
+        body: this.pickReply(
+          [
+            'No voy a poder asistir, por favor cancelen la cita.',
+            'CANCELAR. Surgió un imprevisto y no puedo ir.',
+            'Mejor cancelen, no me va a dar el tiempo. Gracias.',
+            'No puedo ir esa fecha, cancelen por favor.',
+          ],
+          conv.id + ':cancel',
+        ),
         responded: true,
       });
       if (
@@ -754,7 +792,15 @@ export class WhatsappService {
       await this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.INBOUND,
-        body: 'Necesito cambiar el horario, ¿qué otras opciones tienen?',
+        body: this.pickReply(
+          [
+            'Necesito cambiar el día, ¿qué otras opciones tienen?',
+            'CAMBIAR. Ese horario no me sirve, ¿hay otro día?',
+            '¿Pueden pasarme otras fechas? Me surgió un compromiso.',
+            'Quiero reprogramar para otro día si es posible.',
+          ],
+          conv.id + ':ask-change',
+        ),
         responded: true,
       });
       const options = await this.findAlternativeSlots({
@@ -789,7 +835,14 @@ export class WhatsappService {
     await this.appendMessage({
       conversationId: conv.id,
       direction: WhatsappMessageDirection.INBOUND,
-      body: `Me sirve el de ${fecha} a las ${hora}, por favor.`,
+      body: this.pickReply(
+        [
+          `Me sirve el de ${fecha} a las ${hora}, por favor.`,
+          `La opción del ${fecha} a las ${hora} me viene bien.`,
+          `Elegí el ${fecha} · ${hora}. Gracias.`,
+        ],
+        conv.id + ':pick',
+      ),
       responded: true,
     });
     await this.appointments.reschedule({
@@ -856,51 +909,117 @@ export class WhatsappService {
     });
   }
 
+  private static readonly SEED_TAG = 'SEED:bandeja-demo-v2';
+
   /**
-   * Siembra conversaciones demo realistas (idempotente).
-   * No usa datos personales reales; solo pacientes de la DB.
+   * Siembra conversaciones demo variadas (idempotente, no destructiva).
+   * Archiva duplicados de prueba de Juan Pérez sin borrarlos.
+   * Objetivo: ≥3 reprogramadas, ≥3 confirmadas, ≥2 canceladas paciente,
+   * ≥2 cambios por doctor, ≥2 sin respuesta — pacientes distintos.
    */
   async seedDemoConversations() {
-    const existing = await this.prisma.whatsappConversation.count();
-    if (existing >= 6) {
-      return { ok: true, created: 0, existing };
-    }
-
+    const archivedJuan = await this.archiveJuanPerezDuplicates();
     const config = await this.getConfig();
     const now = new Date();
-    let created = 0;
     const errors: string[] = [];
+    let created = 0;
 
-    const patients = await this.prisma.patient.findMany({
-      take: 12,
-      orderBy: { lastName: 'asc' },
+    const active = await this.prisma.whatsappConversation.findMany({
+      where: { archived: false },
+      include: {
+        patient: true,
+        messages: { select: { body: true, direction: true } },
+      },
     });
-    if (!patients.length) {
-      return { ok: false, created: 0, existing, error: 'Sin pacientes' };
+
+    const isDoctorKind = (c: { messages: Array<{ body: string }> }) =>
+      c.messages.some(
+        (m) => m.body === 'KIND:DOCTOR_CANCEL' || m.body === 'KIND:DOCTOR_RESCHEDULE',
+      );
+
+    const counts = {
+      confirmed: active.filter((c) => c.status === WhatsappChatStatus.CONFIRMED).length,
+      cancelled: active.filter((c) => c.status === WhatsappChatStatus.CANCELLED).length,
+      rescheduled: active.filter((c) => c.status === WhatsappChatStatus.RESCHEDULED).length,
+      pendingConfirm: active.filter(
+        (c) => c.status === WhatsappChatStatus.PENDING && !isDoctorKind(c),
+      ).length,
+      doctorPending: active.filter(
+        (c) => c.status === WhatsappChatStatus.PENDING && isDoctorKind(c),
+      ).length,
+    };
+
+    const need: Array<{
+      kind: 'confirm' | 'cancel' | 'reschedule' | 'pending' | 'doctor_cancel' | 'doctor_reschedule';
+    }> = [];
+    for (let i = counts.rescheduled; i < 3; i++) need.push({ kind: 'reschedule' });
+    for (let i = counts.confirmed; i < 3; i++) need.push({ kind: 'confirm' });
+    for (let i = counts.cancelled; i < 2; i++) need.push({ kind: 'cancel' });
+    for (let i = counts.doctorPending; i < 2; i++) {
+      need.push({
+        kind: i % 2 === 0 ? 'doctor_cancel' : 'doctor_reschedule',
+      });
+    }
+    for (let i = counts.pendingConfirm; i < 2; i++) need.push({ kind: 'pending' });
+
+    if (!need.length) {
+      return {
+        ok: true,
+        created: 0,
+        archivedJuan,
+        counts,
+        total: active.length,
+        message: 'Bandeja demo ya completa',
+      };
     }
 
-    const scenarios: Array<'confirm' | 'cancel' | 'reschedule' | 'pending'> = [
-      'confirm',
-      'cancel',
-      'reschedule',
-      'pending',
-      'confirm',
-      'pending',
-    ];
-    const toCreate = Math.max(0, 6 - existing);
+    const usedPatientIds = new Set(active.map((c) => c.patientId));
+    const patients = await this.prisma.patient.findMany({
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: 40,
+    });
+    const pickPatient = () => {
+      const fresh = patients.find((p) => !usedPatientIds.has(p.id));
+      if (fresh) {
+        usedPatientIds.add(fresh.id);
+        return fresh;
+      }
+      // Evitar Juan Pérez en re-seed si hay alternativas
+      const nonJuan = patients.find(
+        (p) =>
+          !(
+            p.firstName.toLowerCase() === 'juan' &&
+            p.lastName.toLowerCase().startsWith('pérez')
+          ),
+      );
+      const p = nonJuan || patients[0];
+      if (p) usedPatientIds.add(p.id);
+      return p;
+    };
 
-    for (let i = 0; i < toCreate; i++) {
+    if (!patients.length) {
+      return { ok: false, created: 0, archivedJuan, error: 'Sin pacientes' };
+    }
+
+    let hourOffset = 2;
+    for (const scenario of need) {
       try {
-        const patient = patients[(existing + i) % patients.length];
+        const patient = pickPatient();
+        if (!patient) break;
+
         const freeSlot = await this.prisma.slot.findFirst({
           where: {
             status: SlotStatus.FREE,
-            startsAt: { gt: new Date(now.getTime() + (i + 1) * 3600_000) },
+            startsAt: { gt: new Date(now.getTime() + hourOffset * 3600_000) },
           },
           include: { doctor: true },
           orderBy: { startsAt: 'asc' },
         });
-        if (!freeSlot) break;
+        hourOffset += 1;
+        if (!freeSlot) {
+          errors.push('Sin slots libres');
+          break;
+        }
 
         const claimed = await this.prisma.slot.updateMany({
           where: { id: freeSlot.id, status: SlotStatus.FREE },
@@ -920,7 +1039,7 @@ export class WhatsappService {
                 toStatus: AppointmentStatus.RESERVED,
                 toSlotId: freeSlot.id,
                 origin: ChangeOrigin.SYSTEM,
-                reason: 'Cita para demo WhatsApp',
+                reason: 'Cita demo WhatsApp bandeja',
               },
             },
           },
@@ -932,7 +1051,42 @@ export class WhatsappService {
           },
         });
 
-        const scenario = scenarios[i % scenarios.length];
+        const sentAt = new Date(Date.now() - (created + 3) * 50 * 60_000);
+
+        if (scenario.kind === 'doctor_cancel' || scenario.kind === 'doctor_reschedule') {
+          const reason =
+            scenario.kind === 'doctor_cancel'
+              ? 'Cirugía de urgencia programada'
+              : 'Congreso médico ese día';
+          if (scenario.kind === 'doctor_cancel') {
+            await this.doctorCancelWithNotice({
+              appointmentId: appt.id,
+              reason,
+            });
+          } else {
+            await this.doctorRescheduleWithNotice({
+              appointmentId: appt.id,
+              reason,
+            });
+          }
+          const conv = await this.prisma.whatsappConversation.findFirst({
+            where: { appointmentId: appt.id },
+          });
+          if (conv) {
+            await this.appendMessage({
+              conversationId: conv.id,
+              direction: WhatsappMessageDirection.SYSTEM,
+              body: WhatsappService.SEED_TAG,
+            });
+            await this.prisma.whatsappConversation.update({
+              where: { id: conv.id },
+              data: { sentAt, archived: false },
+            });
+          }
+          created += 1;
+          continue;
+        }
+
         const body = this.buildConfirmMessage(config.messageTemplate, appt);
         const conv = await this.prisma.whatsappConversation.create({
           data: {
@@ -941,9 +1095,18 @@ export class WhatsappService {
             phone: appt.patient.phone,
             status: WhatsappChatStatus.PENDING,
             provider: 'simulated',
-            sentAt: new Date(Date.now() - (i + 2) * 3600_000),
-            lastMessageAt: new Date(Date.now() - (i + 2) * 3600_000),
+            sentAt,
+            lastMessageAt: sentAt,
             lastMessagePreview: body.slice(0, 120),
+          },
+        });
+        await this.prisma.whatsappMessage.create({
+          data: {
+            conversationId: conv.id,
+            direction: WhatsappMessageDirection.SYSTEM,
+            body: WhatsappService.SEED_TAG,
+            simulated: true,
+            createdAt: sentAt,
           },
         });
         await this.prisma.whatsappMessage.create({
@@ -952,44 +1115,72 @@ export class WhatsappService {
             direction: WhatsappMessageDirection.OUTBOUND,
             body,
             simulated: true,
-            createdAt: new Date(Date.now() - (i + 2) * 3600_000),
+            createdAt: sentAt,
           },
         });
 
-        if (scenario === 'confirm') {
+        if (scenario.kind === 'confirm') {
           await this.simulatePatientReply({ conversationId: conv.id, action: 'confirm' });
-        } else if (scenario === 'cancel') {
+        } else if (scenario.kind === 'cancel') {
           await this.simulatePatientReply({ conversationId: conv.id, action: 'cancel' });
-        } else if (scenario === 'reschedule') {
-          const opt = await this.prisma.slot.findFirst({
-            where: {
-              doctorId: appt.doctorId,
-              status: SlotStatus.FREE,
-              startsAt: { gt: now },
-              NOT: { id: freeSlot.id },
-            },
-            orderBy: { startsAt: 'asc' },
+        } else if (scenario.kind === 'reschedule') {
+          await this.simulatePatientReply({
+            conversationId: conv.id,
+            action: 'reschedule',
           });
-          if (opt) {
+          const opts = await this.getRescheduleOptions(conv.id);
+          if (opts[0]?.slotId) {
             await this.simulatePatientReply({
               conversationId: conv.id,
               action: 'reschedule',
-              newSlotId: opt.id,
+              newSlotId: opts[0].slotId,
             });
           }
         }
+        // pending: deja sin respuesta
         created += 1;
       } catch (e: any) {
-        errors.push(String(e?.message || e).slice(0, 160));
+        errors.push(String(e?.message || e).slice(0, 180));
       }
     }
 
+    const after = await this.prisma.whatsappConversation.count({
+      where: { archived: false },
+    });
     return {
       ok: true,
       created,
-      existing,
-      total: existing + created,
-      errors: errors.slice(0, 5),
+      archivedJuan,
+      beforeCounts: counts,
+      total: after,
+      errors: errors.slice(0, 8),
     };
+  }
+
+  /** Archiva (no borra) chats duplicados de Juan Pérez de pruebas. */
+  private async archiveJuanPerezDuplicates() {
+    const juans = await this.prisma.patient.findMany({
+      where: {
+        firstName: { equals: 'Juan', mode: 'insensitive' },
+        lastName: { startsWith: 'P', mode: 'insensitive' },
+      },
+    });
+    const juanIds = juans
+      .filter((p) => /^p[eé]rez$/i.test(p.lastName.trim()))
+      .map((p) => p.id);
+    if (!juanIds.length) return 0;
+
+    const rows = await this.prisma.whatsappConversation.findMany({
+      where: { patientId: { in: juanIds }, archived: false },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    // Archivar todos los de Juan Pérez (ruido de pruebas); el seed crea pacientes distintos
+    if (!rows.length) return 0;
+    const res = await this.prisma.whatsappConversation.updateMany({
+      where: { id: { in: rows.map((r) => r.id) } },
+      data: { archived: true },
+    });
+    return res.count;
   }
 }

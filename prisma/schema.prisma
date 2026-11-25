@@ -506,6 +506,8 @@ model WhatsappConversation {
   appointmentId      String?            @unique
   phone              String
   status             WhatsappChatStatus @default(PENDING)
+  /// Oculta de la bandeja sin borrar (p. ej. duplicados de prueba)
+  archived           Boolean            @default(false)
   lastMessageAt      DateTime?
   lastMessagePreview String?
   provider           String             @default("simulated")
@@ -520,6 +522,7 @@ model WhatsappConversation {
 
   @@index([status, lastMessageAt])
   @@index([patientId])
+  @@index([archived, lastMessageAt])
   @@map("whatsapp_conversations")
 }
 
