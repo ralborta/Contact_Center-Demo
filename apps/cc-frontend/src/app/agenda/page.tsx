@@ -12,8 +12,13 @@ type Slot = {
   endsAt: string
   status: string
   appointment?: {
+    status?: string
     patient?: { firstName: string; lastName: string; documentId: string }
   } | null
+}
+
+function isCancelledAppt(status?: string) {
+  return status === 'CANCELLED_BY_PATIENT' || status === 'CANCELLED_BY_DOCTOR'
 }
 
 function dayKey(iso: string) {
@@ -87,16 +92,22 @@ export default function AgendaPage() {
       key,
       label: dayLabel(items[0].startsAt),
       items,
-      free: items.filter((i) => i.status === 'FREE').length,
-      reserved: items.filter((i) => i.status === 'RESERVED').length,
+      free: items.filter((i) => i.status === 'FREE' && !isCancelledAppt(i.appointment?.status)).length,
+      reserved: items.filter(
+        (i) => i.status === 'RESERVED' && !isCancelledAppt(i.appointment?.status),
+      ).length,
+      cancelled: items.filter((i) => isCancelledAppt(i.appointment?.status)).length,
       blocked: items.filter((i) => i.status === 'BLOCKED').length,
     }))
   }, [slots])
 
   const totals = useMemo(
     () => ({
-      free: slots.filter((s) => s.status === 'FREE').length,
-      reserved: slots.filter((s) => s.status === 'RESERVED').length,
+      free: slots.filter((s) => s.status === 'FREE' && !isCancelledAppt(s.appointment?.status)).length,
+      reserved: slots.filter(
+        (s) => s.status === 'RESERVED' && !isCancelledAppt(s.appointment?.status),
+      ).length,
+      cancelled: slots.filter((s) => isCancelledAppt(s.appointment?.status)).length,
       blocked: slots.filter((s) => s.status === 'BLOCKED').length,
     }),
     [slots],
@@ -180,6 +191,9 @@ export default function AgendaPage() {
               <span className="status-pill bg-primary-50 text-primary border border-primary/20">
                 {totals.reserved} reservados
               </span>
+              <span className="status-pill bg-red-50 text-status-error border border-status-error/20">
+                {totals.cancelled} cancelados
+              </span>
               <span className="status-pill bg-surface-muted text-on-surface-variant border border-outline-variant">
                 {totals.blocked} bloqueados
               </span>
@@ -234,6 +248,9 @@ export default function AgendaPage() {
                   <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wide">
                     <span className="text-status-success">{day.free} libres</span>
                     <span className="text-primary">{day.reserved} citas</span>
+                    {day.cancelled > 0 && (
+                      <span className="text-status-error">{day.cancelled} canc.</span>
+                    )}
                     {day.blocked > 0 && (
                       <span className="text-on-surface-variant">{day.blocked} bloq.</span>
                     )}
@@ -242,12 +259,24 @@ export default function AgendaPage() {
                 <div className="divide-y divide-outline-variant/40">
                   {day.items.map((s) => {
                     const appt = s.appointment
-                    const tone =
-                      s.status === 'FREE'
+                    const cancelled = isCancelledAppt(appt?.status)
+                    const tone = cancelled
+                      ? 'border-l-status-error bg-red-50/40'
+                      : s.status === 'FREE'
                         ? 'border-l-status-success bg-green-50/40'
                         : s.status === 'BLOCKED'
                           ? 'border-l-outline bg-surface-muted/50'
                           : 'border-l-primary bg-primary-50/50'
+                    const pill = cancelled
+                      ? 'CANCELADO'
+                      : s.status === 'FREE'
+                        ? 'LIBRE'
+                        : s.status === 'BLOCKED'
+                          ? 'BLOQUEADO'
+                          : 'RESERVADO'
+                    const patientName = appt?.patient
+                      ? `${appt.patient.firstName} ${appt.patient.lastName}`
+                      : null
                     return (
                       <div
                         key={s.id}
@@ -260,19 +289,26 @@ export default function AgendaPage() {
                             {formatLaPaz(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
                           </p>
                           <p className="text-xs text-on-surface-variant mt-0.5">
-                            {s.status === 'FREE' && 'Disponible'}
-                            {s.status === 'BLOCKED' && 'Bloqueado'}
-                            {s.status === 'RESERVED' && appt && (
+                            {cancelled && (
                               <>
-                                Reservado · {appt.patient?.firstName} {appt.patient?.lastName} · CI{' '}
-                                {appt.patient?.documentId}
+                                Cancelado
+                                {patientName && <> · {patientName}</>}
+                                {appt?.patient?.documentId && <> · CI {appt.patient.documentId}</>}
                               </>
                             )}
-                            {s.status === 'RESERVED' && !appt && 'Reservado'}
+                            {!cancelled && s.status === 'FREE' && 'Disponible'}
+                            {!cancelled && s.status === 'BLOCKED' && 'Bloqueado'}
+                            {!cancelled && s.status === 'RESERVED' && patientName && (
+                              <>
+                                Reservado · {patientName}
+                                {appt?.patient?.documentId && <> · CI {appt.patient.documentId}</>}
+                              </>
+                            )}
+                            {!cancelled && s.status === 'RESERVED' && !patientName && 'Reservado'}
                           </p>
                         </div>
                         <span className="status-pill bg-white/90 text-on-surface-variant self-center border border-outline-variant/40">
-                          {s.status}
+                          {pill}
                         </span>
                       </div>
                     )

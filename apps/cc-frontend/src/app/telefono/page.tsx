@@ -12,6 +12,12 @@ type LogLine = { at: string; text: string; tone?: 'info' | 'user' | 'agent' | 'e
 const DEFAULT_PHONE = '59170111222'
 const DEFAULT_NAME = 'Juan Pérez'
 
+function formatTimer(totalSec: number) {
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 export default function TelefonoPage() {
   const [phone, setPhone] = useState(DEFAULT_PHONE)
   const [patientLabel, setPatientLabel] = useState(DEFAULT_NAME)
@@ -20,7 +26,9 @@ export default function TelefonoPage() {
   const [agentId, setAgentId] = useState('')
   const [error, setError] = useState('')
   const [logs, setLogs] = useState<LogLine[]>([])
+  const [elapsed, setElapsed] = useState(0)
   const conversationRef = useRef<any>(null)
+  const connectedAtRef = useRef<number | null>(null)
 
   const pushLog = useCallback((text: string, tone: LogLine['tone'] = 'info') => {
     const at = new Date().toLocaleTimeString('es-BO', {
@@ -30,6 +38,17 @@ export default function TelefonoPage() {
     })
     setLogs((prev) => [...prev.slice(-80), { at, text, tone }])
   }, [])
+
+  useEffect(() => {
+    if (state !== 'connected') return
+    connectedAtRef.current = Date.now()
+    setElapsed(0)
+    const id = window.setInterval(() => {
+      if (!connectedAtRef.current) return
+      setElapsed(Math.floor((Date.now() - connectedAtRef.current) / 1000))
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [state])
 
   useEffect(() => {
     return () => {
@@ -44,13 +63,11 @@ export default function TelefonoPage() {
   async function startCall() {
     setError('')
     setState('connecting')
+    setElapsed(0)
     pushLog(`Marcando como ${patientLabel} (${phone})…`)
     try {
       const session = await voiceApi.signedUrl()
       if (session.agentId) setAgentId(session.agentId)
-      if (session.defaultCallerPhone && phone === DEFAULT_PHONE) {
-        setPhone(session.defaultCallerPhone)
-      }
       if (!session.signedUrl) throw new Error('El servidor no devolvió signed URL')
 
       const { Conversation } = await import('@elevenlabs/client')
@@ -68,6 +85,7 @@ export default function TelefonoPage() {
         },
         onDisconnect: () => {
           setState('ended')
+          connectedAtRef.current = null
           pushLog('Llamada finalizada')
           conversationRef.current = null
         },
@@ -102,6 +120,7 @@ export default function TelefonoPage() {
       /* ignore */
     }
     conversationRef.current = null
+    connectedAtRef.current = null
     setState('ended')
     pushLog('Colgaste la llamada')
   }
@@ -129,7 +148,7 @@ export default function TelefonoPage() {
   return (
     <PageShell
       title="Simulador de teléfono"
-      subtitle="Prueba el agente de citas como si llamara un paciente (misma línea gráfica del panel)"
+      subtitle="Celular web → agente ElevenLabs (signed URL desde el backend)"
       actions={
         <button type="button" className="btn-secondary" onClick={useJuan}>
           <UserRound className="w-3.5 h-3.5" />
@@ -137,10 +156,11 @@ export default function TelefonoPage() {
         </button>
       }
     >
-      <div className="grid lg:grid-cols-[360px_1fr] gap-5 max-w-5xl">
-        <div className="surface-card p-6 flex flex-col items-center text-center border-t-4 border-primary">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,380px)_1fr] gap-5 max-w-5xl mx-auto">
+        {/* Teléfono */}
+        <div className="surface-card p-5 sm:p-6 flex flex-col items-center text-center border-t-4 border-primary w-full max-w-md mx-auto lg:mx-0">
           <div
-            className={`w-28 h-28 rounded-full flex items-center justify-center mb-4 ${
+            className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center mb-3 ${
               inCall
                 ? 'bg-primary text-on-primary animate-pulse-soft'
                 : ringing
@@ -148,18 +168,23 @@ export default function TelefonoPage() {
                   : 'bg-primary-50 text-primary'
             }`}
           >
-            <Phone className="w-10 h-10" />
+            <Phone className="w-9 h-9 sm:w-10 sm:h-10" />
           </div>
 
           <p className="label-caps mb-1">Llamada simulada</p>
           <h3 className="font-display text-xl font-semibold text-on-surface">{patientLabel}</h3>
           <p className="text-sm text-on-surface-variant mt-1 tabular-nums">{phone}</p>
-          <p className="text-[11px] text-outline mt-2">
+          <p className="text-2xl font-display font-semibold text-primary tabular-nums mt-3 tracking-wide">
+            {state === 'connected' || state === 'ended' || state === 'connecting'
+              ? formatTimer(elapsed)
+              : '00:00'}
+          </p>
+          <p className="text-[11px] text-outline mt-1">
             Hospital Central La Paz
-            {agentId ? ` · ${agentId.slice(0, 18)}…` : ''}
+            {agentId ? ` · ${agentId.slice(0, 16)}…` : ''}
           </p>
 
-          <div className="w-full mt-6 space-y-3 text-left">
+          <div className="w-full mt-5 space-y-3 text-left">
             <div>
               <label className="label-caps mb-1 block">Nombre simulado</label>
               <input
@@ -170,7 +195,7 @@ export default function TelefonoPage() {
               />
             </div>
             <div>
-              <label className="label-caps mb-1 block">Teléfono (caller)</label>
+              <label className="label-caps mb-1 block">Teléfono (caller → call-init)</label>
               <input
                 className="field-input"
                 value={phone}
@@ -181,7 +206,7 @@ export default function TelefonoPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-2 mt-6 w-full">
+          <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 mt-6 w-full">
             {!inCall && !ringing && (
               <button type="button" className="btn-primary flex-1" onClick={startCall}>
                 <Phone className="w-4 h-4" />
@@ -195,7 +220,7 @@ export default function TelefonoPage() {
               </button>
             )}
             {inCall && (
-              <button type="button" className="btn-secondary" onClick={toggleMute}>
+              <button type="button" className="btn-secondary flex-1 sm:flex-none" onClick={toggleMute}>
                 {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 {muted ? 'Activar mic' : 'Silenciar'}
               </button>
@@ -219,7 +244,7 @@ export default function TelefonoPage() {
           )}
         </div>
 
-        <div className="surface-card overflow-hidden flex flex-col min-h-[420px]">
+        <div className="surface-card overflow-hidden flex flex-col min-h-[320px] sm:min-h-[420px]">
           <header className="px-4 py-3 border-b border-outline-variant/50 bg-surface-muted/40 flex items-center justify-between">
             <p className="label-caps">Transcripción / eventos</p>
             <button
@@ -233,8 +258,8 @@ export default function TelefonoPage() {
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {logs.length === 0 && (
               <p className="text-sm text-outline">
-                Pulse «Llamar» para iniciar una conversación con el agente. El backend entrega la
-                signed URL sin exponer la API key.
+                Pulse «Llamar» para iniciar. El backend entrega la signed URL; el caller simulado
+                (por defecto Juan Pérez) se envía a call-init.
               </p>
             )}
             {logs.map((l, i) => (
@@ -242,9 +267,9 @@ export default function TelefonoPage() {
                 key={`${l.at}-${i}`}
                 className={`rounded-lg px-3 py-2 text-sm border ${
                   l.tone === 'user'
-                    ? 'bg-primary-50 border-primary/20 ml-6'
+                    ? 'bg-primary-50 border-primary/20 sm:ml-6'
                     : l.tone === 'agent'
-                      ? 'bg-green-50 border-status-success/20 mr-6'
+                      ? 'bg-green-50 border-status-success/20 sm:mr-6'
                       : l.tone === 'error'
                         ? 'bg-red-50 border-status-error/20'
                         : 'bg-surface-muted/60 border-outline-variant/40'

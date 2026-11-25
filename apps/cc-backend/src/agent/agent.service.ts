@@ -120,10 +120,11 @@ export class AgentService {
       include: { specialty: true },
       orderBy: { lastName: 'asc' },
     });
-    const doctors = nameQuery
-      ? candidates.filter((d) => doctorMatchesName(d, nameQuery)).slice(0, 15)
-      : candidates.slice(0, 15);
-    return this.formatDoctorSearch(doctors, nameQuery);
+    // Sin tope artificial: el listado completo (≈30) debe verse en la API del agente.
+    const matched = nameQuery
+      ? candidates.filter((d) => doctorMatchesName(d, nameQuery))
+      : candidates;
+    return this.formatDoctorSearch(matched, nameQuery);
   }
 
   private formatDoctorSearch(

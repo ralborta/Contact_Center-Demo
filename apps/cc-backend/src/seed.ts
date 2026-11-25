@@ -141,22 +141,45 @@ async function main() {
   }
   console.log(`${specialtyIds.length} especialidades`);
 
+  const TARGET_PER_SPECIALTY = 3;
   const doctors: Array<{ id: string; specialtyId: string; defaultDurationMin: number }> = [];
   let doctorsCreated = 0;
+
   for (let si = 0; si < DOCTORS_BY_SPECIALTY.length; si++) {
     const specialtyId = specialtyIds[si];
     const names = DOCTORS_BY_SPECIALTY[si];
+    const activeInSpecialty = await prisma.doctor.count({
+      where: { specialtyId, status: 'ACTIVE' },
+    });
+
     for (let di = 0; di < names.length; di++) {
       const [firstName, lastName] = names[di];
-      const existing = await prisma.doctor.findFirst({
-        where: { firstName, lastName, specialtyId },
+      // Unicidad global por nombre: evita duplicar "Fernando Miranda" en otra especialidad
+      const existingAny = await prisma.doctor.findFirst({
+        where: { firstName, lastName },
+        orderBy: { createdAt: 'asc' },
       });
-      if (existing) {
-        doctors.push(existing);
+      if (existingAny) {
+        if (existingAny.status === 'ACTIVE') doctors.push(existingAny);
         continue;
       }
+
+      const currentActive = await prisma.doctor.count({
+        where: { specialtyId, status: 'ACTIVE' },
+      });
+      if (currentActive >= TARGET_PER_SPECIALTY && activeInSpecialty >= TARGET_PER_SPECIALTY) {
+        continue;
+      }
+
       const globalIndex = si * 3 + di;
       const schedules = SCHEDULE_VARIANTS[globalIndex % SCHEDULE_VARIANTS.length];
+      const emailBase = `${firstName
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()}.${lastName
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()}`;
       const d = await prisma.doctor.create({
         data: {
           firstName,
@@ -164,13 +187,7 @@ async function main() {
           specialtyId,
           consultorio: CONSULTORIOS[globalIndex % CONSULTORIOS.length],
           phone: `5917000${String(1000 + globalIndex).slice(-4)}`,
-          email: `${firstName
-            .normalize('NFD')
-            .replace(/\p{M}/gu, '')
-            .toLowerCase()}.${lastName
-            .normalize('NFD')
-            .replace(/\p{M}/gu, '')
-            .toLowerCase()}@hospital.demo.bo`,
+          email: `${emailBase}@hospital.demo.bo`,
           defaultDurationMin: schedules[0].slotDuration || 30,
           status: 'ACTIVE',
           schedules: { create: schedules },
@@ -180,15 +197,99 @@ async function main() {
       doctorsCreated++;
     }
   }
-  console.log(`${doctors.length} doctores (${doctorsCreated} nuevos)`);
 
-  // Slots próximas 3 semanas (solo crea faltantes)
+  // Desactiva duplicados exactos de nombre sin citas activas (no destructivo para datos vivos)
+  const allActive = await prisma.doctor.findMany({
+    where: { status: 'ACTIVE' },
+    orderBy: { createdAt: 'asc' },
+  });
+  const seenName = new Set<string>();
+  let deactivatedDupes = 0;
+  for (const d of allActive) {
+    const key = `${d.firstName}|${d.lastName}`.toLowerCase();
+    if (!seenName.has(key)) {
+      seenName.add(key);
+      continue;
+    }
+    const activeAppts = await prisma.appointment.count({
+      where: {
+        doctorId: d.id,
+        status: {
+          in: ['RESERVED', 'CONFIRMED', 'RESCHEDULED', 'NEEDS_RESCHEDULE'],
+        },
+      },
+    });
+    if (activeAppts > 0) continue;
+    await prisma.doctor.update({
+      where: { id: d.id },
+      data: { status: 'INACTIVE' },
+    });
+    deactivatedDupes++;
+  }
+  // Completar especialidades que quedaron con < 3 tras dedupe
+  const FILL_NAMES: [string, string][] = [
+    ['Laura', 'Benitez'],
+    ['Mateo', 'Quinteros'],
+    ['Rosa', 'Arce'],
+    ['Sebastián', 'Ledezma'],
+    ['Verónica', 'Céspedes'],
+    ['Tomás', 'Almanza'],
+    ['Julia', 'Peña'],
+    ['Nicolás', 'Roca'],
+    ['Andrea', 'Saavedra'],
+    ['Felipe', 'Montero'],
+  ];
+  let fillIdx = 0;
+  for (let si = 0; si < specialtyIds.length; si++) {
+    const specialtyId = specialtyIds[si];
+    while (
+      (await prisma.doctor.count({ where: { specialtyId, status: 'ACTIVE' } })) <
+        TARGET_PER_SPECIALTY &&
+      fillIdx < FILL_NAMES.length
+    ) {
+      const [firstName, lastName] = FILL_NAMES[fillIdx++];
+      const clash = await prisma.doctor.findFirst({ where: { firstName, lastName } });
+      if (clash) continue;
+      const schedules = SCHEDULE_VARIANTS[fillIdx % SCHEDULE_VARIANTS.length];
+      const emailBase = `${firstName
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()}.${lastName
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()}`;
+      await prisma.doctor.create({
+        data: {
+          firstName,
+          lastName,
+          specialtyId,
+          consultorio: CONSULTORIOS[fillIdx % CONSULTORIOS.length],
+          phone: `5917001${String(1000 + fillIdx).slice(-4)}`,
+          email: `${emailBase}@hospital.demo.bo`,
+          defaultDurationMin: schedules[0].slotDuration || 30,
+          status: 'ACTIVE',
+          schedules: { create: schedules },
+        },
+      });
+      doctorsCreated++;
+    }
+  }
+
+  console.log(
+    `${await prisma.doctor.count({ where: { status: 'ACTIVE' } })} doctores ACTIVE (${doctorsCreated} nuevos, ${deactivatedDupes} duplicados inactivados)`,
+  );
+
+  // Slots próximas 3 semanas para TODOS los activos (solo crea faltantes)
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const daysAhead = 21;
   let slotsCreated = 0;
-  for (const doctor of doctors) {
+  const doctorsForSlots = await prisma.doctor.findMany({
+    where: { status: 'ACTIVE' },
+    select: { id: true, specialtyId: true, defaultDurationMin: true },
+  });
+  for (const doctor of doctorsForSlots) {
     const schedules = await prisma.doctorSchedule.findMany({
       where: { doctorId: doctor.id, active: true },
     });
@@ -298,6 +399,59 @@ async function main() {
     }
   }
   console.log(`${appts} citas demo nuevas (activas previas: ${activeCount})`);
+
+  // Una cita cancelada de ejemplo (para la agenda) si aún no hay
+  const cancelledCount = await prisma.appointment.count({
+    where: {
+      status: { in: ['CANCELLED_BY_PATIENT', 'CANCELLED_BY_DOCTOR'] },
+    },
+  });
+  if (cancelledCount === 0) {
+    const freeForCancel = await prisma.slot.findFirst({
+      where: { status: SlotStatus.FREE, startsAt: { gt: now } },
+      include: { doctor: true },
+      orderBy: { startsAt: 'asc' },
+    });
+    if (freeForCancel) {
+      const patient = patients[1] || patients[0];
+      const claimed = await prisma.slot.updateMany({
+        where: { id: freeForCancel.id, status: SlotStatus.FREE },
+        data: { status: SlotStatus.RESERVED },
+      });
+      if (claimed.count === 1) {
+        const appt = await prisma.appointment.create({
+          data: {
+            patientId: patient.id,
+            doctorId: freeForCancel.doctorId,
+            specialtyId: freeForCancel.doctor.specialtyId,
+            slotId: freeForCancel.id,
+            status: AppointmentStatus.RESERVED,
+            channel: AppointmentChannel.CONSOLE,
+          },
+        });
+        await prisma.appointment.update({
+          where: { id: appt.id },
+          data: { status: AppointmentStatus.CANCELLED_BY_PATIENT },
+        });
+        await prisma.appointmentChange.create({
+          data: {
+            appointmentId: appt.id,
+            fromStatus: AppointmentStatus.RESERVED,
+            toStatus: AppointmentStatus.CANCELLED_BY_PATIENT,
+            fromSlotId: freeForCancel.id,
+            toSlotId: freeForCancel.id,
+            origin: ChangeOrigin.OPERATOR,
+            reason: 'Cancelación demo seed',
+          },
+        });
+        await prisma.slot.update({
+          where: { id: freeForCancel.id },
+          data: { status: SlotStatus.FREE },
+        });
+        console.log('1 cita cancelada demo creada');
+      }
+    }
+  }
 
   const callCount = await prisma.interaction.count();
   if (callCount < 3) {
