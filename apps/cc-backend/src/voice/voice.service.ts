@@ -163,18 +163,36 @@ export class VoiceService {
       resultCode = 'RESOLVED';
     }
 
+    // Cita creada/tocada por tools de ESTA conversación (voiceConversationId)
+    const linkedByVoice = await this.prisma.appointment.findFirst({
+      where: { voiceConversationId: conversationId },
+      orderBy: { createdAt: 'desc' },
+    });
     let appointmentId =
-      extractAppointmentIdFromTranscript(data) ||
-      (
-        await this.prisma.appointment.findFirst({
-          where: { voiceConversationId: conversationId },
-          orderBy: { createdAt: 'desc' },
-        })
-      )?.id ||
-      null;
-    if (resultCode !== 'APPOINTMENT_BOOKED' && resultCode !== 'RESCHEDULED' && resultCode !== 'CANCELLED') {
+      extractAppointmentIdFromTranscript(data) || linkedByVoice?.id || null;
+
+    // Si la cita ya quedó marcada con este conversation_id, confiar el vínculo
+    // aunque el transcript de ElevenLabs no liste la tool (p.ej. sync parcial).
+    if (linkedByVoice) {
+      if (
+        resultCode !== 'RESCHEDULED' &&
+        resultCode !== 'CANCELLED' &&
+        !executedTools.some((n) => /reprogramar_cita|cancelar_cita/i.test(n))
+      ) {
+        resultCode = 'APPOINTMENT_BOOKED';
+      }
+      appointmentId = linkedByVoice.id;
+    } else if (
+      resultCode !== 'APPOINTMENT_BOOKED' &&
+      resultCode !== 'RESCHEDULED' &&
+      resultCode !== 'CANCELLED'
+    ) {
       // sin tool de reserva/reprog/cancel no vincular cita
-      if (!executedTools.some((n) => /reservar_cita|reprogramar_cita|cancelar_cita/i.test(n))) {
+      if (
+        !executedTools.some((n) =>
+          /reservar_cita|reprogramar_cita|cancelar_cita/i.test(n),
+        )
+      ) {
         appointmentId = null;
       }
     }
