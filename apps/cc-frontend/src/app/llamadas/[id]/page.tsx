@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, Phone, Wrench } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Clock3, Phone, UserRound, Wrench } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { APPT_STATUS_LABEL, callsApi, formatLaPaz } from '@/lib/api'
+import { Avatar, StatusBadge } from '@/components/ui'
 
 type Turn = { role: 'agent' | 'user' | 'tool'; text: string; t?: number }
 
@@ -137,10 +138,12 @@ export default function LlamadaDetallePage() {
 
   return (
     <PageShell
+      icon={Phone}
       title="Detalle de llamada"
       subtitle={call?.startedAt ? formatLaPaz(call.startedAt) : '…'}
       actions={
         <Link href="/llamadas" className="btn-secondary">
+          <ArrowLeft className="w-3.5 h-3.5" />
           Volver
         </Link>
       }
@@ -149,8 +152,41 @@ export default function LlamadaDetallePage() {
         <p className="text-sm text-outline">Cargando…</p>
       ) : (
         <div className="space-y-5 max-w-4xl">
-          <section className="surface-card p-5 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <section className="surface-card overflow-hidden shadow-soft">
+            <header className="bg-gradient-to-r from-primary to-primary-600 text-on-primary px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-full bg-white/15">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-display text-lg font-semibold leading-tight">
+                    {call.patient
+                      ? `${call.patient.firstName} ${call.patient.lastName}`
+                      : call.from}
+                  </p>
+                  <p className="text-xs text-on-primary/80 mt-0.5 flex items-center gap-2">
+                    <Clock3 className="w-3.5 h-3.5" />
+                    {call.startedAt
+                      ? formatLaPaz(call.startedAt, { dateStyle: 'medium', timeStyle: 'short' })
+                      : '—'}
+                    {call.callDetail?.durationSec != null && (
+                      <span>· {formatRel(call.callDetail.durationSec)}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <StatusBadge
+                  status={call.direction}
+                  label={call.direction === 'INBOUND' ? 'Entrante' : 'Saliente'}
+                  className="!bg-white/15 !text-white !border-white/30"
+                />
+                <span className="status-pill bg-emerald-400/20 text-white border border-white/25">
+                  {RESULT_LABEL[call.resultCode] || call.outcome || 'Completada'}
+                </span>
+              </div>
+            </header>
+            <div className="p-5 space-y-4">
               <div>
                 <p className="label-caps mb-1">Resumen</p>
                 <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">
@@ -158,43 +194,51 @@ export default function LlamadaDetallePage() {
                     'Sin resumen disponible'}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="status-pill bg-primary-50 text-primary border border-primary/20">
-                  {call.direction === 'INBOUND' ? 'Entrante' : 'Saliente'}
-                </span>
-                <span className="status-pill bg-green-50 text-status-success border border-status-success/20">
-                  {RESULT_LABEL[call.resultCode] || call.outcome || 'Completada'}
-                </span>
-              </div>
-            </div>
-            <div className="grid sm:grid-cols-4 gap-3 text-sm border-t border-outline-variant/40 pt-4">
-              <div>
-                <p className="label-caps">Caller</p>
-                <p className="font-medium tabular-nums">{call.from}</p>
-              </div>
-              <div>
-                <p className="label-caps">Paciente</p>
-                <p className="font-medium">
-                  {call.patient
-                    ? `${call.patient.firstName} ${call.patient.lastName}`
-                    : 'No identificado'}
-                </p>
-              </div>
-              <div>
-                <p className="label-caps">Duración</p>
-                <p className="font-medium">
-                  {call.callDetail?.durationSec != null
-                    ? formatRel(call.callDetail.durationSec)
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="label-caps">Fecha</p>
-                <p className="font-medium">
-                  {call.startedAt
-                    ? formatLaPaz(call.startedAt, { dateStyle: 'medium', timeStyle: 'short' })
-                    : '—'}
-                </p>
+              <div className="grid sm:grid-cols-4 gap-3 text-sm border-t border-outline-variant/40 pt-4">
+                <div>
+                  <p className="label-caps flex items-center gap-1">
+                    <Phone className="w-3 h-3" /> Caller
+                  </p>
+                  <p className="font-medium tabular-nums">{call.from}</p>
+                </div>
+                <div>
+                  <p className="label-caps flex items-center gap-1">
+                    <UserRound className="w-3 h-3" /> Paciente
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {call.patient && (
+                      <Avatar
+                        firstName={call.patient.firstName}
+                        lastName={call.patient.lastName}
+                        size="sm"
+                      />
+                    )}
+                    <p className="font-medium">
+                      {call.patient
+                        ? `${call.patient.firstName} ${call.patient.lastName}`
+                        : 'No identificado'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className="label-caps">Duración</p>
+                  <p className="font-medium">
+                    {call.callDetail?.durationSec != null
+                      ? formatRel(call.callDetail.durationSec)
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="label-caps">Fecha</p>
+                  <p className="font-medium">
+                    {call.startedAt
+                      ? formatLaPaz(call.startedAt, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })
+                      : '—'}
+                  </p>
+                </div>
               </div>
             </div>
           </section>
@@ -202,10 +246,10 @@ export default function LlamadaDetallePage() {
           {call.appointment ? (
             <Link
               href={`/citas?cita=${call.appointment.id}`}
-              className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 hover:border-primary/40 transition-colors border-l-4 border-l-primary block"
+              className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 hover:border-primary/40 transition-colors border-l-4 border-l-primary block shadow-soft"
             >
               <div className="flex items-start gap-3">
-                <div className="bg-primary-50 text-primary p-2 rounded-lg">
+                <div className="bg-primary-50 text-primary p-2.5 rounded-full">
                   <CalendarDays className="w-4 h-4" />
                 </div>
                 <div>
@@ -227,9 +271,12 @@ export default function LlamadaDetallePage() {
                   </p>
                 </div>
               </div>
-              <span className="status-pill bg-primary-100 text-primary">
-                {APPT_STATUS_LABEL[call.appointment.status] || call.appointment.status}
-              </span>
+              <StatusBadge
+                status={call.appointment.status}
+                label={
+                  APPT_STATUS_LABEL[call.appointment.status] || call.appointment.status
+                }
+              />
             </Link>
           ) : (
             <section className="surface-card p-4 border-dashed border border-outline-variant/60">

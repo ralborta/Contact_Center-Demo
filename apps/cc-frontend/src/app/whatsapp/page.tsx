@@ -10,8 +10,10 @@ import {
   XCircle,
   CalendarClock,
   Clock,
+  Stethoscope,
 } from 'lucide-react'
 import PageShell from '@/components/PageShell'
+import { Avatar, KpiCard, StatusBadge, WaTicks } from '@/components/ui'
 import {
   APPT_STATUS_LABEL,
   WA_CHAT_STATUS_LABEL,
@@ -20,13 +22,6 @@ import {
 } from '@/lib/api'
 
 type Tab = 'inbox' | 'config'
-
-const STATUS_TONE: Record<string, string> = {
-  PENDING: 'bg-surface-muted text-on-surface-variant border border-outline-variant/50',
-  CONFIRMED: 'bg-green-50 text-status-success border border-status-success/20',
-  CANCELLED: 'bg-red-50 text-status-error border border-status-error/20',
-  RESCHEDULED: 'bg-accent-soft text-accent border border-accent/20',
-}
 
 export default function WhatsappPage() {
   const [tab, setTab] = useState<Tab>('inbox')
@@ -177,19 +172,20 @@ export default function WhatsappPage() {
 
   return (
     <PageShell
+      icon={MessageCircle}
       title="WhatsApp"
       subtitle="Confirmación de citas con pacientes"
       actions={
         <div className="flex gap-2">
           <button
-            className={`btn-secondary ${tab === 'inbox' ? '!bg-primary !text-on-primary' : ''}`}
+            className={`btn-secondary ${tab === 'inbox' ? '!bg-[#128C7E] !text-white !border-[#128C7E]' : ''}`}
             onClick={() => setTab('inbox')}
           >
             <MessageCircle className="w-3.5 h-3.5" />
             Bandeja
           </button>
           <button
-            className={`btn-secondary ${tab === 'config' ? '!bg-primary !text-on-primary' : ''}`}
+            className={`btn-secondary ${tab === 'config' ? '!bg-[#128C7E] !text-white !border-[#128C7E]' : ''}`}
             onClick={() => setTab('config')}
           >
             <Settings2 className="w-3.5 h-3.5" />
@@ -207,24 +203,11 @@ export default function WhatsappPage() {
       {tab === 'inbox' && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-            {[
-              { label: 'Confirmadas', value: metrics?.confirmed, icon: CheckCircle2, tone: 'text-status-success' },
-              { label: 'Canceladas', value: metrics?.cancelled, icon: XCircle, tone: 'text-status-error' },
-              { label: 'Reprogramadas', value: metrics?.rescheduled, icon: CalendarClock, tone: 'text-accent' },
-              { label: 'Sin respuesta', value: metrics?.pending, icon: Clock, tone: 'text-on-surface-variant' },
-              { label: 'Cambios por doctor', value: metrics?.doctorChanges, icon: RefreshCw, tone: 'text-primary' },
-            ].map((c) => {
-              const Icon = c.icon
-              return (
-                <div key={c.label} className="surface-card p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon className={`w-4 h-4 ${c.tone}`} />
-                  </div>
-                  <p className="text-2xl font-display font-semibold">{c.value ?? '—'}</p>
-                  <p className="label-caps mt-1">{c.label}</p>
-                </div>
-              )
-            })}
+            <KpiCard label="Confirmadas" value={metrics?.confirmed ?? '—'} icon={CheckCircle2} tone="green" />
+            <KpiCard label="Canceladas" value={metrics?.cancelled ?? '—'} icon={XCircle} tone="red" />
+            <KpiCard label="Reprogramadas" value={metrics?.rescheduled ?? '—'} icon={CalendarClock} tone="amber" />
+            <KpiCard label="Sin respuesta" value={metrics?.pending ?? '—'} icon={Clock} tone="slate" />
+            <KpiCard label="Cambios por doctor" value={metrics?.doctorChanges ?? '—'} icon={Stethoscope} tone="teal" />
           </div>
 
           <div className="flex flex-wrap gap-2 mb-4">
@@ -253,8 +236,8 @@ export default function WhatsappPage() {
             </button>
           </div>
 
-          <div className="surface-card overflow-hidden grid md:grid-cols-[320px_1fr] min-h-[520px]">
-            <aside className="border-r border-outline-variant/50 max-h-[640px] overflow-y-auto">
+          <div className="surface-card overflow-hidden grid md:grid-cols-[320px_1fr] min-h-[520px] shadow-soft">
+            <aside className="border-r border-outline-variant/50 max-h-[640px] overflow-y-auto bg-[#F0F2F5]">
               {conversations.length === 0 && (
                 <p className="p-4 text-sm text-outline">Sin conversaciones</p>
               )}
@@ -265,26 +248,39 @@ export default function WhatsappPage() {
                     key={c.id}
                     type="button"
                     onClick={() => setSelectedId(c.id)}
-                    className={`w-full text-left px-4 py-3 border-b border-outline-variant/40 hover:bg-primary-50/40 ${
-                      active ? 'bg-primary-50/70' : ''
+                    className={`w-full text-left px-3 py-3 border-b border-outline-variant/30 hover:bg-white/80 ${
+                      active ? 'bg-white shadow-sm' : ''
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-sm">
-                        {c.patient?.firstName} {c.patient?.lastName}
-                      </p>
-                      <span className={`status-pill text-[10px] ${STATUS_TONE[c.status] || ''}`}>
-                        {WA_CHAT_STATUS_LABEL[c.status] || c.status}
-                      </span>
+                    <div className="flex items-start gap-2.5">
+                      <Avatar
+                        firstName={c.patient?.firstName}
+                        lastName={c.patient?.lastName}
+                        size="md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-sm truncate">
+                            {c.patient?.firstName} {c.patient?.lastName}
+                          </p>
+                          <StatusBadge
+                            status={c.status}
+                            label={WA_CHAT_STATUS_LABEL[c.status] || c.status}
+                          />
+                        </div>
+                        <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">
+                          {c.lastMessagePreview || c.appointment?.specialty?.name || '—'}
+                        </p>
+                        <p className="text-[11px] text-outline mt-1">
+                          {c.lastMessageAt
+                            ? formatLaPaz(c.lastMessageAt, {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })
+                            : ''}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">
-                      {c.lastMessagePreview || c.appointment?.specialty?.name || '—'}
-                    </p>
-                    <p className="text-[11px] text-outline mt-1">
-                      {c.lastMessageAt
-                        ? formatLaPaz(c.lastMessageAt, { dateStyle: 'short', timeStyle: 'short' })
-                        : ''}
-                    </p>
                   </button>
                 )
               })}
@@ -295,38 +291,53 @@ export default function WhatsappPage() {
                 <p className="p-6 text-sm text-outline">Seleccioná una conversación</p>
               ) : (
                 <>
-                  <header className="px-4 py-3 border-b border-outline-variant/50 bg-surface-muted/30">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold">
-                          {detail.patient?.firstName} {detail.patient?.lastName}
-                        </p>
-                        <p className="text-xs text-on-surface-variant">
-                          {detail.appointment?.specialty?.name || 'Sin especialidad'}
-                          {detail.appointment?.doctor
-                            ? ` · Dr(a). ${detail.appointment.doctor.lastName}`
-                            : ''}
-                          {detail.appointment?.slot
-                            ? ` · ${formatLaPaz(detail.appointment.slot.startsAt, {
-                                dateStyle: 'medium',
-                                timeStyle: 'short',
-                              })}`
-                            : ''}
-                        </p>
+                  <header className="px-4 py-3 border-b border-black/5 bg-[#075E54] text-white">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          firstName={detail.patient?.firstName}
+                          lastName={detail.patient?.lastName}
+                          size="md"
+                          className="!bg-white/20 !text-white ring-2 ring-white/30"
+                        />
+                        <div>
+                          <p className="font-semibold">
+                            {detail.patient?.firstName} {detail.patient?.lastName}
+                          </p>
+                          <p className="text-xs text-white/75">
+                            {detail.appointment?.specialty?.name || 'Sin especialidad'}
+                            {detail.appointment?.doctor
+                              ? ` · Dr(a). ${detail.appointment.doctor.lastName}`
+                              : ''}
+                            {detail.appointment?.slot
+                              ? ` · ${formatLaPaz(detail.appointment.slot.startsAt, {
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short',
+                                })}`
+                              : ''}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2 items-center">
-                        <span className={`status-pill ${STATUS_TONE[detail.status] || ''}`}>
-                          {WA_CHAT_STATUS_LABEL[detail.status] || detail.status}
-                        </span>
+                        <StatusBadge
+                          status={detail.status}
+                          label={WA_CHAT_STATUS_LABEL[detail.status] || detail.status}
+                          className="!bg-white/15 !text-white !border-white/25"
+                        />
                         {detail.appointment && (
-                          <span className="status-pill bg-primary-50 text-primary border border-primary/20">
-                            Cita: {APPT_STATUS_LABEL[detail.appointment.status] || detail.appointment.status}
-                          </span>
+                          <StatusBadge
+                            status={detail.appointment.status}
+                            label={`Cita: ${
+                              APPT_STATUS_LABEL[detail.appointment.status] ||
+                              detail.appointment.status
+                            }`}
+                            className="!bg-white/15 !text-white !border-white/25"
+                          />
                         )}
                         {detail.appointmentId && (
                           <Link
                             href={`/citas?cita=${detail.appointmentId}`}
-                            className="text-xs font-semibold text-primary hover:underline"
+                            className="text-xs font-semibold text-white/90 underline underline-offset-2"
                           >
                             Ver cita
                           </Link>
@@ -335,7 +346,7 @@ export default function WhatsappPage() {
                     </div>
                   </header>
 
-                  <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[420px] bg-gradient-to-b from-surface-muted/20 to-transparent">
+                  <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[420px] bg-wa-chat">
                     {visibleMessages.map((m: any) => {
                       const inbound = m.direction === 'INBOUND'
                       return (
@@ -343,24 +354,15 @@ export default function WhatsappPage() {
                           key={m.id}
                           className={`flex ${inbound ? 'justify-end' : 'justify-start'}`}
                         >
-                          <div
-                            className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                              inbound
-                                ? 'bg-primary text-on-primary rounded-br-md'
-                                : 'bg-white border border-primary/10 rounded-bl-md'
-                            }`}
-                          >
-                            <p
-                              className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                                inbound ? 'text-on-primary/70' : 'text-primary'
-                              }`}
-                            >
+                          <div className={inbound ? 'wa-bubble-in' : 'wa-bubble-out'}>
+                            <p className="text-[10px] font-bold text-[#128C7E] mb-0.5">
                               {inbound ? 'Paciente' : 'Hospital'}
-                              <span className="ml-2 tabular-nums font-semibold">
-                                {formatLaPaz(m.createdAt, { timeStyle: 'short' })}
-                              </span>
                             </p>
                             {m.body}
+                            <p className="text-[10px] text-right text-on-surface-variant/80 mt-1 tabular-nums">
+                              {formatLaPaz(m.createdAt, { timeStyle: 'short' })}
+                              {!inbound && <WaTicks read={detail.status !== 'PENDING'} />}
+                            </p>
                           </div>
                         </div>
                       )

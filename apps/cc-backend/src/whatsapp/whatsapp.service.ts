@@ -974,25 +974,21 @@ export class WhatsappService {
     }
 
     const usedPatientIds = new Set(active.map((c) => c.patientId));
-    const patients = await this.prisma.patient.findMany({
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      take: 40,
-    });
+    const isJuanPerez = (p: { firstName: string; lastName: string }) =>
+      /^juan$/i.test(p.firstName.trim()) && /p[eé]rez/i.test(p.lastName || '');
+    const patients = (
+      await this.prisma.patient.findMany({
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        take: 40,
+      })
+    ).filter((p) => !isJuanPerez(p));
     const pickPatient = () => {
       const fresh = patients.find((p) => !usedPatientIds.has(p.id));
       if (fresh) {
         usedPatientIds.add(fresh.id);
         return fresh;
       }
-      // Evitar Juan Pérez en re-seed si hay alternativas
-      const nonJuan = patients.find(
-        (p) =>
-          !(
-            p.firstName.toLowerCase() === 'juan' &&
-            p.lastName.toLowerCase().startsWith('pérez')
-          ),
-      );
-      const p = nonJuan || patients[0];
+      const p = patients[0];
       if (p) usedPatientIds.add(p.id);
       return p;
     };
@@ -1191,23 +1187,15 @@ export class WhatsappService {
     const juans = await this.prisma.patient.findMany({
       where: {
         firstName: { equals: 'Juan', mode: 'insensitive' },
-        lastName: { startsWith: 'P', mode: 'insensitive' },
       },
     });
     const juanIds = juans
-      .filter((p) => /^p[eé]rez$/i.test(p.lastName.trim()))
+      .filter((p) => /p[eé]rez/i.test(p.lastName || ''))
       .map((p) => p.id);
     if (!juanIds.length) return 0;
 
-    const rows = await this.prisma.whatsappConversation.findMany({
-      where: { patientId: { in: juanIds }, archived: false },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
-    // Archivar todos los de Juan Pérez (ruido de pruebas); el seed crea pacientes distintos
-    if (!rows.length) return 0;
     const res = await this.prisma.whatsappConversation.updateMany({
-      where: { id: { in: rows.map((r) => r.id) } },
+      where: { patientId: { in: juanIds }, archived: false },
       data: { archived: true },
     });
     return res.count;

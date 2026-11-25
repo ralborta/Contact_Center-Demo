@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { FileText, Users } from 'lucide-react'
 import PageShell from '@/components/PageShell'
+import { Avatar, IconAction } from '@/components/ui'
 import { patientsApi } from '@/lib/api'
 
 export default function PacientesPage() {
@@ -26,6 +27,7 @@ export default function PacientesPage() {
 
   return (
     <PageShell
+      icon={Users}
       title="Pacientes"
       subtitle="Fichas e historial de citas"
       actions={<button className="btn-primary" onClick={() => setShow(true)}>Nuevo paciente</button>}
@@ -40,26 +42,38 @@ export default function PacientesPage() {
         />
         <button className="btn-secondary" onClick={() => load(q)}>Buscar</button>
       </div>
-      <div className="surface-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-muted/80 text-left">
+      <div className="surface-card overflow-x-auto shadow-soft">
+        <table className="data-table">
+          <thead>
             <tr>
-              <th className="px-4 py-3 label-caps">Nombre</th>
-              <th className="px-4 py-3 label-caps">CI</th>
-              <th className="px-4 py-3 label-caps">Teléfono</th>
-              <th className="px-4 py-3 label-caps">Seguro</th>
-              <th className="px-4 py-3 label-caps"></th>
+              <th>Nombre</th>
+              <th>CI</th>
+              <th>Teléfono</th>
+              <th>Seguro</th>
+              <th className="text-right"> </th>
             </tr>
           </thead>
           <tbody>
             {items.map((p) => (
-              <tr key={p.id} className="border-t border-outline-variant/40">
-                <td className="px-4 py-3 font-medium">{p.firstName} {p.lastName}</td>
-                <td className="px-4 py-3">{p.documentId}</td>
-                <td className="px-4 py-3">{p.phone}</td>
-                <td className="px-4 py-3">{p.insurance || '—'}</td>
-                <td className="px-4 py-3 text-right">
-                  <Link href={`/pacientes/${p.id}`} className="text-primary font-semibold">Ficha</Link>
+              <tr key={p.id}>
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar firstName={p.firstName} lastName={p.lastName} size="sm" />
+                    <span className="font-medium truncate">
+                      {p.firstName} {p.lastName}
+                    </span>
+                  </div>
+                </td>
+                <td className="tabular-nums">{p.documentId}</td>
+                <td className="tabular-nums">{p.phone}</td>
+                <td>{p.insurance || '—'}</td>
+                <td className="text-right">
+                  <IconAction
+                    icon={FileText}
+                    label="Ficha"
+                    href={`/pacientes/${p.id}`}
+                    tone="primary"
+                  />
                 </td>
               </tr>
             ))}

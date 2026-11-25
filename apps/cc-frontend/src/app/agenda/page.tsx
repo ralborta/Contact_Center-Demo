@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CalendarDays, MessageCircle, Phone, X } from 'lucide-react'
 import PageShell from '@/components/PageShell'
+import { Avatar, SpecialtyChip, StatusBadge } from '@/components/ui'
 import {
   APPT_STATUS_LABEL,
   CHANGE_ORIGIN_LABEL,
@@ -178,16 +179,20 @@ export default function AgendaPage() {
 
   return (
     <PageShell
+      icon={CalendarDays}
       title="Agenda"
       subtitle={
         selected
-          ? `Dr(a). ${selected.firstName} ${selected.lastName} · ${selected.specialty?.name}${
+          ? `Dr(a). ${selected.firstName} ${selected.lastName}${
               selected.consultorio ? ` · Cons. ${selected.consultorio}` : ''
             }`
           : 'Seleccione un doctor'
       }
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {selected?.specialty?.name && (
+            <SpecialtyChip name={selected.specialty.name} />
+          )}
           <button
             className={view === 'day' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setView('day')}
@@ -268,18 +273,32 @@ export default function AgendaPage() {
                   key={d.id}
                   type="button"
                   onClick={() => setDoctorId(d.id)}
-                  className={`w-full text-left rounded-lg px-3 py-2.5 transition-all ${
+                  className={`w-full text-left rounded-xl px-3 py-2.5 transition-all ${
                     active
-                      ? 'bg-primary text-on-primary shadow-sm'
+                      ? 'bg-primary text-on-primary shadow-soft'
                       : 'hover:bg-primary-50 text-on-surface'
                   }`}
                 >
-                  <p className="text-sm font-semibold leading-tight">
-                    Dr(a). {d.lastName}
-                  </p>
-                  <p className={`text-[11px] mt-0.5 ${active ? 'text-on-primary/80' : 'text-on-surface-variant'}`}>
-                    {d.firstName} · {d.specialty?.name}
-                  </p>
+                  <div className="flex items-center gap-2.5">
+                    <Avatar
+                      firstName={d.firstName}
+                      lastName={d.lastName}
+                      size="sm"
+                      className={active ? '!bg-white !text-primary' : ''}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-tight truncate">
+                        Dr(a). {d.lastName}
+                      </p>
+                      <p
+                        className={`text-[11px] mt-0.5 truncate ${
+                          active ? 'text-on-primary/80' : 'text-on-surface-variant'
+                        }`}
+                      >
+                        {d.firstName} · {d.specialty?.name}
+                      </p>
+                    </div>
+                  </div>
                 </button>
               )
             })}
@@ -322,19 +341,26 @@ export default function AgendaPage() {
                     const clickable =
                       !cancelled && s.status === 'RESERVED' && Boolean(appt)
                     const tone = cancelled
-                      ? 'border-l-status-error bg-red-50/40'
+                      ? 'border-l-red-500 bg-red-50/70'
                       : s.status === 'FREE'
-                        ? 'border-l-status-success bg-green-50/40'
+                        ? 'border-l-emerald-500 bg-emerald-50/70'
                         : s.status === 'BLOCKED'
-                          ? 'border-l-outline bg-surface-muted/50'
-                          : 'border-l-primary bg-primary-50/50'
-                    const pill = cancelled
-                      ? 'CANCELADO'
+                          ? 'border-l-slate-400 bg-slate-100/80'
+                          : 'border-l-sky-500 bg-sky-50/80'
+                    const pillStatus = cancelled
+                      ? 'CANCELLED'
                       : s.status === 'FREE'
-                        ? 'LIBRE'
+                        ? 'FREE'
                         : s.status === 'BLOCKED'
-                          ? 'BLOQUEADO'
-                          : 'RESERVADO'
+                          ? 'BLOCKED'
+                          : 'RESERVED'
+                    const pillLabel = cancelled
+                      ? 'Cancelado'
+                      : s.status === 'FREE'
+                        ? 'Libre'
+                        : s.status === 'BLOCKED'
+                          ? 'Bloqueado'
+                          : 'Reservado'
                     const patientName = appt?.patient
                       ? `${appt.patient.firstName} ${appt.patient.lastName}`
                       : null
@@ -350,30 +376,41 @@ export default function AgendaPage() {
                             : 'cursor-default'
                         } ${selectedSlot?.id === s.id ? 'ring-1 ring-inset ring-primary/30' : ''}`}
                       >
-                        <div>
-                          <p className="font-semibold text-sm text-on-surface">
-                            {formatLaPaz(s.startsAt, { hour: '2-digit', minute: '2-digit' })}
-                            {' – '}
-                            {formatLaPaz(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          <p className="text-xs text-on-surface-variant mt-0.5">
-                            {cancelled && (
-                              <>
-                                Cancelado
-                                {patientName && <> · {patientName}</>}
-                              </>
-                            )}
-                            {!cancelled && s.status === 'FREE' && 'Disponible'}
-                            {!cancelled && s.status === 'BLOCKED' && 'Bloqueado'}
-                            {!cancelled && s.status === 'RESERVED' && patientName && (
-                              <>Reservado · {patientName}</>
-                            )}
-                            {!cancelled && s.status === 'RESERVED' && !patientName && 'Reservado'}
-                          </p>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {appt?.patient && (
+                            <Avatar
+                              firstName={appt.patient.firstName}
+                              lastName={appt.patient.lastName}
+                              size="sm"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm text-on-surface tabular-nums">
+                              {formatLaPaz(s.startsAt, { hour: '2-digit', minute: '2-digit' })}
+                              {' – '}
+                              {formatLaPaz(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-xs text-on-surface-variant mt-0.5 truncate">
+                              {cancelled && (
+                                <>
+                                  Cancelado
+                                  {patientName && <> · {patientName}</>}
+                                </>
+                              )}
+                              {!cancelled && s.status === 'FREE' && 'Disponible'}
+                              {!cancelled && s.status === 'BLOCKED' && 'Bloqueado'}
+                              {!cancelled && s.status === 'RESERVED' && patientName && (
+                                <>Reservado · {patientName}</>
+                              )}
+                              {!cancelled && s.status === 'RESERVED' && !patientName && 'Reservado'}
+                            </p>
+                          </div>
                         </div>
-                        <span className="status-pill bg-white/90 text-on-surface-variant self-center border border-outline-variant/40">
-                          {pill}
-                        </span>
+                        <StatusBadge
+                          status={pillStatus}
+                          label={pillLabel}
+                          className="self-center bg-white/90"
+                        />
                       </button>
                     )
                   })}

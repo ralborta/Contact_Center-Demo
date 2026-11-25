@@ -7,6 +7,9 @@
   --background: #eef3f6;
   --primary: #0f5c5c;
   --accent: #c45c26;
+  --wa-green: #25d366;
+  --wa-teal: #128c7e;
+  --wa-dark: #075e54;
 }
 
 html,
@@ -47,7 +50,7 @@ body {
 
 @layer components {
   .surface-card {
-    @apply bg-surface-card rounded-xl border border-outline-variant/60 shadow-card;
+    @apply bg-surface-card rounded-xl border border-outline-variant/50 shadow-soft;
   }
 
   .field-input {
@@ -63,7 +66,7 @@ body {
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 border border-primary text-primary bg-transparent hover:bg-primary-50 font-semibold text-xs tracking-wide px-5 py-2.5 rounded-lg transition-all;
+    @apply inline-flex items-center justify-center gap-2 border border-primary/40 text-primary bg-white/80 hover:bg-primary-50 font-semibold text-xs tracking-wide px-5 py-2.5 rounded-lg transition-all;
   }
 
   .btn-danger {
@@ -71,7 +74,7 @@ body {
   }
 
   .status-pill {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase;
   }
 
   .label-caps {
@@ -80,5 +83,37 @@ body {
 
   .page-title {
     @apply font-display text-2xl md:text-3xl font-semibold text-on-surface tracking-tight;
+  }
+
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table thead {
+    @apply bg-primary-50/70 text-left;
+  }
+
+  .data-table th {
+    @apply px-4 py-3 label-caps text-primary-700;
+  }
+
+  .data-table tbody tr {
+    @apply border-t border-outline-variant/40 transition-colors;
+  }
+
+  .data-table tbody tr:hover {
+    @apply bg-primary-50/50;
+  }
+
+  .data-table td {
+    @apply px-4 py-3;
+  }
+
+  .wa-bubble-out {
+    @apply max-w-[85%] rounded-2xl rounded-bl-md px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap bg-white text-on-surface shadow-sm;
+  }
+
+  .wa-bubble-in {
+    @apply max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap bg-[#DCF8C6] text-on-surface shadow-sm;
   }
 }

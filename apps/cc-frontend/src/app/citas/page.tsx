@@ -1,7 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import {
+  Ban,
+  CalendarClock,
+  ClipboardList,
+  Phone,
+} from 'lucide-react'
 import PageShell from '@/components/PageShell'
+import { Avatar, IconAction, StatusBadge } from '@/components/ui'
 import {
   APPT_STATUS_LABEL,
   CHANGE_ORIGIN_LABEL,
@@ -104,6 +111,7 @@ export default function CitasPage() {
 
   return (
     <PageShell
+      icon={ClipboardList}
       title="Citas"
       subtitle="Gestión, reprogramación y cancelaciones"
       actions={
@@ -126,17 +134,17 @@ export default function CitasPage() {
         </select>
       </div>
 
-      <div className="surface-card overflow-x-auto mb-8">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-muted/80 text-left">
+      <div className="surface-card overflow-x-auto mb-8 shadow-soft">
+        <table className="data-table">
+          <thead>
             <tr>
-              <th className="px-4 py-3 label-caps">Fecha</th>
-              <th className="px-4 py-3 label-caps">Paciente</th>
-              <th className="px-4 py-3 label-caps">Doctor</th>
-              <th className="px-4 py-3 label-caps">Estado</th>
-              <th className="px-4 py-3 label-caps">Cambio</th>
-              <th className="px-4 py-3 label-caps">WhatsApp</th>
-              <th className="px-4 py-3 label-caps">Acciones</th>
+              <th>Fecha</th>
+              <th>Paciente</th>
+              <th>Doctor</th>
+              <th>Estado</th>
+              <th>Cambio</th>
+              <th>WhatsApp</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -147,25 +155,50 @@ export default function CitasPage() {
                 a.status === 'CONFIRMED' ||
                 a.status === 'RESCHEDULED' ||
                 a.status === 'NEEDS_RESCHEDULE'
+              const statusKey = a.needsReschedule ? 'NEEDS_RESCHEDULE' : a.status
               return (
               <tr
                 key={a.id}
                 id={`cita-${a.id}`}
-                className={`border-t border-outline-variant/40 ${
-                  highlightId === a.id ? 'bg-primary-50/80 ring-2 ring-inset ring-primary/30' : ''
-                }`}
+                className={highlightId === a.id ? 'bg-primary-50/80 ring-2 ring-inset ring-primary/30' : ''}
               >
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td className="whitespace-nowrap">
                   {a.slot ? formatLaPaz(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                 </td>
-                <td className="px-4 py-3">{a.patient?.firstName} {a.patient?.lastName}</td>
-                <td className="px-4 py-3">Dr(a). {a.doctor?.lastName} · {a.specialty?.name}</td>
-                <td className="px-4 py-3">
-                  <span className={`status-pill ${a.needsReschedule ? 'bg-accent-soft text-accent' : 'bg-primary-100 text-primary'}`}>
-                    {APPT_STATUS_LABEL[a.status] || a.status}
-                  </span>
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar
+                      firstName={a.patient?.firstName}
+                      lastName={a.patient?.lastName}
+                      size="sm"
+                    />
+                    <span className="font-medium truncate">
+                      {a.patient?.firstName} {a.patient?.lastName}
+                    </span>
+                  </div>
                 </td>
-                <td className="px-4 py-3 text-xs max-w-[180px]">
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar
+                      firstName={a.doctor?.firstName}
+                      lastName={a.doctor?.lastName}
+                      size="sm"
+                    />
+                    <span className="truncate">
+                      Dr(a). {a.doctor?.lastName}
+                      {a.specialty?.name ? (
+                        <span className="text-on-surface-variant"> · {a.specialty.name}</span>
+                      ) : null}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <StatusBadge
+                    status={statusKey}
+                    label={APPT_STATUS_LABEL[a.status] || a.status}
+                  />
+                </td>
+                <td className="text-xs max-w-[180px]">
                   {lastChange ? (
                     <div>
                       <p className="font-semibold">
@@ -179,11 +212,11 @@ export default function CitasPage() {
                     <span className="text-outline">{a.reason || '—'}</span>
                   )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td className="whitespace-nowrap">
                   {a.whatsappConversation ? (
                     <a
                       href={`/whatsapp?chat=${a.whatsappConversation.id}`}
-                      className="text-primary font-semibold hover:underline"
+                      className="text-primary font-semibold hover:underline text-xs"
                     >
                       {WA_CHAT_STATUS_LABEL[a.whatsappConversation.status] ||
                         a.whatsappConversation.status}
@@ -192,28 +225,33 @@ export default function CitasPage() {
                     <span className="text-outline text-xs">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 space-x-2 whitespace-nowrap">
-                  {a.interactions?.[0]?.id && (
-                    <a href={`/llamadas/${a.interactions[0].id}`} className="text-primary font-semibold">
-                      Llamada
-                    </a>
-                  )}
-                  {active && (
-                    <>
-                      <button
-                        className="text-status-error font-semibold"
-                        onClick={() => cancel(a.id, true)}
-                      >
-                        Cancelar (doctor)
-                      </button>
-                      <button
-                        className="text-accent font-semibold"
-                        onClick={() => doctorReschedule(a.id)}
-                      >
-                        Reprogramar (doctor)
-                      </button>
-                    </>
-                  )}
+                <td className="whitespace-nowrap">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {a.interactions?.[0]?.id && (
+                      <IconAction
+                        icon={Phone}
+                        label="Llamada"
+                        href={`/llamadas/${a.interactions[0].id}`}
+                        tone="primary"
+                      />
+                    )}
+                    {active && (
+                      <>
+                        <IconAction
+                          icon={Ban}
+                          label="Cancelar (doctor)"
+                          tone="danger"
+                          onClick={() => cancel(a.id, true)}
+                        />
+                        <IconAction
+                          icon={CalendarClock}
+                          label="Reprogramar (doctor)"
+                          tone="amber"
+                          onClick={() => doctorReschedule(a.id)}
+                        />
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             )})}
@@ -221,7 +259,7 @@ export default function CitasPage() {
         </table>
       </div>
 
-      <section className="surface-card p-5 mb-6">
+      <section className="surface-card p-5 mb-6 shadow-soft">
         <h3 className="font-display text-lg font-semibold mb-1">Bloquear agenda del doctor</h3>
         <p className="text-sm text-on-surface-variant mb-4">Cancela citas afectadas y crea cola de avisos salientes</p>
         <div className="grid md:grid-cols-4 gap-3">
