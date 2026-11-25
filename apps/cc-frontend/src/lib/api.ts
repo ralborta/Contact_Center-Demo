@@ -121,6 +121,33 @@ export const agentConfigApi = {
   update: async (body: any) => (await getApi().patch('/api/agent-config', body)).data,
 }
 
+export const whatsappApi = {
+  getConfig: async () => (await getApi().get('/api/whatsapp/config')).data,
+  updateConfig: async (body: any) =>
+    (await getApi().patch('/api/whatsapp/config', body)).data,
+  metrics: async () => (await getApi().get('/api/whatsapp/metrics')).data,
+  list: async (status?: string) =>
+    (await getApi().get('/api/whatsapp/conversations', { params: status ? { status } : {} })).data,
+  get: async (id: string) =>
+    (await getApi().get(`/api/whatsapp/conversations/${id}`)).data,
+  options: async (id: string) =>
+    (await getApi().get(`/api/whatsapp/conversations/${id}/options`)).data,
+  simulateReply: async (
+    id: string,
+    body: { action: 'confirm' | 'cancel' | 'reschedule'; newSlotId?: string },
+  ) =>
+    (await getApi().post(`/api/whatsapp/conversations/${id}/simulate-reply`, body)).data,
+  runNow: async () => (await getApi().post('/api/whatsapp/run-now')).data,
+  seedDemo: async () => (await getApi().post('/api/whatsapp/seed-demo')).data,
+}
+
+export const WA_CHAT_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Sin respuesta',
+  CONFIRMED: 'Confirmada',
+  CANCELLED: 'Cancelada',
+  RESCHEDULED: 'Reprogramada',
+}
+
 export const voiceApi = {
   signedUrl: async () => (await getApi().get('/api/voice/signed-url')).data,
 }

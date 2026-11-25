@@ -15,6 +15,7 @@ import {
   UserCog,
   LogOut,
   HeartPulse,
+  MessageCircle,
 } from 'lucide-react'
 import { getUser, clearAuth, isAdmin } from '@/lib/auth'
 import { resetApiInstance } from '@/lib/api'
@@ -25,6 +26,7 @@ const NAV = [
   { href: '/llamadas', label: 'Llamadas', icon: Phone, match: (p: string) => p.startsWith('/llamadas') },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays, match: (p: string) => p.startsWith('/agenda') },
   { href: '/citas', label: 'Citas', icon: ClipboardList, match: (p: string) => p.startsWith('/citas') },
+  { href: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, match: (p: string) => p.startsWith('/whatsapp') },
   { href: '/doctores', label: 'Doctores', icon: Stethoscope, match: (p: string) => p.startsWith('/doctores') || p.startsWith('/especialidades') },
   { href: '/pacientes', label: 'Pacientes', icon: Users, match: (p: string) => p.startsWith('/pacientes') },
   { href: '/campanas', label: 'Campañas', icon: Megaphone, match: (p: string) => p.startsWith('/campanas') },

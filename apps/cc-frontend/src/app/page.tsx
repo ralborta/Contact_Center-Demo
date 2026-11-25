@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Phone, CalendarCheck, XCircle, Bot, UserRound, Activity } from 'lucide-react'
+import { Phone, CalendarCheck, XCircle, Bot, UserRound, Activity, MessageCircle } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { analyticsApi } from '@/lib/api'
 
@@ -108,6 +108,30 @@ export default function DashboardPage() {
           <div className="mt-5 flex flex-wrap gap-2">
             <Link href="/llamadas" className="btn-primary">Ver llamadas</Link>
             <Link href="/agenda" className="btn-secondary">Abrir agenda</Link>
+          </div>
+        </section>
+
+        <section className="surface-card p-5 md:col-span-2">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <h3 className="font-display text-lg font-semibold">Confirmaciones WhatsApp</h3>
+            <MessageCircle className="w-4 h-4 text-primary" />
+          </div>
+          <p className="text-sm text-on-surface-variant mb-4">Estado de las conversaciones de confirmación</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Confirmadas', value: data?.whatsapp?.confirmed },
+              { label: 'Canceladas', value: data?.whatsapp?.cancelled },
+              { label: 'Reprogramadas', value: data?.whatsapp?.rescheduled },
+              { label: 'Sin respuesta', value: data?.whatsapp?.pending },
+            ].map((x) => (
+              <div key={x.label} className="rounded-lg bg-surface-muted/60 px-3 py-3">
+                <p className="text-xl font-display font-semibold">{x.value ?? '—'}</p>
+                <p className="label-caps mt-1">{x.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4">
+            <Link href="/whatsapp" className="btn-secondary">Abrir WhatsApp</Link>
           </div>
         </section>
       </div>

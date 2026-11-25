@@ -2,9 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CalendarDays, Phone, X } from 'lucide-react'
+import { CalendarDays, MessageCircle, Phone, X } from 'lucide-react'
 import PageShell from '@/components/PageShell'
-import { APPT_STATUS_LABEL, doctorsApi, formatLaPaz, specialtiesApi } from '@/lib/api'
+import {
+  APPT_STATUS_LABEL,
+  WA_CHAT_STATUS_LABEL,
+  doctorsApi,
+  formatLaPaz,
+  specialtiesApi,
+} from '@/lib/api'
 
 type AgendaAppointment = {
   id: string
@@ -23,6 +29,11 @@ type AgendaAppointment = {
     resultCode?: string | null
     startedAt?: string
   }>
+  whatsappConversation?: {
+    id: string
+    status?: string
+    lastMessageAt?: string | null
+  } | null
 }
 
 type Slot = {
@@ -408,6 +419,15 @@ export default function AgendaPage() {
                     'Reservada'}
                 </p>
               </div>
+              <div>
+                <p className="label-caps">WhatsApp</p>
+                <p className="font-medium">
+                  {detailAppt.whatsappConversation
+                    ? WA_CHAT_STATUS_LABEL[detailAppt.whatsappConversation.status || ''] ||
+                      detailAppt.whatsappConversation.status
+                    : 'Sin mensaje'}
+                </p>
+              </div>
               <div className="col-span-2">
                 <p className="label-caps">Fecha y hora</p>
                 <p className="font-medium">
@@ -427,19 +447,30 @@ export default function AgendaPage() {
               )}
             </div>
 
-            {detailCall ? (
-              <Link
-                href={`/llamadas/${detailCall.id}`}
-                className="btn-primary w-full inline-flex items-center justify-center gap-2"
-              >
-                <Phone className="w-4 h-4" />
-                Ver llamada que reservó
-              </Link>
-            ) : (
-              <p className="text-xs text-on-surface-variant">
-                Esta cita no está vinculada a una llamada del agente.
-              </p>
-            )}
+            <div className="flex flex-col gap-2">
+              {detailCall ? (
+                <Link
+                  href={`/llamadas/${detailCall.id}`}
+                  className="btn-primary w-full inline-flex items-center justify-center gap-2"
+                >
+                  <Phone className="w-4 h-4" />
+                  Ver llamada que reservó
+                </Link>
+              ) : (
+                <p className="text-xs text-on-surface-variant">
+                  Esta cita no está vinculada a una llamada del agente.
+                </p>
+              )}
+              {detailAppt.whatsappConversation?.id && (
+                <Link
+                  href={`/whatsapp?chat=${detailAppt.whatsappConversation.id}`}
+                  className="btn-secondary w-full inline-flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Ver chat de confirmación
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       )}

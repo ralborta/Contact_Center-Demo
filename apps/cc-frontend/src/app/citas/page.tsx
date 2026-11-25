@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import PageShell from '@/components/PageShell'
 import {
   APPT_STATUS_LABEL,
+  WA_CHAT_STATUS_LABEL,
   appointmentsApi,
   doctorsApi,
   formatLaPaz,
@@ -114,6 +115,7 @@ export default function CitasPage() {
               <th className="px-4 py-3 label-caps">Paciente</th>
               <th className="px-4 py-3 label-caps">Doctor</th>
               <th className="px-4 py-3 label-caps">Estado</th>
+              <th className="px-4 py-3 label-caps">WhatsApp</th>
               <th className="px-4 py-3 label-caps">Acciones</th>
             </tr>
           </thead>
@@ -135,6 +137,19 @@ export default function CitasPage() {
                   <span className={`status-pill ${a.needsReschedule ? 'bg-accent-soft text-accent' : 'bg-primary-100 text-primary'}`}>
                     {APPT_STATUS_LABEL[a.status] || a.status}
                   </span>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {a.whatsappConversation ? (
+                    <a
+                      href={`/whatsapp?chat=${a.whatsappConversation.id}`}
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      {WA_CHAT_STATUS_LABEL[a.whatsappConversation.status] ||
+                        a.whatsappConversation.status}
+                    </a>
+                  ) : (
+                    <span className="text-outline text-xs">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 space-x-2 whitespace-nowrap">
                   {a.interactions?.[0]?.id && (

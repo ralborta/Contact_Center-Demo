@@ -63,6 +63,9 @@ export class AppointmentsService {
           orderBy: { startedAt: 'desc' },
           take: 3,
         },
+        whatsappConversation: {
+          select: { id: true, status: true, lastMessageAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -81,6 +84,9 @@ export class AppointmentsService {
         interactions: {
           include: { callDetail: true },
           orderBy: { startedAt: 'desc' },
+        },
+        whatsappConversation: {
+          select: { id: true, status: true, lastMessageAt: true },
         },
       },
     });
@@ -268,6 +274,52 @@ export class AppointmentsService {
       ...params,
       toStatus: AppointmentStatus.CANCELLED_BY_PATIENT,
       blockSlot: false,
+    });
+  }
+
+  /** Confirmación de asistencia (WhatsApp / operador). */
+  async confirmByPatient(params: {
+    appointmentId: string;
+    origin: ChangeOrigin;
+    actorId?: string;
+    reason?: string;
+  }) {
+    const appt = await this.prisma.appointment.findUnique({
+      where: { id: params.appointmentId },
+    });
+    if (!appt) throw new NotFoundException('Cita no encontrada');
+    if (
+      !ACTIVE_STATUSES.includes(appt.status) &&
+      appt.status !== AppointmentStatus.NEEDS_RESCHEDULE
+    ) {
+      throw new BadRequestException(
+        `No se puede confirmar una cita en estado ${appt.status}`,
+      );
+    }
+    return this.prisma.appointment.update({
+      where: { id: appt.id },
+      data: {
+        status: AppointmentStatus.CONFIRMED,
+        needsReschedule: false,
+        changes: {
+          create: {
+            fromStatus: appt.status,
+            toStatus: AppointmentStatus.CONFIRMED,
+            fromSlotId: appt.slotId,
+            toSlotId: appt.slotId,
+            origin: params.origin,
+            actorId: params.actorId,
+            reason: params.reason || 'Confirmación por WhatsApp',
+            notified: true,
+          },
+        },
+      },
+      include: {
+        patient: true,
+        doctor: { include: { specialty: true } },
+        specialty: true,
+        slot: true,
+      },
     });
   }
 

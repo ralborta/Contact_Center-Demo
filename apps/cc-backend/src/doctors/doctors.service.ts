@@ -129,6 +129,9 @@ export class DoctorsService {
               orderBy: { startedAt: 'desc' },
               take: 3,
             },
+            whatsappConversation: {
+              select: { id: true, status: true, lastMessageAt: true },
+            },
           },
         },
       },

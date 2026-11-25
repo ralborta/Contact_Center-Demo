@@ -303,6 +303,7 @@ model Patient {
   appointments Appointment[]
   interactions Interaction[]
   campaignJobs OutboundCampaignJob[]
+  whatsappConversations WhatsappConversation[]
 
   @@index([phone])
   @@index([normalizedPhone])
@@ -358,6 +359,7 @@ model Appointment {
   changes      AppointmentChange[]
   interactions Interaction[]
   campaignJobs OutboundCampaignJob[]
+  whatsappConversation WhatsappConversation?
 
   @@index([patientId, status])
   @@index([doctorId, status])
@@ -452,6 +454,87 @@ model OutboundCampaignJob {
   @@index([campaignId, status])
   @@index([status])
   @@map("outbound_campaign_jobs")
+}
+
+// ─── Confirmación de citas por WhatsApp ───────────────────────────
+
+enum WhatsappSendMode {
+  SAME_DAY
+  DAY_BEFORE
+  BOTH
+}
+
+enum WhatsappChatStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum WhatsappMessageDirection {
+  OUTBOUND
+  INBOUND
+  SYSTEM
+}
+
+model WhatsappConfirmConfig {
+  id              String          @id @default("default")
+  enabled         Boolean         @default(true)
+  mode            WhatsappSendMode @default(SAME_DAY)
+  /// Horas antes de la cita (mismo día)
+  hoursBefore     Int             @default(3)
+  /// Hora fija del día anterior (HH:mm, America/La_Paz)
+  dayBeforeTime   String          @default("18:00")
+  /// Cada cuánto corre el proceso: 15 | 30 | 60
+  intervalMinutes Int             @default(30)
+  sendWindowStart String          @default("08:00")
+  sendWindowEnd   String          @default("20:00")
+  messageTemplate String          @db.Text @default("Hola {{paciente}}, te escribimos del Hospital Central La Paz para confirmar tu cita de {{especialidad}} con el/la Dr(a). {{doctor}} el {{fecha}} a las {{hora}}. ¿Confirmás tu asistencia? Respondé CONFIRMAR, CANCELAR o CAMBIAR.")
+  /// simulated | builderbot (futuro)
+  provider        String          @default("simulated")
+  timezone        String          @default("America/La_Paz")
+  lastRunAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("whatsapp_confirm_config")
+}
+
+model WhatsappConversation {
+  id                 String             @id @default(uuid())
+  patientId          String
+  appointmentId      String?            @unique
+  phone              String
+  status             WhatsappChatStatus @default(PENDING)
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  provider           String             @default("simulated")
+  sentAt             DateTime?
+  respondedAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  patient     Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  messages    WhatsappMessage[]
+
+  @@index([status, lastMessageAt])
+  @@index([patientId])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsappMessage {
+  id             String                   @id @default(uuid())
+  conversationId String
+  direction      WhatsappMessageDirection
+  body           String                   @db.Text
+  simulated      Boolean                  @default(true)
+  createdAt      DateTime                 @default(now())
+
+  conversation WhatsappConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("whatsapp_messages")
 }
 
 // ─── Configuración del agente ─────────────────────────────────────

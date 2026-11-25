@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { AppointmentStatus, InteractionStatus } from '@prisma/client';
+import {
+  AppointmentStatus,
+  InteractionStatus,
+  WhatsappChatStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -22,6 +26,10 @@ export class AnalyticsService {
       aiResolved,
       transferred,
       totalCallsWeek,
+      waConfirmed,
+      waCancelled,
+      waRescheduled,
+      waPending,
     ] = await Promise.all([
       this.prisma.interaction.count({
         where: { startedAt: { gte: startOfDay, lt: endOfDay } },
@@ -71,6 +79,18 @@ export class AnalyticsService {
       this.prisma.interaction.count({
         where: { startedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
       }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.CONFIRMED },
+      }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.CANCELLED },
+      }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.RESCHEDULED },
+      }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.PENDING },
+      }),
     ]);
 
     const resolutionRate =
@@ -88,6 +108,12 @@ export class AnalyticsService {
       aiResolutionRate: resolutionRate,
       humanTransfersToday: transferred,
       callsLast7Days: totalCallsWeek,
+      whatsapp: {
+        confirmed: waConfirmed,
+        cancelled: waCancelled,
+        rescheduled: waRescheduled,
+        pending: waPending,
+      },
       timezone: 'America/La_Paz',
       currency: 'Bs',
     };

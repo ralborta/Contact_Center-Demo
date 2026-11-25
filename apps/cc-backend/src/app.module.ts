@@ -15,6 +15,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AgentConfigModule } from './agent-config/agent-config.module';
 import { VoiceModule } from './voice/voice.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { VoiceModule } from './voice/voice.module';
     AnalyticsModule,
     AgentConfigModule,
     VoiceModule,
+    WhatsappModule,
   ],
 })
 export class AppModule {}
