@@ -23,6 +23,14 @@ import {
 
 type Tab = 'inbox' | 'config'
 
+function humanPreview(text?: string | null) {
+  const t = String(text || '').trim()
+  if (!t) return '—'
+  if (/^(SEED:|KIND:|OPCIONES:)/i.test(t)) return 'Conversación'
+  if (/^conv_/i.test(t) || /^test[-_]/i.test(t)) return 'Conversación'
+  return t
+}
+
 export default function WhatsappPage() {
   const [tab, setTab] = useState<Tab>('inbox')
   const [conversations, setConversations] = useState<any[]>([])
@@ -269,7 +277,9 @@ export default function WhatsappPage() {
                           />
                         </div>
                         <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">
-                          {c.lastMessagePreview || c.appointment?.specialty?.name || '—'}
+                          {humanPreview(
+                            c.lastMessagePreview || c.appointment?.specialty?.name,
+                          )}
                         </p>
                         <p className="text-[11px] text-outline mt-1">
                           {c.lastMessageAt

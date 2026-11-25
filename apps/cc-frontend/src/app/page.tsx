@@ -119,7 +119,7 @@ export default function DashboardPage() {
     <PageShell
       icon={LayoutDashboard}
       title={`${greetingForHour(hourLaPaz)}`}
-      subtitle={`${dateLabel} · Centro de citas · America/La_Paz`}
+      subtitle={`${dateLabel} · Centro de citas · La Paz, Bolivia`}
       actions={
         <Link href="/citas?needsReschedule=true" className="btn-secondary">
           <CalendarClock className="w-3.5 h-3.5" />

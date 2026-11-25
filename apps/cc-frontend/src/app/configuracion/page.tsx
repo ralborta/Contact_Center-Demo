@@ -64,7 +64,9 @@ export default function ConfiguracionPage() {
           <input type="checkbox" checked={!!form.transferEnabled} onChange={(e) => setForm({ ...form, transferEnabled: e.target.checked })} />
           Permitir derivación a humano
         </label>
-        <p className="text-xs text-on-surface-variant">Zona horaria: {form.timezone || 'America/La_Paz'} · Moneda: {form.currency || 'Bs'}</p>
+        <p className="text-xs text-on-surface-variant">
+          Zona horaria: La Paz, Bolivia · Moneda: {form.currency || 'Bs'}
+        </p>
         <button className="btn-primary" onClick={save}>{saved ? 'Guardado' : 'Guardar'}</button>
       </div>
     </PageShell>

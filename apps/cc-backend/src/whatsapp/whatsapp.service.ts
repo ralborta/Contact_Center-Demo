@@ -395,7 +395,7 @@ export class WhatsappService {
   }
 
   async listConversations(status?: WhatsappChatStatus) {
-    return this.prisma.whatsappConversation.findMany({
+    const rows = await this.prisma.whatsappConversation.findMany({
       where: {
         archived: false,
         ...(status ? { status } : {}),
@@ -413,6 +413,18 @@ export class WhatsappService {
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
       take: 100,
     });
+    return rows.map((r) => ({
+      ...r,
+      lastMessagePreview: this.humanPreview(r.lastMessagePreview),
+    }));
+  }
+
+  private humanPreview(text?: string | null) {
+    const t = String(text || '').trim();
+    if (!t) return null;
+    if (this.isInternalMarker(t)) return null;
+    if (/^conv_/i.test(t) || /^test[-_]/i.test(t)) return null;
+    return t;
   }
 
   private pickReply(pool: string[], salt: string) {
@@ -433,6 +445,15 @@ export class WhatsappService {
     };
   }
 
+  private isInternalMarker(body: string) {
+    const b = String(body || '').trim();
+    return (
+      b.startsWith('SEED:') ||
+      b.startsWith('KIND:') ||
+      b.startsWith('OPCIONES:')
+    );
+  }
+
   private async appendMessage(params: {
     conversationId: string;
     direction: WhatsappMessageDirection;
@@ -441,8 +462,10 @@ export class WhatsappService {
     status?: WhatsappChatStatus;
     responded?: boolean;
   }) {
-    const preview = params.body.slice(0, 120);
     const now = new Date();
+    const internal =
+      params.direction === WhatsappMessageDirection.SYSTEM ||
+      this.isInternalMarker(params.body);
     await this.prisma.whatsappMessage.create({
       data: {
         conversationId: params.conversationId,
@@ -455,7 +478,10 @@ export class WhatsappService {
       where: { id: params.conversationId },
       data: {
         lastMessageAt: now,
-        lastMessagePreview: preview,
+        // No mostrar marcadores internos (SEED/KIND/OPCIONES) en la bandeja
+        ...(internal
+          ? {}
+          : { lastMessagePreview: params.body.slice(0, 120) }),
         ...(params.status ? { status: params.status } : {}),
         ...(params.responded ? { respondedAt: now } : {}),
       },
@@ -919,6 +945,7 @@ export class WhatsappService {
    */
   async seedDemoConversations() {
     const archivedJuan = await this.archiveJuanPerezDuplicates();
+    const cleanedPreviews = await this.sanitizeTechnicalPreviews();
     const config = await this.getConfig();
     const now = new Date();
     const errors: string[] = [];
@@ -967,6 +994,7 @@ export class WhatsappService {
         ok: true,
         created: 0,
         archivedJuan,
+        cleanedPreviews,
         counts,
         total: active.length,
         message: 'Bandeja demo ya completa',
@@ -1117,10 +1145,50 @@ export class WhatsappService {
       ok: true,
       created,
       archivedJuan,
+      cleanedPreviews,
       beforeCounts: counts,
       total: after,
       errors: errors.slice(0, 8),
     };
+  }
+
+  /** Corrige previews que quedaron con marcadores SEED/KIND/OPCIONES. */
+  private async sanitizeTechnicalPreviews() {
+    const dirty = await this.prisma.whatsappConversation.findMany({
+      where: {
+        OR: [
+          { lastMessagePreview: { startsWith: 'SEED:' } },
+          { lastMessagePreview: { startsWith: 'KIND:' } },
+          { lastMessagePreview: { startsWith: 'OPCIONES:' } },
+        ],
+      },
+      select: { id: true },
+    });
+    let fixed = 0;
+    for (const row of dirty) {
+      const msg = await this.prisma.whatsappMessage.findFirst({
+        where: {
+          conversationId: row.id,
+          NOT: {
+            OR: [
+              { direction: WhatsappMessageDirection.SYSTEM },
+              { body: { startsWith: 'SEED:' } },
+              { body: { startsWith: 'KIND:' } },
+              { body: { startsWith: 'OPCIONES:' } },
+            ],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      await this.prisma.whatsappConversation.update({
+        where: { id: row.id },
+        data: {
+          lastMessagePreview: msg ? msg.body.slice(0, 120) : null,
+        },
+      });
+      fixed += 1;
+    }
+    return fixed;
   }
 
   /** Reserva un slot libre sin cita previa y crea la cita demo. */
