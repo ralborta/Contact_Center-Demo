@@ -175,11 +175,11 @@ export default function ConfiguracionPage() {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-on-surface-variant">Zona</span>
-                <span className="font-semibold">La Paz, Bolivia</span>
+                <span className="font-semibold">Argentina</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-on-surface-variant">Moneda</span>
-                <span className="font-semibold">{form.currency || 'Bs'}</span>
+                <span className="font-semibold">{form.currency || 'ARS'}</span>
               </div>
             </div>
           </div>

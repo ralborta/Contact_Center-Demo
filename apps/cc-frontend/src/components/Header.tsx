@@ -55,7 +55,7 @@ export default function Header() {
           </div>
           <div>
             <h1 className="text-lg font-display font-semibold text-on-primary leading-tight">
-              Hospital Central La Paz
+              Hospital Santa María
             </h1>
             <p className="text-[10px] text-on-primary/75 uppercase tracking-wider font-semibold">
               Centro de Citas

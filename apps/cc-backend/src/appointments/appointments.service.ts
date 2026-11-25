@@ -594,14 +594,14 @@ export class AppointmentsService {
     slot: { startsAt: Date; endsAt: Date };
   }) {
     const starts = appt.slot.startsAt;
-    const fecha = starts.toLocaleDateString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const fecha = starts.toLocaleDateString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     });
-    const hora = starts.toLocaleTimeString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const hora = starts.toLocaleTimeString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,

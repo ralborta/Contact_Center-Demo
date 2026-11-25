@@ -283,7 +283,7 @@ export default function CitasPage() {
             <select className="field-input" value={form.patientId} onChange={(e) => setForm({ ...form, patientId: e.target.value })}>
               <option value="">Paciente</option>
               {patients.map((p) => (
-                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · CI {p.documentId}</option>
+                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · DNI {p.documentId}</option>
               ))}
             </select>
             <select className="field-input" value={form.doctorId} onChange={(e) => loadAvailability(e.target.value)}>

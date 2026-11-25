@@ -35,7 +35,7 @@ export default function PacientesPage() {
       <div className="mb-4 flex gap-2">
         <input
           className="field-input max-w-md"
-          placeholder="Buscar por nombre, CI o teléfono"
+          placeholder="Buscar por nombre, DNI o teléfono"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && load(q)}
@@ -47,7 +47,7 @@ export default function PacientesPage() {
           <thead>
             <tr>
               <th>Nombre</th>
-              <th>CI</th>
+              <th>DNI</th>
               <th>Teléfono</th>
               <th>Seguro</th>
               <th className="text-right"> </th>

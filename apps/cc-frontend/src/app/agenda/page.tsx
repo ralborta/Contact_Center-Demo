@@ -458,7 +458,7 @@ export default function AgendaPage() {
               <div>
                 <p className="label-caps">Documento</p>
                 <p className="font-medium">
-                  {detailPatient?.documentId ? `CI ${detailPatient.documentId}` : '—'}
+                  {detailPatient?.documentId ? `DNI ${detailPatient.documentId}` : '—'}
                 </p>
               </div>
               <div>

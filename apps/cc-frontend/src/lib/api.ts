@@ -172,8 +172,8 @@ export const usersApi = {
 
 export function formatLaPaz(iso: string | Date, opts?: Intl.DateTimeFormatOptions) {
   const d = typeof iso === 'string' ? new Date(iso) : iso
-  return d.toLocaleString('es-BO', {
-    timeZone: 'America/La_Paz',
+  return d.toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
     ...opts,
   })
 }

@@ -55,8 +55,8 @@ export class AgentService {
         ok: false,
         encontrado: false,
         mensaje:
-          'No encontré al paciente. Ofrezca registrarlo: pida nombre, apellido, carnet de identidad y teléfono, confirme los datos y use registrar_paciente.',
-        faltantes: ['nombre', 'apellido', 'ci', 'telefono'],
+          'No encontré al paciente. Ofrezca registrarlo: pida nombre, apellido, DNI y teléfono, confirme los datos y use registrar_paciente.',
+        faltantes: ['nombre', 'apellido', 'dni', 'telefono'],
       };
     }
     const voice = this.patients.formatForVoice(patient);
@@ -99,7 +99,7 @@ export class AgentService {
         ok: false,
         registrado: false,
         mensaje:
-          'Faltan datos para registrar. Necesito nombre, apellido, carnet de identidad y teléfono.',
+          'Faltan datos para registrar. Necesito nombre, apellido, DNI y teléfono.',
         faltantes: result.missing,
       };
     }
@@ -478,7 +478,7 @@ export class AgentService {
         status: InteractionStatus.IN_PROGRESS,
         startedAt: new Date(),
         from: 'pending',
-        to: 'Hospital Central La Paz',
+        to: 'Hospital Santa María',
         aiHandled: true,
         resultCode,
         provider: Provider.VOICE_AGENT,
@@ -522,7 +522,7 @@ export class AgentService {
         status: InteractionStatus.IN_PROGRESS,
         startedAt: new Date(),
         from,
-        to: 'Hospital Central La Paz',
+        to: 'Hospital Santa María',
         aiHandled: true,
         intent: 'consulta',
         provider: Provider.VOICE_AGENT,
@@ -548,10 +548,10 @@ export class AgentService {
       ? await this.patients.findByPhoneOrCi(String(phone))
       : null;
     const config = await this.prisma.agentConfig.findUnique({ where: { id: 'default' } });
-    const hospital = config?.hospitalName || 'Hospital Central La Paz';
+    const hospital = config?.hospitalName || 'Hospital Santa María';
     const saludo =
       config?.greeting ||
-      'Buenos días, habla el asistente de citas del Hospital Central La Paz. ¿En qué puedo ayudarle?';
+      'Buenos días, habla el asistente de turnos del Hospital Santa María. ¿En qué te puedo ayudar?';
 
     // Respuesta estricta: type + dynamic_variables (strings). HTTP 200.
     // No incluir claves system__* (las pone ElevenLabs).
@@ -581,7 +581,7 @@ export class AgentService {
         citas_proximas_count: String(citas.length),
         citas_resumen:
           citas.length === 0
-            ? 'sin citas próximas'
+            ? 'sin turnos próximos'
             : citas
                 .slice(0, 3)
                 .map((c) => this.appointments.formatForVoice(c).mensaje)
@@ -624,7 +624,7 @@ export class AgentService {
     const to =
       data?.metadata?.phone_call?.agent_number ||
       payload?.to ||
-      'Hospital Central La Paz';
+      'Hospital Santa María';
 
     const transcript = data?.transcript ?? payload?.transcript ?? null;
     const analysis = data?.analysis || payload?.analysis || {};

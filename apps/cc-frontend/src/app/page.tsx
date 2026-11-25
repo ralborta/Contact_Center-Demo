@@ -43,12 +43,12 @@ export default function DashboardPage() {
 
   const dateLabel = useMemo(
     () =>
-      now.toLocaleDateString('es-BO', {
+      now.toLocaleDateString('es-AR', {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
         year: 'numeric',
-        timeZone: 'America/La_Paz',
+        timeZone: 'America/Argentina/Buenos_Aires',
       }),
     [now],
   )
@@ -57,7 +57,7 @@ export default function DashboardPage() {
     const parts = new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       hour12: false,
-      timeZone: 'America/La_Paz',
+      timeZone: 'America/Argentina/Buenos_Aires',
     }).formatToParts(now)
     return Number(parts.find((p) => p.type === 'hour')?.value || 12)
   }, [now])
@@ -119,7 +119,7 @@ export default function DashboardPage() {
     <PageShell
       icon={LayoutDashboard}
       title={`${greetingForHour(hourLaPaz)}`}
-      subtitle={`${dateLabel} · Centro de citas · La Paz, Bolivia`}
+      subtitle={`${dateLabel} · Centro de turnos · Argentina`}
       actions={
         <Link href="/citas?needsReschedule=true" className="btn-secondary">
           <CalendarClock className="w-3.5 h-3.5" />

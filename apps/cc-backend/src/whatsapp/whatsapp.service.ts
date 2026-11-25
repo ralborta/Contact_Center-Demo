@@ -246,7 +246,7 @@ export class WhatsappService {
 
     const { fecha, hora } = formatLaPazParts(new Date(before.slot.startsAt));
     const intro =
-      `Hola ${cancelled.patient.firstName}, te escribimos del Hospital Central La Paz. ` +
+      `Hola ${cancelled.patient.firstName}, te escribimos del Hospital Santa María. ` +
       `Lamentablemente el/la Dr(a). ${before.doctor.lastName} tuvo que cancelar tu cita de ${before.specialty.name} ` +
       `del ${fecha} a las ${hora}. Motivo: ${params.reason}.`;
 
@@ -343,7 +343,7 @@ export class WhatsappService {
     const { fecha, hora } = formatLaPazParts(new Date(before.slot.startsAt));
     const fmt = this.formatOptionsMessage(options);
     const body =
-      `Hola ${updated.patient.firstName}, te escribimos del Hospital Central La Paz. ` +
+      `Hola ${updated.patient.firstName}, te escribimos del Hospital Santa María. ` +
       `El/la Dr(a). ${before.doctor.lastName} necesita cambiar tu cita de ${before.specialty.name} ` +
       `del ${fecha} a las ${hora}. Motivo: ${params.reason}.\n\n` +
       `Estas son las opciones disponibles:\n${fmt.text}\n\n` +

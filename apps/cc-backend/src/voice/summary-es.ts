@@ -65,5 +65,5 @@ export function ensureSpanishSummary(params: {
   if (availability) {
     return `Se consultó disponibilidad de turnos. No hubo reserva en esta llamada.`;
   }
-  return `Llamada de consulta con el asistente de citas del Hospital Central La Paz.`;
+  return `Llamada de consulta con el asistente de turnos del Hospital Santa María.`;
 }

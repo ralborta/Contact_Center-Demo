@@ -38,7 +38,7 @@ export class AvailabilityService {
       if (period === 'any') return true;
       const hour = Number(
         s.startsAt.toLocaleString('en-US', {
-          timeZone: 'America/La_Paz',
+          timeZone: 'America/Argentina/Buenos_Aires',
           hour: 'numeric',
           hour12: false,
         }),
@@ -52,7 +52,7 @@ export class AvailabilityService {
     const byDay = new Map<string, typeof filtered>();
     for (const s of filtered) {
       const dayKey = s.startsAt.toLocaleDateString('en-CA', {
-        timeZone: 'America/La_Paz',
+        timeZone: 'America/Argentina/Buenos_Aires',
       });
       const list = byDay.get(dayKey) || [];
       list.push(s);
@@ -89,14 +89,14 @@ export class AvailabilityService {
       specialty: { id: string; name: string };
     };
   }) {
-    const fecha = s.startsAt.toLocaleDateString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const fecha = s.startsAt.toLocaleDateString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     });
-    const hora = s.startsAt.toLocaleTimeString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const hora = s.startsAt.toLocaleTimeString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -194,12 +194,12 @@ export class AvailabilityService {
     return { created };
   }
 
-  /** Interpreta hora local America/La_Paz como UTC (offset fijo -4). */
+  /** Interpreta hora local America/Argentina/Buenos_Aires como UTC (offset fijo -3). */
   private laPazLocalToUtc(day: Date, hour: number, minute: number): Date {
     const y = day.getFullYear();
     const m = day.getMonth();
     const d = day.getDate();
-    // La Paz = UTC-4
-    return new Date(Date.UTC(y, m, d, hour + 4, minute, 0, 0));
+    // Argentina (sin DST) = UTC-3
+    return new Date(Date.UTC(y, m, d, hour + 3, minute, 0, 0));
   }
 }

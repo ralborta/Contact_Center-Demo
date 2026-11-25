@@ -25,7 +25,7 @@ export default function PacienteFichaPage() {
   return (
     <PageShell
       title={`${p.firstName} ${p.lastName}`}
-      subtitle={`CI ${p.documentId} · ${p.phone}`}
+      subtitle={`DNI ${p.documentId} · ${p.phone}`}
       actions={<Link href="/pacientes" className="btn-secondary">Volver</Link>}
     >
       <div className="grid lg:grid-cols-3 gap-6">

@@ -21,7 +21,7 @@ describe('PatientsService.registerNew', () => {
     patients.create.mockClear();
   });
 
-  it('crea paciente nuevo cuando no existe CI ni teléfono', async () => {
+  it('crea paciente nuevo cuando no existe DNI ni teléfono', async () => {
     patients.findUnique.mockResolvedValue(null);
     patients.findFirst.mockResolvedValue(null);
     const r = await svc.registerNew({
@@ -35,7 +35,7 @@ describe('PatientsService.registerNew', () => {
     expect(patients.create).toHaveBeenCalled();
   });
 
-  it('es idempotente por CI', async () => {
+  it('es idempotente por DNI', async () => {
     patients.findUnique.mockResolvedValue({
       id: 'p1',
       firstName: 'Ana',

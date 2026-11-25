@@ -3,8 +3,8 @@
 import { Conversation } from '@elevenlabs/client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const DEFAULT_PHONE = '59170111222'
-const HOSPITAL = 'Hospital Central La Paz'
+const DEFAULT_PHONE = '5491155551234'
+const HOSPITAL = 'Hospital Santa María'
 
 type CallPhase = 'idle' | 'connecting' | 'active' | 'ended' | 'error'
 

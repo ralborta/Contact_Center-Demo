@@ -61,7 +61,7 @@ export class PatientsService {
   }
 
   /**
-   * Alta idempotente: si ya existe por CI o por teléfono, reutiliza (sin duplicar).
+   * Alta idempotente: si ya existe por DNI o por teléfono, reutiliza (sin duplicar).
    */
   async registerNew(params: {
     phone: string;
@@ -231,7 +231,7 @@ export class PatientsService {
       ciEnmascarado: ciMasked,
       telefono: p.phone,
       seguro: p.insurance || 'sin seguro registrado',
-      mensaje: `Paciente ${p.firstName} ${p.lastName}, carnet terminado en ${p.documentId.slice(-3)}.`,
+      mensaje: `Paciente ${p.firstName} ${p.lastName}, DNI terminado en ${p.documentId.slice(-3)}.`,
     };
   }
 }

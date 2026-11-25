@@ -37,7 +37,7 @@ export default function AnaliticaPage() {
     <PageShell
       icon={BarChart3}
       title="Analítica"
-      subtitle={`Indicadores de los últimos ${kpis?.periodDays ?? 30} días · La Paz, Bolivia`}
+      subtitle={`Indicadores de los últimos ${kpis?.periodDays ?? 30} días · Argentina`}
     >
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
         <KpiCard

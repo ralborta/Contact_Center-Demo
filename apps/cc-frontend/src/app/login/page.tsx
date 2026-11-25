@@ -52,9 +52,9 @@ export default function LoginPage() {
             <HeartPulse className="w-6 h-6" />
           </div>
           <h1 className="font-display text-2xl font-semibold text-on-surface">
-            Hospital Central La Paz
+            Hospital Santa María
           </h1>
-          <p className="text-sm text-on-surface-variant mt-1">Centro de Citas Médicas</p>
+          <p className="text-sm text-on-surface-variant mt-1">Centro de Turnos</p>
         </div>
 
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>

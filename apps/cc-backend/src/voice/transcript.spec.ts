@@ -18,14 +18,14 @@ describe('transcript helpers', () => {
           role: 'agent',
           message: '¡Hola! [warm] Con gusto te ayudo con tu cita de traumato...',
           original_message:
-            '¡Hola! [warm] Con gusto te ayudo con tu cita de traumatología. ¿Me confirmás tu CI?',
+            '¡Hola! [warm] Con gusto te ayudo con tu cita de traumatología. ¿Me confirmás tu DNI?',
           time_in_call_secs: 1,
         },
       ],
     });
     expect(turns).toHaveLength(1);
     expect(turns[0].text).toBe(
-      '¡Hola! Con gusto te ayudo con tu cita de traumatología. ¿Me confirmás tu CI?',
+      '¡Hola! Con gusto te ayudo con tu cita de traumatología. ¿Me confirmás tu DNI?',
     );
     expect(turns[0].text).not.toMatch(/\[\w+\]/);
     expect(turns[0].text).not.toMatch(/\.\.\.$/);

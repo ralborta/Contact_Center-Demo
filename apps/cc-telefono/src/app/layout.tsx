@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Hospital Central La Paz — Llamar',
-  description: 'Llamá al asistente de citas del Hospital Central La Paz',
+  title: 'Hospital Santa María — Llamar',
+  description: 'Llamá al asistente de turnos del Hospital Santa María',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

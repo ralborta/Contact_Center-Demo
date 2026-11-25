@@ -33,12 +33,12 @@ ELEVENLABS_WEBHOOK_TOKEN=...   # puede ser el mismo que AGENT_API_SECRET
 CORS_ORIGIN=https://TU-WEB.easypanel.host
 RUN_SEED=true                  # solo el primer deploy / demos; luego false
 SEED_ADMIN_PASSWORD=...        # requerido si RUN_SEED crea el usuario admin
-TZ=America/La_Paz
+TZ=America/Argentina/Buenos_Aires
 APP_PORT=3000
 PORT=3000
 ```
 
-Al arrancar, `main.ts` ejecuta `prisma migrate deploy`. Si `RUN_SEED=true`, carga datos demo (especialidades, doctores, Juan Pérez CI 1234567, etc.) y crea `admin` solo si `SEED_ADMIN_PASSWORD` está definido.
+Al arrancar, `main.ts` ejecuta `prisma migrate deploy`. Si `RUN_SEED=true`, carga datos demo (especialidades, doctores, Juan Pérez DNI 1234567, etc.) y crea `admin` solo si `SEED_ADMIN_PASSWORD` está definido.
 
 Health: `GET /api/health`  
 Docs: `GET /api/docs`

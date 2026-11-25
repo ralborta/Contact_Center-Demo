@@ -8,4 +8,4 @@ Dirección visual hospitalaria (no plantilla genérica de IA, no branding bancar
 - Tipografía: Manrope (UI) + Source Serif 4 (títulos)
 - Cards: blancas, radio 12px, sombra teal suave
 - Sin nombres de proveedores de stack/IA en la interfaz
-- Zona: America/La_Paz · moneda Bs
+- Zona: America/Argentina/Buenos_Aires · moneda ARS

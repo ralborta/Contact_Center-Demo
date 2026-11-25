@@ -483,16 +483,16 @@ model WhatsappConfirmConfig {
   mode            WhatsappSendMode @default(SAME_DAY)
   /// Horas antes de la cita (mismo día)
   hoursBefore     Int             @default(3)
-  /// Hora fija del día anterior (HH:mm, America/La_Paz)
+  /// Hora fija del día anterior (HH:mm, America/Argentina/Buenos_Aires)
   dayBeforeTime   String          @default("18:00")
   /// Cada cuánto corre el proceso: 15 | 30 | 60
   intervalMinutes Int             @default(30)
   sendWindowStart String          @default("08:00")
   sendWindowEnd   String          @default("20:00")
-  messageTemplate String          @db.Text @default("Hola {{paciente}}, te escribimos del Hospital Central La Paz para confirmar tu cita de {{especialidad}} con el/la Dr(a). {{doctor}} el {{fecha}} a las {{hora}}. ¿Confirmás tu asistencia? Respondé CONFIRMAR, CANCELAR o CAMBIAR.")
+  messageTemplate String          @db.Text @default("Hola {{paciente}}, te escribimos del Hospital Santa María para confirmar tu cita de {{especialidad}} con el/la Dr(a). {{doctor}} el {{fecha}} a las {{hora}}. ¿Confirmás tu asistencia? Respondé CONFIRMAR, CANCELAR o CAMBIAR.")
   /// simulated | builderbot (futuro)
   provider        String          @default("simulated")
-  timezone        String          @default("America/La_Paz")
+  timezone        String          @default("America/Argentina/Buenos_Aires")
   lastRunAt       DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -544,16 +544,16 @@ model WhatsappMessage {
 
 model AgentConfig {
   id                  String   @id @default("default")
-  hospitalName        String   @default("Hospital Central La Paz")
-  greeting            String   @default("Buenos días, habla el asistente de citas del Hospital Central La Paz. ¿En qué puedo ayudarle?")
+  hospitalName        String   @default("Hospital Santa María")
+  greeting            String   @default("Buenos días, habla el asistente de turnos del Hospital Santa María. ¿En qué te puedo ayudar?")
   businessHoursStart  String   @default("07:00")
   businessHoursEnd    String   @default("20:00")
-  timezone            String   @default("America/La_Paz")
+  timezone            String   @default("America/Argentina/Buenos_Aires")
   transferMessage     String   @default("Lo derivo con un operador humano, un momento por favor.")
   closedMessage       String   @default("Nuestro horario de atención telefónica es de 7:00 a 20:00. Puede volver a llamar en ese horario.")
   transferEnabled     Boolean  @default(true)
-  currency            String   @default("Bs")
-  locale              String   @default("es-BO")
+  currency            String   @default("ARS")
+  locale              String   @default("es-AR")
   updatedAt           DateTime @updatedAt
   createdAt           DateTime @default(now())
 

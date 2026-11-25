@@ -119,8 +119,8 @@ export class AnalyticsService {
         pending: waPending,
         doctorChanges: waDoctorChanges,
       },
-      timezone: 'America/La_Paz',
-      currency: 'Bs',
+      timezone: 'America/Argentina/Buenos_Aires',
+      currency: 'ARS',
     };
   }
 
@@ -194,10 +194,10 @@ export class AnalyticsService {
     });
   }
 
-  /** Inicio del día en America/La_Paz (UTC-4). */
+  /** Inicio del día en America/Argentina/Buenos_Aires (UTC-3). */
   private startOfLaPazDay(): Date {
     const now = new Date();
-    const laPaz = new Date(now.getTime() - 4 * 3600_000);
-    return new Date(Date.UTC(laPaz.getUTCFullYear(), laPaz.getUTCMonth(), laPaz.getUTCDate(), 4, 0, 0));
+    const local = new Date(now.getTime() - 3 * 3600_000);
+    return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 3, 0, 0));
   }
 }

@@ -77,7 +77,7 @@ export class VoiceService {
       agentId,
       defaultCallerPhone:
         this.config.get<string>('SIMULATOR_CALLER_PHONE') || '59170111222',
-      hospitalName: 'Hospital Central La Paz',
+      hospitalName: 'Hospital Santa María',
     };
   }
 
@@ -98,7 +98,7 @@ export class VoiceService {
         agentId: this.agentId(),
         signedUrl: null,
         conversationId: null,
-        hospitalName: 'Hospital Central La Paz',
+        hospitalName: 'Hospital Santa María',
         defaultCallerPhone:
           this.config.get<string>('SIMULATOR_CALLER_PHONE') || '59170111222',
       };
@@ -237,7 +237,7 @@ export class VoiceService {
         startedAt,
         endedAt,
         from,
-        to: 'Hospital Central La Paz',
+        to: 'Hospital Santa María',
         patientId: patient?.id,
         aiHandled: true,
         outcome,
@@ -441,7 +441,7 @@ export class VoiceService {
           status: InteractionStatus.IN_PROGRESS,
           startedAt: new Date(),
           from: 'pending',
-          to: 'Hospital Central La Paz',
+          to: 'Hospital Santa María',
           aiHandled: true,
           resultCode: resultCode || 'APPOINTMENT_BOOKED',
           provider: Provider.VOICE_AGENT,
