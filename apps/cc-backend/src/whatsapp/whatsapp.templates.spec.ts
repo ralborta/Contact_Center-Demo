@@ -22,9 +22,9 @@ describe('whatsapp templates', () => {
   });
 
   it('ventana de envío por HH:mm', () => {
-    // 12:00 UTC = 08:00 La Paz (UTC-4)
+    // 12:00 UTC = 09:00 Argentina (UTC-3)
     const noonUtc = new Date('2026-11-26T12:00:00.000Z');
     expect(isWithinSendWindow(noonUtc, '08:00', '20:00')).toBe(true);
-    expect(isWithinSendWindow(noonUtc, '09:00', '20:00')).toBe(false);
+    expect(isWithinSendWindow(noonUtc, '10:00', '20:00')).toBe(false);
   });
 });
