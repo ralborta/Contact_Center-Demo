@@ -64,11 +64,14 @@ module.exports = {
       },
       boxShadow: {
         card: '0 1px 3px rgb(15 92 92 / 0.06), 0 4px 12px rgb(26 32 44 / 0.04)',
+        soft: '0 2px 8px rgb(15 92 92 / 0.07), 0 8px 20px rgb(26 32 44 / 0.05)',
         elevate: '0 8px 24px rgb(15 92 92 / 0.12)',
       },
       backgroundImage: {
         'hero-mesh':
-          'radial-gradient(ellipse at 20% 0%, rgba(15,92,92,0.12), transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(196,92,38,0.08), transparent 45%), linear-gradient(180deg, #EEF3F6 0%, #F7FAFC 100%)',
+          'radial-gradient(ellipse at 12% -10%, rgba(15,92,92,0.14), transparent 48%), radial-gradient(ellipse at 92% 8%, rgba(43,108,176,0.08), transparent 42%), radial-gradient(ellipse at 70% 100%, rgba(196,92,38,0.07), transparent 45%), linear-gradient(180deg, #E8F0F3 0%, #F7FAFC 55%, #F4F8F9 100%)',
+        'wa-chat':
+          'linear-gradient(180deg, #E5DDD5 0%, #D1CBC3 100%)',
       },
     },
   },

@@ -1,5 +1,5 @@
 /**
- * Seed hospitalario demo — Bolivia / America/La_Paz
+ * Seed hospitalario demo — Argentina / America/Argentina/Buenos_Aires
  * IDEMPOTENTE y NO destructivo: solo agrega lo que falta.
  * Conserva a Juan Pérez 1234567 y sus citas existentes.
  */
@@ -33,16 +33,16 @@ const SPECIALTIES = [
 
 /** 30 médicos: 3 por especialidad (orden = specialty index). */
 const DOCTORS_BY_SPECIALTY: Array<[string, string][]> = [
-  [['Ana', 'Quispe'], ['Patricia', 'López'], ['Ricardo', 'Mendoza']], // MG
-  [['Carlos', 'Mamani'], ['Bruno', 'Arias'], ['Jimena', 'Suárez']], // PED
-  [['María', 'Condori'], ['Lucía', 'Flores'], ['Camila', 'Aguilar']], // GIN
+  [['Ana', 'Benítez'], ['Patricia', 'López'], ['Ricardo', 'Mendoza']], // MG
+  [['Carlos', 'Giménez'], ['Bruno', 'Arias'], ['Jimena', 'Suárez']], // PED
+  [['María', 'Fernández'], ['Lucía', 'Flores'], ['Camila', 'Aguilar']], // GIN
   [['José', 'Vargas'], ['Diego', 'Salazar'], ['Héctor', 'Navarro']], // CARD
-  [['Pedro', 'Rojas'], ['Valeria', 'Torrez'], ['Óscar', 'Rivera']], // TRA
-  [['Elena', 'Choque'], ['Sofía', 'Gutierrez'], ['Natalia', 'Paz']], // DER
+  [['Pedro', 'Rojas'], ['Valeria', 'Torres'], ['Óscar', 'Rivera']], // TRA
+  [['Elena', 'Acosta'], ['Sofía', 'Gutierrez'], ['Natalia', 'Paz']], // DER
   [['Miguel', 'Paredes'], ['Fernando', 'Miranda'], ['Adriana', 'Mejía']], // OFT
-  [['Andrés', 'Cruz'], ['Gabriela', 'Silva'], ['Esteban', 'Villca']], // NEU
+  [['Andrés', 'Cruz'], ['Gabriela', 'Silva'], ['Esteban', 'Villalba']], // NEU
   [['Daniela', 'Castro'], ['Roberto', 'Calle'], ['Paola', 'Núñez']], // ODO
-  [['Iván', 'Barrientos'], ['Claudia', 'Zambrana'], ['Mauricio', 'Pinto']], // PSI
+  [['Iván', 'Barrientos'], ['Claudia', 'Romero'], ['Mauricio', 'Pinto']], // PSI
 ];
 
 const CONSULTORIOS = ['101', '102', '103', '201', '202', '203', '301', '302', 'A-1', 'A-2', 'B-1', 'B-2'];
@@ -73,16 +73,17 @@ const SCHEDULE_VARIANTS = [
   ],
 ];
 
-function laPazLocalToUtc(day: Date, hour: number, minute: number): Date {
-  return new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), hour + 4, minute, 0, 0));
+function argentinaLocalToUtc(day: Date, hour: number, minute: number): Date {
+  // Argentina (sin DST) = UTC-3
+  return new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), hour + 3, minute, 0, 0));
 }
 
 async function main() {
-  console.log('=== Seed Centro de Citas (idempotente) ===');
+  console.log('=== Seed Centro de Turnos (idempotente) ===');
 
   const profiles = [
     { name: 'Administrador', slug: 'ADMIN', description: 'Acceso total' },
-    { name: 'Operador', slug: 'AGENT', description: 'Mesa de citas / call center' },
+    { name: 'Operador', slug: 'AGENT', description: 'Mesa de turnos / call center' },
     { name: 'Doctor', slug: 'DOCTOR', description: 'Gestiona su agenda' },
     { name: 'Solo lectura', slug: 'VIEWER', description: 'Solo consulta' },
   ];
@@ -116,17 +117,24 @@ async function main() {
 
   await prisma.agentConfig.upsert({
     where: { id: 'default' },
-    update: {},
+    update: {
+      hospitalName: 'Hospital Santa María',
+      greeting:
+        'Buenos días, habla el asistente de turnos del Hospital Santa María. ¿En qué te puedo ayudar?',
+      timezone: 'America/Argentina/Buenos_Aires',
+      currency: 'ARS',
+      locale: 'es-AR',
+    },
     create: {
       id: 'default',
-      hospitalName: 'Hospital Central La Paz',
+      hospitalName: 'Hospital Santa María',
       greeting:
-        'Buenos días, habla el asistente de citas del Hospital Central La Paz. ¿En qué puedo ayudarle?',
+        'Buenos días, habla el asistente de turnos del Hospital Santa María. ¿En qué te puedo ayudar?',
       businessHoursStart: '07:00',
       businessHoursEnd: '20:00',
-      timezone: 'America/La_Paz',
-      currency: 'Bs',
-      locale: 'es-BO',
+      timezone: 'America/Argentina/Buenos_Aires',
+      currency: 'ARS',
+      locale: 'es-AR',
     },
   });
 
@@ -186,7 +194,7 @@ async function main() {
           lastName,
           specialtyId,
           consultorio: CONSULTORIOS[globalIndex % CONSULTORIOS.length],
-          phone: `5917000${String(1000 + globalIndex).slice(-4)}`,
+          phone: `54911555${String(1000 + globalIndex).slice(-4)}`,
           email: `${emailBase}@hospital.demo.bo`,
           defaultDurationMin: schedules[0].slotDuration || 30,
           status: 'ACTIVE',
@@ -264,7 +272,7 @@ async function main() {
           lastName,
           specialtyId,
           consultorio: CONSULTORIOS[fillIdx % CONSULTORIOS.length],
-          phone: `5917001${String(1000 + fillIdx).slice(-4)}`,
+          phone: `54911556${String(1000 + fillIdx).slice(-4)}`,
           email: `${emailBase}@hospital.demo.bo`,
           defaultDurationMin: schedules[0].slotDuration || 30,
           status: 'ACTIVE',
@@ -304,7 +312,7 @@ async function main() {
         let mins = sh * 60 + sm;
         const endMins = eh * 60 + em;
         while (mins + slotDur <= endMins) {
-          const startsAt = laPazLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
+          const startsAt = argentinaLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
           const endsAt = new Date(startsAt.getTime() + slotDur * 60_000);
           if (startsAt > now) {
             try {
@@ -324,24 +332,31 @@ async function main() {
   }
   console.log(`${slotsCreated} slots nuevos generados`);
 
+  // documentId se conserva (no romper citas existentes); teléfonos/seguro se actualizan a formato AR.
   const patientsData = [
-    { firstName: 'Juan', lastName: 'Pérez', documentId: '1234567', phone: '59170111222', insurance: 'Caja Nacional de Salud' },
-    { firstName: 'María', lastName: 'García', documentId: '2345678', phone: '59170222333', insurance: 'Seguro Social Universitario' },
-    { firstName: 'Luis', lastName: 'Fernández', documentId: '3456789', phone: '59170333444', insurance: null as string | null },
-    { firstName: 'Carmen', lastName: 'Rojas', documentId: '4567890', phone: '59170444555', insurance: 'Caja Petrolera' },
-    { firstName: 'Roberto', lastName: 'Mendoza', documentId: '5678901', phone: '59170555666', insurance: null },
-    { firstName: 'Patricia', lastName: 'Aliaga', documentId: '6789012', phone: '59170666777', insurance: 'Caja Nacional de Salud' },
-    { firstName: 'Andrés', lastName: 'Choque', documentId: '7890123', phone: '59170777888', insurance: null },
-    { firstName: 'Elena', lastName: 'Vargas', documentId: '8901234', phone: '59170888999', insurance: 'Seguro Privado Demo' },
-    { firstName: 'Hugo', lastName: 'Soria', documentId: '9012345', phone: '59170999001', insurance: null },
-    { firstName: 'Isabel', lastName: 'Calle', documentId: '9123456', phone: '59170999002', insurance: 'Caja Nacional de Salud' },
+    { firstName: 'Juan', lastName: 'Pérez', documentId: '1234567', phone: '5491155551234', insurance: 'OSDE' },
+    { firstName: 'María', lastName: 'García', documentId: '2345678', phone: '5491155552233', insurance: 'Swiss Medical' },
+    { firstName: 'Luis', lastName: 'Fernández', documentId: '3456789', phone: '5491155553344', insurance: null as string | null },
+    { firstName: 'Carmen', lastName: 'Rojas', documentId: '4567890', phone: '5491155554455', insurance: 'PAMI' },
+    { firstName: 'Roberto', lastName: 'Mendoza', documentId: '5678901', phone: '5491155555566', insurance: null },
+    { firstName: 'Patricia', lastName: 'Ibarra', documentId: '6789012', phone: '5491155556677', insurance: 'Galeno' },
+    { firstName: 'Andrés', lastName: 'Acosta', documentId: '7890123', phone: '5491155557788', insurance: null },
+    { firstName: 'Elena', lastName: 'Vargas', documentId: '8901234', phone: '5491155558899', insurance: 'Medicus' },
+    { firstName: 'Hugo', lastName: 'Soria', documentId: '9012345', phone: '5491155559001', insurance: null },
+    { firstName: 'Isabel', lastName: 'Calle', documentId: '9123456', phone: '5491155559002', insurance: 'OSDE' },
   ];
 
   const patients = [];
   for (const p of patientsData) {
     const patient = await prisma.patient.upsert({
       where: { documentId: p.documentId },
-      update: {}, // no pisa datos existentes (protege a Juan Pérez)
+      update: {
+        firstName: p.firstName,
+        lastName: p.lastName,
+        phone: p.phone,
+        normalizedPhone: p.phone,
+        insurance: p.insurance || null,
+      },
       create: {
         firstName: p.firstName,
         lastName: p.lastName,
@@ -464,7 +479,7 @@ async function main() {
         startedAt: new Date(Date.now() - 3600_000),
         endedAt: new Date(Date.now() - 3500_000),
         from: patient.phone,
-        to: '+59122000000',
+        to: '+541148000000',
         patientId: patient.id,
         aiHandled: true,
         outcome: Outcome.RESOLVED,

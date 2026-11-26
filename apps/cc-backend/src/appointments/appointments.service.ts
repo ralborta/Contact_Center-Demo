@@ -58,6 +58,14 @@ export class AppointmentsService {
         specialty: true,
         slot: true,
         changes: { orderBy: { createdAt: 'desc' }, take: 5 },
+        interactions: {
+          select: { id: true, startedAt: true, resultCode: true, outcome: true },
+          orderBy: { startedAt: 'desc' },
+          take: 3,
+        },
+        whatsappConversation: {
+          select: { id: true, status: true, lastMessageAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -73,6 +81,13 @@ export class AppointmentsService {
         specialty: true,
         slot: true,
         changes: { orderBy: { createdAt: 'desc' } },
+        interactions: {
+          include: { callDetail: true },
+          orderBy: { startedAt: 'desc' },
+        },
+        whatsappConversation: {
+          select: { id: true, status: true, lastMessageAt: true },
+        },
       },
     });
     if (!appt) throw new NotFoundException('Cita no encontrada');
@@ -109,6 +124,7 @@ export class AppointmentsService {
     actorId?: string;
     reason?: string;
     notes?: string;
+    voiceConversationId?: string;
   }) {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -142,6 +158,7 @@ export class AppointmentsService {
             channel: params.channel,
             reason: params.reason,
             notes: params.notes,
+            voiceConversationId: params.voiceConversationId || null,
             changes: {
               create: {
                 toStatus: AppointmentStatus.RESERVED,
@@ -175,6 +192,7 @@ export class AppointmentsService {
     origin: ChangeOrigin;
     actorId?: string;
     reason?: string;
+    voiceConversationId?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const appt = await tx.appointment.findUnique({
@@ -182,7 +200,12 @@ export class AppointmentsService {
         include: { slot: true, doctor: true },
       });
       if (!appt) throw new NotFoundException('Cita no encontrada');
-      if (!ACTIVE_STATUSES.includes(appt.status) && appt.status !== AppointmentStatus.NEEDS_RESCHEDULE) {
+      const canReschedule =
+        ACTIVE_STATUSES.includes(appt.status) ||
+        appt.status === AppointmentStatus.NEEDS_RESCHEDULE ||
+        (appt.status === AppointmentStatus.CANCELLED_BY_DOCTOR &&
+          appt.needsReschedule);
+      if (!canReschedule) {
         throw new BadRequestException(`No se puede reprogramar una cita en estado ${appt.status}`);
       }
 
@@ -219,6 +242,9 @@ export class AppointmentsService {
           specialtyId: newSlot.doctor.specialtyId,
           status: AppointmentStatus.RESCHEDULED,
           needsReschedule: false,
+          ...(params.voiceConversationId
+            ? { voiceConversationId: params.voiceConversationId }
+            : {}),
           changes: {
             create: {
               fromStatus: appt.status,
@@ -247,11 +273,58 @@ export class AppointmentsService {
     origin: ChangeOrigin;
     actorId?: string;
     reason?: string;
+    voiceConversationId?: string;
   }) {
     return this.cancelInternal({
       ...params,
       toStatus: AppointmentStatus.CANCELLED_BY_PATIENT,
       blockSlot: false,
+    });
+  }
+
+  /** Confirmación de asistencia (WhatsApp / operador). */
+  async confirmByPatient(params: {
+    appointmentId: string;
+    origin: ChangeOrigin;
+    actorId?: string;
+    reason?: string;
+  }) {
+    const appt = await this.prisma.appointment.findUnique({
+      where: { id: params.appointmentId },
+    });
+    if (!appt) throw new NotFoundException('Cita no encontrada');
+    if (
+      !ACTIVE_STATUSES.includes(appt.status) &&
+      appt.status !== AppointmentStatus.NEEDS_RESCHEDULE
+    ) {
+      throw new BadRequestException(
+        `No se puede confirmar una cita en estado ${appt.status}`,
+      );
+    }
+    return this.prisma.appointment.update({
+      where: { id: appt.id },
+      data: {
+        status: AppointmentStatus.CONFIRMED,
+        needsReschedule: false,
+        changes: {
+          create: {
+            fromStatus: appt.status,
+            toStatus: AppointmentStatus.CONFIRMED,
+            fromSlotId: appt.slotId,
+            toSlotId: appt.slotId,
+            origin: params.origin,
+            actorId: params.actorId,
+            reason: params.reason || 'Confirmación por WhatsApp',
+            notified: true,
+          },
+        },
+      },
+      include: {
+        patient: true,
+        doctor: { include: { specialty: true } },
+        specialty: true,
+        slot: true,
+      },
     });
   }
 
@@ -280,6 +353,67 @@ export class AppointmentsService {
       await this.createDoctorCancelCampaign(result.id, result.patientId, result.patient.phone);
     }
     return result;
+  }
+
+  /**
+   * El doctor pide cambiar el horario: libera el slot y deja la cita
+   * en NEEDS_RESCHEDULE para que el paciente elija otra opción.
+   */
+  async requestDoctorReschedule(params: {
+    appointmentId: string;
+    actorId?: string;
+    reason: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const appt = await tx.appointment.findUnique({
+        where: { id: params.appointmentId },
+        include: {
+          patient: true,
+          doctor: { include: { specialty: true } },
+          specialty: true,
+          slot: true,
+        },
+      });
+      if (!appt) throw new NotFoundException('Cita no encontrada');
+      if (
+        appt.status === AppointmentStatus.CANCELLED_BY_PATIENT ||
+        appt.status === AppointmentStatus.CANCELLED_BY_DOCTOR ||
+        appt.status === AppointmentStatus.COMPLETED
+      ) {
+        throw new BadRequestException(`La cita ya está en estado ${appt.status}`);
+      }
+
+      await tx.slot.update({
+        where: { id: appt.slotId },
+        data: { status: SlotStatus.FREE },
+      });
+
+      return tx.appointment.update({
+        where: { id: appt.id },
+        data: {
+          status: AppointmentStatus.NEEDS_RESCHEDULE,
+          needsReschedule: true,
+          reason: params.reason,
+          changes: {
+            create: {
+              fromStatus: appt.status,
+              toStatus: AppointmentStatus.NEEDS_RESCHEDULE,
+              fromSlotId: appt.slotId,
+              origin: ChangeOrigin.DOCTOR,
+              actorId: params.actorId,
+              reason: params.reason,
+              notified: true,
+            },
+          },
+        },
+        include: {
+          patient: true,
+          doctor: { include: { specialty: true } },
+          specialty: true,
+          slot: true,
+        },
+      });
+    });
   }
 
   /**
@@ -378,6 +512,7 @@ export class AppointmentsService {
     toStatus: AppointmentStatus;
     blockSlot: boolean;
     markNeedsReschedule?: boolean;
+    voiceConversationId?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const appt = await tx.appointment.findUnique({
@@ -404,6 +539,9 @@ export class AppointmentsService {
           status: params.toStatus,
           needsReschedule: params.markNeedsReschedule ?? false,
           reason: params.reason ?? appt.reason,
+          ...(params.voiceConversationId
+            ? { voiceConversationId: params.voiceConversationId }
+            : {}),
           changes: {
             create: {
               fromStatus: appt.status,
@@ -456,14 +594,14 @@ export class AppointmentsService {
     slot: { startsAt: Date; endsAt: Date };
   }) {
     const starts = appt.slot.startsAt;
-    const fecha = starts.toLocaleDateString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const fecha = starts.toLocaleDateString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     });
-    const hora = starts.toLocaleTimeString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const hora = starts.toLocaleTimeString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,

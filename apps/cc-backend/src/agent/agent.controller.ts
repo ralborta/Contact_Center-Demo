@@ -11,9 +11,17 @@ export class AgentController {
   constructor(private agent: AgentService) {}
 
   @Post('identificar-paciente')
-  @ApiOperation({ summary: 'Identificar o registrar paciente (teléfono/CI)' })
+  @ApiOperation({ summary: 'Identificar paciente existente (teléfono/DNI)' })
   identify(@Body() body: any) {
     return this.agent.identifyPatient(body);
+  }
+
+  @Post('registrar-paciente')
+  @ApiOperation({
+    summary: 'Registrar paciente nuevo (idempotente por DNI o teléfono)',
+  })
+  register(@Body() body: any) {
+    return this.agent.registerPatient(body);
   }
 
   @Get('especialidades')

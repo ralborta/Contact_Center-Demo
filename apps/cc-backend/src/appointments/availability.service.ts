@@ -38,7 +38,7 @@ export class AvailabilityService {
       if (period === 'any') return true;
       const hour = Number(
         s.startsAt.toLocaleString('en-US', {
-          timeZone: 'America/La_Paz',
+          timeZone: 'America/Argentina/Buenos_Aires',
           hour: 'numeric',
           hour12: false,
         }),
@@ -47,7 +47,34 @@ export class AvailabilityService {
       return hour >= 12;
     });
 
-    return filtered.slice(0, limit).map((s) => this.formatSlot(s));
+    // Diversificar por día: 1–2 slots de días distintos para ofrecer
+    // opciones de la próxima semana, no solo la agenda de un día.
+    const byDay = new Map<string, typeof filtered>();
+    for (const s of filtered) {
+      const dayKey = s.startsAt.toLocaleDateString('en-CA', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+      });
+      const list = byDay.get(dayKey) || [];
+      list.push(s);
+      byDay.set(dayKey, list);
+    }
+    const diversified: typeof filtered = [];
+    const dayKeys = [...byDay.keys()];
+    let round = 0;
+    while (diversified.length < limit && dayKeys.some((k) => (byDay.get(k) || []).length > 0)) {
+      for (const key of dayKeys) {
+        if (diversified.length >= limit) break;
+        const list = byDay.get(key) || [];
+        if (list.length > round) diversified.push(list[round]);
+      }
+      round++;
+      if (round > 3) break;
+    }
+    const chosen = diversified.length > 0 ? diversified : filtered.slice(0, limit);
+    return chosen
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+      .slice(0, limit)
+      .map((s) => this.formatSlot(s));
   }
 
   formatSlot(s: {
@@ -62,14 +89,14 @@ export class AvailabilityService {
       specialty: { id: string; name: string };
     };
   }) {
-    const fecha = s.startsAt.toLocaleDateString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const fecha = s.startsAt.toLocaleDateString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     });
-    const hora = s.startsAt.toLocaleTimeString('es-BO', {
-      timeZone: 'America/La_Paz',
+    const hora = s.startsAt.toLocaleTimeString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -129,7 +156,7 @@ export class AvailabilityService {
           const endMins = eh * 60 + em;
 
           while (mins + slotDur <= endMins) {
-            const startsAt = this.laPazLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
+            const startsAt = this.argentinaLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
             const endsAt = new Date(startsAt.getTime() + slotDur * 60_000);
 
             const blockedRange = exceptions.some((e) => {
@@ -167,12 +194,12 @@ export class AvailabilityService {
     return { created };
   }
 
-  /** Interpreta hora local America/La_Paz como UTC (offset fijo -4). */
-  private laPazLocalToUtc(day: Date, hour: number, minute: number): Date {
+  /** Interpreta hora local America/Argentina/Buenos_Aires como UTC (offset fijo -3). */
+  private argentinaLocalToUtc(day: Date, hour: number, minute: number): Date {
     const y = day.getFullYear();
     const m = day.getMonth();
     const d = day.getDate();
-    // La Paz = UTC-4
-    return new Date(Date.UTC(y, m, d, hour + 4, minute, 0, 0));
+    // Argentina (sin DST) = UTC-3
+    return new Date(Date.UTC(y, m, d, hour + 3, minute, 0, 0));
   }
 }

@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Stethoscope } from 'lucide-react'
 import PageShell from '@/components/PageShell'
+import { Avatar, SpecialtyChip, StatusBadge } from '@/components/ui'
 import { doctorsApi, specialtiesApi } from '@/lib/api'
+
+const DOCTOR_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: 'Activo',
+  INACTIVE: 'Inactivo',
+}
 
 export default function DoctoresPage() {
   const [doctors, setDoctors] = useState<any[]>([])
@@ -36,6 +43,7 @@ export default function DoctoresPage() {
 
   return (
     <PageShell
+      icon={Stethoscope}
       title="Doctores"
       subtitle="Plantel médico, consultorios y horarios"
       actions={
@@ -47,19 +55,29 @@ export default function DoctoresPage() {
     >
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {doctors.map((d) => (
-          <article key={d.id} className="surface-card p-5">
-            <p className="label-caps text-primary">{d.specialty?.name}</p>
-            <h3 className="font-display text-xl font-semibold mt-1">
-              Dr(a). {d.firstName} {d.lastName}
-            </h3>
-            <p className="text-sm text-on-surface-variant mt-1">
-              Consultorio {d.consultorio || '—'} · {d.defaultDurationMin} min
-            </p>
-            <p className="text-xs mt-2">
-              <span className={`status-pill ${d.status === 'ACTIVE' ? 'bg-green-100 text-status-success' : 'bg-surface-muted text-outline'}`}>
-                {d.status}
-              </span>
-            </p>
+          <article key={d.id} className="surface-card p-5 shadow-soft">
+            <div className="flex items-start gap-3">
+              <Avatar
+                firstName={d.firstName}
+                lastName={d.lastName}
+                size="lg"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <SpecialtyChip name={d.specialty?.name} />
+                  <StatusBadge
+                    status={d.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE'}
+                    label={DOCTOR_STATUS_LABEL[d.status] || d.status}
+                  />
+                </div>
+                <h3 className="font-display text-xl font-semibold">
+                  Dr(a). {d.firstName} {d.lastName}
+                </h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  Consultorio {d.consultorio || '—'} · {d.defaultDurationMin} min
+                </p>
+              </div>
+            </div>
             <div className="mt-4 flex gap-2">
               <button
                 className="btn-secondary text-[10px]"
@@ -68,7 +86,7 @@ export default function DoctoresPage() {
                 Generar agenda 4 sem
               </button>
             </div>
-            <div className="mt-3 text-xs text-on-surface-variant">
+            <div className="mt-3 text-xs text-on-surface-variant border-t border-outline-variant/40 pt-3">
               {(d.schedules || []).slice(0, 4).map((s: any) => (
                 <div key={s.id}>D{s.dayOfWeek}: {s.startTime}-{s.endTime}</div>
               ))}

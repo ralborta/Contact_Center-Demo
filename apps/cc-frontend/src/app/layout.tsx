@@ -15,7 +15,7 @@ const sourceSerif = Source_Serif_4({
 })
 
 export const metadata = {
-  title: 'Hospital Central La Paz — Centro de Citas',
+  title: 'Hospital Santa María — Centro de Turnos',
   description: 'Centro de gestión de citas médicas por teléfono',
 }
 

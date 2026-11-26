@@ -1,6 +1,6 @@
-# Centro de Citas Médicas — Hospital Central La Paz
+# Centro de Turnos — Hospital Santa María
 
-Producto de demos en la rama **`citas-hospital`**: call center de citas por teléfono con agente de voz y consola de gestión hospitalaria (Bolivia, español, Bs, `America/La_Paz`).
+Producto de demos en la rama **`citas-hospital`**: call center de turnos por teléfono con agente de voz y consola de gestión hospitalaria (Argentina, español, ARS, `America/Argentina/Buenos_Aires`).
 
 > Esta rama **no** es el contact center bancario. No mergear a `master` sin revisión explícita.
 
@@ -31,7 +31,7 @@ Login seed: usuario `admin` con contraseña definida en `SEED_ADMIN_PASSWORD` (v
 
 | Endpoint | Uso |
 |---|---|
-| `POST /api/agent/identificar-paciente` | Teléfono/CI |
+| `POST /api/agent/identificar-paciente` | Teléfono/DNI |
 | `GET  /api/agent/especialidades` | Listado |
 | `POST /api/agent/buscar-doctores` | Por especialidad/nombre |
 | `POST /api/agent/disponibilidad` | Slots libres |

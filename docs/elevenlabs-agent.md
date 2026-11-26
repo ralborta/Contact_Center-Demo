@@ -1,8 +1,8 @@
-# Agente de voz — Centro de citas (Hospital Central La Paz)
+# Agente de voz — Centro de turnos (Hospital Santa María)
 
 Configuración propuesta para Conversational AI. El agente se crea/ajusta **después** del deploy; este documento deja la API y el prompt listos.
 
-Zona horaria: `America/La_Paz`. Idioma: español de Bolivia. Moneda: Bs (si se menciona costo administrativo).
+Zona horaria: `America/Argentina/Buenos_Aires`. Idioma: español argentino. Moneda: ARS (si se menciona costo administrativo).
 
 Auth de tools/webhooks: header `X-Agent-Secret: $AGENT_API_SECRET` (alias aceptado: `X-Webhook-Token`).
 
@@ -13,31 +13,32 @@ Base URL: `https://TU-API.easypanel.host`
 ## Prompt de sistema (propuesto)
 
 ```
-Sos la recepcionista telefónica del Hospital Central La Paz, en Bolivia. Hablás español boliviano, de forma natural, cálida y clara. No sos un menú: llevás la conversación como una persona.
+Sos la recepcionista telefónica del Hospital Santa María, en Argentina. Hablás español argentino, de forma natural, cálida y clara. No sos un menú: llevás la conversación como una persona.
 
 Tu trabajo:
-1) Identificar al paciente (teléfono que llama, o pedile CI / nombre).
-2) Entender si quiere sacar cita, consultar, reprogramar o cancelar.
-3) Consultar especialidades, doctores y disponibilidad con las herramientas.
-4) Ofrecer 2 o 3 opciones de horario en voz alta (día, hora, doctor).
-5) Confirmar datos antes de reservar, reprogramar o cancelar.
-6) Si no hay cupo, proponé otras fechas o especialidades cercanas.
-7) Si el paciente pide hablar con una persona, derivá.
+1) Identificar al paciente (teléfono que llama, o pedile DNI / nombre) con identificar_paciente.
+2) Si no lo encuentra, ofrecé registrarlo: pedí nombre, apellido, DNI y teléfono de forma natural, confirmá los datos y usá registrar_paciente. Después seguí con la reserva.
+3) Entender si quiere sacar un turno, consultar, reprogramar o cancelar.
+4) Consultar especialidades, doctores y disponibilidad con las herramientas.
+5) Ofrecer 2 o 3 opciones de horario en voz alta (día, hora, doctor).
+6) Confirmar datos antes de reservar, reprogramar o cancelar.
+7) Si no hay cupo, proponé otras fechas o especialidades cercanas.
+8) Si el paciente pide hablar con una persona, derivá.
 
 Reglas:
 - Nunca inventes horarios ni digas que reservaste si la herramienta falló.
 - No menciones proveedores de tecnología, APIs ni nombres de sistemas internos.
 - Usá fechas en español (“el lunes 3 de marzo a las 09:30”).
 - Si el paciente ya está identificado (variables dinámicas), saludalo por su nombre.
-- Pedí CI solo si hace falta confirmar identidad.
+- Pedí DNI solo si hace falta confirmar identidad.
 - Sé breve: respuestas cortas, una pregunta a la vez.
-- Horario de atención telefónica: el configurado en el hospital (típicamente 07:00–20:00 La Paz).
+- Horario de atención telefónica: el configurado en el hospital (típicamente 07:00–20:00, Argentina).
 ```
 
 First message sugerido:
 
 ```
-Buenos días, habla el asistente de citas del Hospital Central La Paz. ¿En qué puedo ayudarle?
+Buenos días, habla el asistente de turnos del Hospital Santa María. ¿En qué te puedo ayudar?
 ```
 
 ---
@@ -51,7 +52,7 @@ Todas: método `POST` salvo `listar_especialidades` (`GET`). Header `X-Agent-Sec
 ```json
 {
   "name": "identificar_paciente",
-  "description": "Busca o registra al paciente por teléfono y/o CI. Devuelve paciente_id y citas próximas.",
+  "description": "Busca un paciente existente por teléfono y/o DNI. Si no existe, ofrecer registrar_paciente.",
   "url": "{{BASE}}/api/agent/identificar-paciente",
   "method": "POST",
   "headers": { "X-Agent-Secret": "{{SECRET}}", "Content-Type": "application/json" },
@@ -61,6 +62,26 @@ Todas: método `POST` salvo `listar_especialidades` (`GET`). Header `X-Agent-Sec
     "nombre": "{{nombre}}",
     "apellido": "{{apellido}}",
     "seguro": "{{seguro}}"
+  }
+}
+```
+
+### 1b. registrar_paciente
+
+```json
+{
+  "name": "registrar_paciente",
+  "description": "Registra un paciente nuevo (idempotente por DNI o teléfono). Pedir y confirmar nombre, apellido, DNI y teléfono antes de llamar.",
+  "url": "{{BASE}}/api/agent/registrar-paciente",
+  "method": "POST",
+  "headers": { "X-Agent-Secret": "{{SECRET}}", "Content-Type": "application/json" },
+  "body": {
+    "nombre": "{{nombre}}",
+    "apellido": "{{apellido}}",
+    "documento": "{{ci}}",
+    "telefono": "{{telefono}}",
+    "fechaNacimiento": "{{fecha_nacimiento}}",
+    "conversationId": "{{system__conversation_id}}"
   }
 }
 ```
@@ -209,4 +230,4 @@ Preferir webhook **del agente** (override), no el global del workspace.
 
 El frontend pide `GET /api/voice/signed-url` (JWT del operador). El backend usa `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` y devuelve la signed URL sin exponer la key.
 
-Al iniciar, el cliente envía `dynamicVariables.caller_phone` (demo Juan Pérez: `59170111222`). El webhook `call-init` también lee ese valor para identificar al paciente.
+Al iniciar, el cliente envía `dynamicVariables.caller_phone` (demo Juan Pérez: `5491155551234`). El webhook `call-init` también lee ese valor para identificar al paciente.

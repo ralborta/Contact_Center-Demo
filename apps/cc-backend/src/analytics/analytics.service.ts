@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { AppointmentStatus, InteractionStatus } from '@prisma/client';
+import {
+  AppointmentStatus,
+  InteractionStatus,
+  WhatsappChatStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -7,7 +11,7 @@ export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
   async dashboard() {
-    const startOfDay = this.startOfLaPazDay();
+    const startOfDay = this.startOfArgentinaDay();
     const endOfDay = new Date(startOfDay.getTime() + 24 * 3600_000);
 
     const [
@@ -22,6 +26,11 @@ export class AnalyticsService {
       aiResolved,
       transferred,
       totalCallsWeek,
+      waConfirmed,
+      waCancelled,
+      waRescheduled,
+      waPending,
+      waDoctorChanges,
     ] = await Promise.all([
       this.prisma.interaction.count({
         where: { startedAt: { gte: startOfDay, lt: endOfDay } },
@@ -71,6 +80,21 @@ export class AnalyticsService {
       this.prisma.interaction.count({
         where: { startedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
       }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.CONFIRMED },
+      }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.CANCELLED },
+      }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.RESCHEDULED },
+      }),
+      this.prisma.whatsappConversation.count({
+        where: { status: WhatsappChatStatus.PENDING },
+      }),
+      this.prisma.appointmentChange.count({
+        where: { origin: 'DOCTOR' },
+      }),
     ]);
 
     const resolutionRate =
@@ -88,8 +112,15 @@ export class AnalyticsService {
       aiResolutionRate: resolutionRate,
       humanTransfersToday: transferred,
       callsLast7Days: totalCallsWeek,
-      timezone: 'America/La_Paz',
-      currency: 'Bs',
+      whatsapp: {
+        confirmed: waConfirmed,
+        cancelled: waCancelled,
+        rescheduled: waRescheduled,
+        pending: waPending,
+        doctorChanges: waDoctorChanges,
+      },
+      timezone: 'America/Argentina/Buenos_Aires',
+      currency: 'ARS',
     };
   }
 
@@ -163,10 +194,10 @@ export class AnalyticsService {
     });
   }
 
-  /** Inicio del día en America/La_Paz (UTC-4). */
-  private startOfLaPazDay(): Date {
+  /** Inicio del día en America/Argentina/Buenos_Aires (UTC-3). */
+  private startOfArgentinaDay(): Date {
     const now = new Date();
-    const laPaz = new Date(now.getTime() - 4 * 3600_000);
-    return new Date(Date.UTC(laPaz.getUTCFullYear(), laPaz.getUTCMonth(), laPaz.getUTCDate(), 4, 0, 0));
+    const local = new Date(now.getTime() - 3 * 3600_000);
+    return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 3, 0, 0));
   }
 }

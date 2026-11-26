@@ -1,19 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import {
+  Ban,
+  CalendarClock,
+  ClipboardList,
+  Phone,
+} from 'lucide-react'
 import PageShell from '@/components/PageShell'
+import { Avatar, IconAction, StatusBadge } from '@/components/ui'
 import {
   APPT_STATUS_LABEL,
+  CHANGE_ORIGIN_LABEL,
+  WA_CHAT_STATUS_LABEL,
   appointmentsApi,
   doctorsApi,
-  formatLaPaz,
+  formatArgentina,
   patientsApi,
+  whatsappApi,
 } from '@/lib/api'
 
 export default function CitasPage() {
   const [items, setItems] = useState<any[]>([])
   const [filter, setFilter] = useState('')
   const [needsOnly, setNeedsOnly] = useState(false)
+  const [highlightId, setHighlightId] = useState('')
   const [doctors, setDoctors] = useState<any[]>([])
   const [patients, setPatients] = useState<any[]>([])
   const [availability, setAvailability] = useState<any[]>([])
@@ -33,9 +44,17 @@ export default function CitasPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('needsReschedule') === 'true') setNeedsOnly(true)
+    const cita = params.get('cita')
+    if (cita) setHighlightId(cita)
     doctorsApi.list().then(setDoctors)
     patientsApi.list().then(setPatients)
   }, [])
+
+  useEffect(() => {
+    if (!highlightId || items.length === 0) return
+    const el = document.getElementById(`cita-${highlightId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightId, items])
 
   useEffect(() => {
     void load()
@@ -50,9 +69,26 @@ export default function CitasPage() {
   }
 
   async function cancel(id: string, byDoctor: boolean) {
-    const reason = prompt(byDoctor ? 'Motivo de cancelación del doctor' : 'Motivo de cancelación') || ''
-    await appointmentsApi.cancel(id, { byDoctor, reason, blockSlot: false })
-    setMessage(byDoctor ? 'Cancelada por doctor · se generó aviso' : 'Cita cancelada')
+    const reason =
+      prompt(byDoctor ? 'Motivo de cancelación del doctor' : 'Motivo de cancelación') || ''
+    if (byDoctor) {
+      await whatsappApi.doctorCancel({
+        appointmentId: id,
+        reason: reason || 'Cambio de agenda del doctor',
+      })
+      setMessage('Cancelada por doctor · se avisó al paciente por WhatsApp')
+    } else {
+      await appointmentsApi.cancel(id, { byDoctor: false, reason, blockSlot: false })
+      setMessage('Cita cancelada')
+    }
+    load()
+  }
+
+  async function doctorReschedule(id: string) {
+    const reason =
+      prompt('Motivo del cambio de horario (doctor)') || 'El doctor necesita cambiar el horario'
+    await whatsappApi.doctorReschedule({ appointmentId: id, reason })
+    setMessage('Se pidió reprogramación · opciones enviadas por WhatsApp')
     load()
   }
 
@@ -75,6 +111,7 @@ export default function CitasPage() {
 
   return (
     <PageShell
+      icon={ClipboardList}
       title="Citas"
       subtitle="Gestión, reprogramación y cancelaciones"
       actions={
@@ -97,41 +134,132 @@ export default function CitasPage() {
         </select>
       </div>
 
-      <div className="surface-card overflow-x-auto mb-8">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-muted/80 text-left">
+      <div className="surface-card overflow-x-auto mb-8 shadow-soft">
+        <table className="data-table">
+          <thead>
             <tr>
-              <th className="px-4 py-3 label-caps">Fecha</th>
-              <th className="px-4 py-3 label-caps">Paciente</th>
-              <th className="px-4 py-3 label-caps">Doctor</th>
-              <th className="px-4 py-3 label-caps">Estado</th>
-              <th className="px-4 py-3 label-caps">Acciones</th>
+              <th>Fecha</th>
+              <th>Paciente</th>
+              <th>Doctor</th>
+              <th>Estado</th>
+              <th>Cambio</th>
+              <th>WhatsApp</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((a) => (
-              <tr key={a.id} className="border-t border-outline-variant/40">
-                <td className="px-4 py-3 whitespace-nowrap">
-                  {a.slot ? formatLaPaz(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+            {items.map((a) => {
+              const lastChange = a.changes?.[0]
+              const active =
+                a.status === 'RESERVED' ||
+                a.status === 'CONFIRMED' ||
+                a.status === 'RESCHEDULED' ||
+                a.status === 'NEEDS_RESCHEDULE'
+              const statusKey = a.needsReschedule ? 'NEEDS_RESCHEDULE' : a.status
+              return (
+              <tr
+                key={a.id}
+                id={`cita-${a.id}`}
+                className={highlightId === a.id ? 'bg-primary-50/80 ring-2 ring-inset ring-primary/30' : ''}
+              >
+                <td className="whitespace-nowrap">
+                  {a.slot ? formatArgentina(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                 </td>
-                <td className="px-4 py-3">{a.patient?.firstName} {a.patient?.lastName}</td>
-                <td className="px-4 py-3">Dr(a). {a.doctor?.lastName} · {a.specialty?.name}</td>
-                <td className="px-4 py-3">
-                  <span className={`status-pill ${a.needsReschedule ? 'bg-accent-soft text-accent' : 'bg-primary-100 text-primary'}`}>
-                    {APPT_STATUS_LABEL[a.status] || a.status}
-                  </span>
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar
+                      firstName={a.patient?.firstName}
+                      lastName={a.patient?.lastName}
+                      size="sm"
+                    />
+                    <span className="font-medium truncate">
+                      {a.patient?.firstName} {a.patient?.lastName}
+                    </span>
+                  </div>
                 </td>
-                <td className="px-4 py-3 space-x-2 whitespace-nowrap">
-                  <button className="text-status-error font-semibold" onClick={() => cancel(a.id, false)}>Cancelar</button>
-                  <button className="text-accent font-semibold" onClick={() => cancel(a.id, true)}>Cancelar doctor</button>
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar
+                      firstName={a.doctor?.firstName}
+                      lastName={a.doctor?.lastName}
+                      size="sm"
+                    />
+                    <span className="truncate">
+                      Dr(a). {a.doctor?.lastName}
+                      {a.specialty?.name ? (
+                        <span className="text-on-surface-variant"> · {a.specialty.name}</span>
+                      ) : null}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <StatusBadge
+                    status={statusKey}
+                    label={APPT_STATUS_LABEL[a.status] || a.status}
+                  />
+                </td>
+                <td className="text-xs max-w-[180px]">
+                  {lastChange ? (
+                    <div>
+                      <p className="font-semibold">
+                        {CHANGE_ORIGIN_LABEL[lastChange.origin] || lastChange.origin}
+                      </p>
+                      <p className="text-on-surface-variant truncate" title={lastChange.reason || a.reason || ''}>
+                        {lastChange.reason || a.reason || '—'}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-outline">{a.reason || '—'}</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap">
+                  {a.whatsappConversation ? (
+                    <a
+                      href={`/whatsapp?chat=${a.whatsappConversation.id}`}
+                      className="text-primary font-semibold hover:underline text-xs"
+                    >
+                      {WA_CHAT_STATUS_LABEL[a.whatsappConversation.status] ||
+                        a.whatsappConversation.status}
+                    </a>
+                  ) : (
+                    <span className="text-outline text-xs">—</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {a.interactions?.[0]?.id && (
+                      <IconAction
+                        icon={Phone}
+                        label="Llamada"
+                        href={`/llamadas/${a.interactions[0].id}`}
+                        tone="primary"
+                      />
+                    )}
+                    {active && (
+                      <>
+                        <IconAction
+                          icon={Ban}
+                          label="Cancelar (doctor)"
+                          tone="danger"
+                          onClick={() => cancel(a.id, true)}
+                        />
+                        <IconAction
+                          icon={CalendarClock}
+                          label="Reprogramar (doctor)"
+                          tone="amber"
+                          onClick={() => doctorReschedule(a.id)}
+                        />
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
 
-      <section className="surface-card p-5 mb-6">
+      <section className="surface-card p-5 mb-6 shadow-soft">
         <h3 className="font-display text-lg font-semibold mb-1">Bloquear agenda del doctor</h3>
         <p className="text-sm text-on-surface-variant mb-4">Cancela citas afectadas y crea cola de avisos salientes</p>
         <div className="grid md:grid-cols-4 gap-3">
@@ -155,7 +283,7 @@ export default function CitasPage() {
             <select className="field-input" value={form.patientId} onChange={(e) => setForm({ ...form, patientId: e.target.value })}>
               <option value="">Paciente</option>
               {patients.map((p) => (
-                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · CI {p.documentId}</option>
+                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · DNI {p.documentId}</option>
               ))}
             </select>
             <select className="field-input" value={form.doctorId} onChange={(e) => loadAvailability(e.target.value)}>

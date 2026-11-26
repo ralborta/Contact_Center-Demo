@@ -11,3 +11,7 @@ coverage/
 .idea/
 .vercel
 .env*.local
+
+# Next build
+**/.next/
+**/next-env.d.ts

@@ -1,9 +1,9 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { VoiceService } from './voice.service';
 
-@ApiTags('Voz / simulador')
+@ApiTags('Voz')
 @Controller('voice')
 export class VoiceController {
   constructor(private voice: VoiceService) {}
@@ -11,10 +11,47 @@ export class VoiceController {
   @Get('signed-url')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Signed URL para el simulador (no expone la API key)',
-  })
+  @ApiOperation({ summary: 'Signed URL (operadores autenticados)' })
   signedUrl() {
     return this.voice.getSignedUrl();
+  }
+
+  @Get('public/session')
+  @ApiOperation({
+    summary: 'Sesión pública para la webapp del teléfono del paciente',
+  })
+  publicSession() {
+    return this.voice.getPublicSession();
+  }
+
+  @Post('public/end-call')
+  @ApiOperation({
+    summary:
+      'Al colgar: sincroniza la conversación desde ElevenLabs y registra la llamada',
+  })
+  endCall(
+    @Body()
+    body: {
+      conversationId: string;
+      callerPhone?: string;
+      durationSec?: number;
+    },
+  ) {
+    return this.voice.syncFromConversation({
+      conversationId: body.conversationId,
+      callerPhone: body.callerPhone,
+      durationSec: body.durationSec,
+    });
+  }
+
+  @Post('cleanup-transcripts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Limpia tags [warm] y re-sincroniza textos truncados en llamadas ya guardadas',
+  })
+  cleanupTranscripts() {
+    return this.voice.cleanupStoredTranscripts();
   }
 }

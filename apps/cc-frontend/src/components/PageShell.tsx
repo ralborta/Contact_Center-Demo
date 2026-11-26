@@ -1,5 +1,6 @@
 'use client'
 
+import type { LucideIcon } from 'lucide-react'
 import Header from './Header'
 
 export default function PageShell({
@@ -7,11 +8,13 @@ export default function PageShell({
   title,
   subtitle,
   actions,
+  icon: Icon,
 }: {
   children: React.ReactNode
   title?: string
   subtitle?: string
   actions?: React.ReactNode
+  icon?: LucideIcon
 }) {
   return (
     <div className="min-h-screen bg-hero-mesh">
@@ -19,9 +22,18 @@ export default function PageShell({
       <main className="max-w-container-max mx-auto px-4 md:px-8 py-6 md:py-8 animate-fade-up">
         {(title || actions) && (
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
-            <div>
-              {title && <h2 className="page-title">{title}</h2>}
-              {subtitle && <p className="text-sm text-on-surface-variant mt-1">{subtitle}</p>}
+            <div className="flex items-start gap-3">
+              {Icon && (
+                <div className="mt-0.5 p-2.5 rounded-xl bg-primary text-on-primary shadow-soft">
+                  <Icon className="w-5 h-5" strokeWidth={2.25} />
+                </div>
+              )}
+              <div>
+                {title && <h2 className="page-title">{title}</h2>}
+                {subtitle && (
+                  <p className="text-sm text-on-surface-variant mt-1">{subtitle}</p>
+                )}
+              </div>
             </div>
             {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
           </div>

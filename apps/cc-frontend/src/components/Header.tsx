@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Phone,
-  Smartphone,
   CalendarDays,
   Stethoscope,
   Users,
@@ -16,16 +15,19 @@ import {
   UserCog,
   LogOut,
   HeartPulse,
+  MessageCircle,
 } from 'lucide-react'
 import { getUser, clearAuth, isAdmin } from '@/lib/auth'
 import { resetApiInstance } from '@/lib/api'
+import { Avatar } from '@/components/ui'
 
+// Panel LIVE: sin Simulador ni ruta /telefono (webapp separada).
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, match: (p: string) => p === '/' },
   { href: '/llamadas', label: 'Llamadas', icon: Phone, match: (p: string) => p.startsWith('/llamadas') },
-  { href: '/telefono', label: 'Simulador', icon: Smartphone, match: (p: string) => p.startsWith('/telefono') },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays, match: (p: string) => p.startsWith('/agenda') },
   { href: '/citas', label: 'Citas', icon: ClipboardList, match: (p: string) => p.startsWith('/citas') },
+  { href: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, match: (p: string) => p.startsWith('/whatsapp') },
   { href: '/doctores', label: 'Doctores', icon: Stethoscope, match: (p: string) => p.startsWith('/doctores') || p.startsWith('/especialidades') },
   { href: '/pacientes', label: 'Pacientes', icon: Users, match: (p: string) => p.startsWith('/pacientes') },
   { href: '/campanas', label: 'Campañas', icon: Megaphone, match: (p: string) => p.startsWith('/campanas') },
@@ -45,17 +47,19 @@ export default function Header() {
   }
 
   return (
-    <nav className="bg-primary w-full z-50 shadow-md">
+    <nav className="bg-primary w-full z-50 shadow-elevate">
       <div className="flex justify-between items-center w-full px-4 md:px-8 py-3 max-w-container-max mx-auto gap-4">
         <Link href="/" className="flex items-center gap-3 shrink-0 group">
-          <div className="bg-white/95 p-2 rounded-lg text-primary group-hover:scale-105 transition-transform">
-            <HeartPulse className="w-5 h-5" />
+          <div className="bg-white p-2 rounded-xl text-primary shadow-sm group-hover:scale-105 transition-transform">
+            <HeartPulse className="w-5 h-5" strokeWidth={2.25} />
           </div>
           <div>
             <h1 className="text-lg font-display font-semibold text-on-primary leading-tight">
-              Hospital Central La Paz
+              Hospital Santa María
             </h1>
-            <p className="text-[10px] text-on-primary/80 uppercase tracking-wider">Centro de Citas</p>
+            <p className="text-[10px] text-on-primary/75 uppercase tracking-wider font-semibold">
+              Centro de Turnos
+            </p>
           </div>
         </Link>
 
@@ -69,11 +73,11 @@ export default function Header() {
                 href={item.href}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all ${
                   active
-                    ? 'bg-white/20 text-on-primary'
-                    : 'text-on-primary/80 hover:text-on-primary hover:bg-white/10'
+                    ? 'bg-white text-primary shadow-sm'
+                    : 'text-on-primary/85 hover:text-on-primary hover:bg-white/12'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3.5 h-3.5" strokeWidth={2.25} />
                 <span>{item.label}</span>
               </Link>
             )
@@ -82,7 +86,9 @@ export default function Header() {
             <Link
               href="/usuarios"
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold ${
-                pathname === '/usuarios' ? 'bg-white/20 text-on-primary' : 'text-on-primary/80 hover:bg-white/10'
+                pathname === '/usuarios'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-on-primary/85 hover:bg-white/12'
               }`}
             >
               <UserCog className="w-3.5 h-3.5" />
@@ -96,10 +102,12 @@ export default function Header() {
             <span className="text-xs font-semibold hidden md:block">
               {user?.username}
             </span>
-            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-primary text-xs font-bold">
-              {(user?.username || 'A').charAt(0).toUpperCase()}
-            </div>
-            <button onClick={handleLogout} className="p-2 hover:bg-white/10 rounded-lg" title="Cerrar sesión">
+            <Avatar label={(user?.username || 'A').charAt(0).toUpperCase()} size="sm" />
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-white/12 rounded-lg"
+              title="Cerrar sesión"
+            >
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -115,7 +123,7 @@ export default function Header() {
               key={item.href}
               href={item.href}
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap ${
-                active ? 'bg-white/20 text-on-primary' : 'text-on-primary/80'
+                active ? 'bg-white text-primary' : 'text-on-primary/85'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />

@@ -2,19 +2,56 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CalendarDays, Phone } from 'lucide-react'
+import { CalendarDays, MessageCircle, Phone, X } from 'lucide-react'
 import PageShell from '@/components/PageShell'
-import { doctorsApi, formatLaPaz, specialtiesApi } from '@/lib/api'
+import { Avatar, SpecialtyChip, StatusBadge } from '@/components/ui'
+import {
+  APPT_STATUS_LABEL,
+  CHANGE_ORIGIN_LABEL,
+  WA_CHAT_STATUS_LABEL,
+  doctorsApi,
+  formatArgentina,
+  specialtiesApi,
+  whatsappApi,
+} from '@/lib/api'
+
+type AgendaAppointment = {
+  id: string
+  status?: string
+  reason?: string | null
+  voiceConversationId?: string | null
+  patient?: {
+    firstName: string
+    lastName: string
+    documentId?: string
+    phone?: string | null
+  } | null
+  specialty?: { name: string } | null
+  interactions?: Array<{
+    id: string
+    providerConversationId?: string | null
+    resultCode?: string | null
+    startedAt?: string
+  }>
+  whatsappConversation?: {
+    id: string
+    status?: string
+    lastMessageAt?: string | null
+  } | null
+  changes?: Array<{
+    origin?: string
+    reason?: string | null
+    toStatus?: string
+    createdAt?: string
+  }>
+}
 
 type Slot = {
   id: string
   startsAt: string
   endsAt: string
   status: string
-  appointment?: {
-    status?: string
-    patient?: { firstName: string; lastName: string; documentId: string }
-  } | null
+  appointment?: AgendaAppointment | null
 }
 
 function isCancelledAppt(status?: string) {
@@ -22,7 +59,7 @@ function isCancelledAppt(status?: string) {
 }
 
 function dayKey(iso: string) {
-  return formatLaPaz(iso, {
+  return formatArgentina(iso, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -30,11 +67,19 @@ function dayKey(iso: string) {
 }
 
 function dayLabel(iso: string) {
-  return formatLaPaz(iso, {
+  return formatArgentina(iso, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   })
+}
+
+function linkedCall(appt?: AgendaAppointment | null) {
+  if (!appt) return null
+  const byVoice = appt.voiceConversationId
+    ? appt.interactions?.find((i) => i.providerConversationId === appt.voiceConversationId)
+    : null
+  return byVoice || appt.interactions?.[0] || null
 }
 
 export default function AgendaPage() {
@@ -45,6 +90,24 @@ export default function AgendaPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [view, setView] = useState<'day' | 'week'>('week')
   const [loading, setLoading] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
+  const [actionMsg, setActionMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function reloadAgenda() {
+    if (!doctorId) return
+    setLoading(true)
+    const from = new Date()
+    from.setHours(0, 0, 0, 0)
+    const to = new Date(from)
+    to.setDate(to.getDate() + (view === 'day' ? 1 : 7))
+    try {
+      const data = await doctorsApi.agenda(doctorId, from.toISOString(), to.toISOString())
+      setSlots(data)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     Promise.all([doctorsApi.list(), specialtiesApi.list()]).then(([d, s]) => {
@@ -56,15 +119,9 @@ export default function AgendaPage() {
 
   useEffect(() => {
     if (!doctorId) return
-    setLoading(true)
-    const from = new Date()
-    from.setHours(0, 0, 0, 0)
-    const to = new Date(from)
-    to.setDate(to.getDate() + (view === 'day' ? 1 : 7))
-    doctorsApi
-      .agenda(doctorId, from.toISOString(), to.toISOString())
-      .then(setSlots)
-      .finally(() => setLoading(false))
+    setSelectedSlot(null)
+    void reloadAgenda()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId, view])
 
   const filteredDoctors = useMemo(
@@ -113,22 +170,29 @@ export default function AgendaPage() {
     [slots],
   )
 
+  const detailAppt = selectedSlot?.appointment
+  const detailPatient = detailAppt?.patient
+  const detailCall = linkedCall(detailAppt)
+  const detailName = detailPatient
+    ? `${detailPatient.firstName} ${detailPatient.lastName}`
+    : null
+
   return (
     <PageShell
+      icon={CalendarDays}
       title="Agenda"
       subtitle={
         selected
-          ? `Dr(a). ${selected.firstName} ${selected.lastName} · ${selected.specialty?.name}${
+          ? `Dr(a). ${selected.firstName} ${selected.lastName}${
               selected.consultorio ? ` · Cons. ${selected.consultorio}` : ''
             }`
           : 'Seleccione un doctor'
       }
       actions={
-        <div className="flex flex-wrap gap-2">
-          <Link href="/telefono" className="btn-secondary">
-            <Phone className="w-3.5 h-3.5" />
-            Simulador
-          </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {selected?.specialty?.name && (
+            <SpecialtyChip name={selected.specialty.name} />
+          )}
           <button
             className={view === 'day' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setView('day')}
@@ -209,18 +273,32 @@ export default function AgendaPage() {
                   key={d.id}
                   type="button"
                   onClick={() => setDoctorId(d.id)}
-                  className={`w-full text-left rounded-lg px-3 py-2.5 transition-all ${
+                  className={`w-full text-left rounded-xl px-3 py-2.5 transition-all ${
                     active
-                      ? 'bg-primary text-on-primary shadow-sm'
+                      ? 'bg-primary text-on-primary shadow-soft'
                       : 'hover:bg-primary-50 text-on-surface'
                   }`}
                 >
-                  <p className="text-sm font-semibold leading-tight">
-                    Dr(a). {d.lastName}
-                  </p>
-                  <p className={`text-[11px] mt-0.5 ${active ? 'text-on-primary/80' : 'text-on-surface-variant'}`}>
-                    {d.firstName} · {d.specialty?.name}
-                  </p>
+                  <div className="flex items-center gap-2.5">
+                    <Avatar
+                      firstName={d.firstName}
+                      lastName={d.lastName}
+                      size="sm"
+                      className={active ? '!bg-white !text-primary' : ''}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-tight truncate">
+                        Dr(a). {d.lastName}
+                      </p>
+                      <p
+                        className={`text-[11px] mt-0.5 truncate ${
+                          active ? 'text-on-primary/80' : 'text-on-surface-variant'
+                        }`}
+                      >
+                        {d.firstName} · {d.specialty?.name}
+                      </p>
+                    </div>
+                  </div>
                 </button>
               )
             })}
@@ -260,57 +338,80 @@ export default function AgendaPage() {
                   {day.items.map((s) => {
                     const appt = s.appointment
                     const cancelled = isCancelledAppt(appt?.status)
+                    const clickable =
+                      !cancelled && s.status === 'RESERVED' && Boolean(appt)
                     const tone = cancelled
-                      ? 'border-l-status-error bg-red-50/40'
+                      ? 'border-l-red-500 bg-red-50/70'
                       : s.status === 'FREE'
-                        ? 'border-l-status-success bg-green-50/40'
+                        ? 'border-l-emerald-500 bg-emerald-50/70'
                         : s.status === 'BLOCKED'
-                          ? 'border-l-outline bg-surface-muted/50'
-                          : 'border-l-primary bg-primary-50/50'
-                    const pill = cancelled
-                      ? 'CANCELADO'
+                          ? 'border-l-slate-400 bg-slate-100/80'
+                          : 'border-l-sky-500 bg-sky-50/80'
+                    const pillStatus = cancelled
+                      ? 'CANCELLED'
                       : s.status === 'FREE'
-                        ? 'LIBRE'
+                        ? 'FREE'
                         : s.status === 'BLOCKED'
-                          ? 'BLOQUEADO'
-                          : 'RESERVADO'
+                          ? 'BLOCKED'
+                          : 'RESERVED'
+                    const pillLabel = cancelled
+                      ? 'Cancelado'
+                      : s.status === 'FREE'
+                        ? 'Libre'
+                        : s.status === 'BLOCKED'
+                          ? 'Bloqueado'
+                          : 'Reservado'
                     const patientName = appt?.patient
                       ? `${appt.patient.firstName} ${appt.patient.lastName}`
                       : null
                     return (
-                      <div
+                      <button
                         key={s.id}
-                        className={`border-l-4 px-4 py-3 flex flex-wrap justify-between gap-2 ${tone}`}
+                        type="button"
+                        disabled={!clickable}
+                        onClick={() => clickable && setSelectedSlot(s)}
+                        className={`w-full text-left border-l-4 px-4 py-3 flex flex-wrap justify-between gap-2 ${tone} ${
+                          clickable
+                            ? 'cursor-pointer hover:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                            : 'cursor-default'
+                        } ${selectedSlot?.id === s.id ? 'ring-1 ring-inset ring-primary/30' : ''}`}
                       >
-                        <div>
-                          <p className="font-semibold text-sm text-on-surface">
-                            {formatLaPaz(s.startsAt, { hour: '2-digit', minute: '2-digit' })}
-                            {' – '}
-                            {formatLaPaz(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          <p className="text-xs text-on-surface-variant mt-0.5">
-                            {cancelled && (
-                              <>
-                                Cancelado
-                                {patientName && <> · {patientName}</>}
-                                {appt?.patient?.documentId && <> · CI {appt.patient.documentId}</>}
-                              </>
-                            )}
-                            {!cancelled && s.status === 'FREE' && 'Disponible'}
-                            {!cancelled && s.status === 'BLOCKED' && 'Bloqueado'}
-                            {!cancelled && s.status === 'RESERVED' && patientName && (
-                              <>
-                                Reservado · {patientName}
-                                {appt?.patient?.documentId && <> · CI {appt.patient.documentId}</>}
-                              </>
-                            )}
-                            {!cancelled && s.status === 'RESERVED' && !patientName && 'Reservado'}
-                          </p>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {appt?.patient && (
+                            <Avatar
+                              firstName={appt.patient.firstName}
+                              lastName={appt.patient.lastName}
+                              size="sm"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm text-on-surface tabular-nums">
+                              {formatArgentina(s.startsAt, { hour: '2-digit', minute: '2-digit' })}
+                              {' – '}
+                              {formatArgentina(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-xs text-on-surface-variant mt-0.5 truncate">
+                              {cancelled && (
+                                <>
+                                  Cancelado
+                                  {patientName && <> · {patientName}</>}
+                                </>
+                              )}
+                              {!cancelled && s.status === 'FREE' && 'Disponible'}
+                              {!cancelled && s.status === 'BLOCKED' && 'Bloqueado'}
+                              {!cancelled && s.status === 'RESERVED' && patientName && (
+                                <>Reservado · {patientName}</>
+                              )}
+                              {!cancelled && s.status === 'RESERVED' && !patientName && 'Reservado'}
+                            </p>
+                          </div>
                         </div>
-                        <span className="status-pill bg-white/90 text-on-surface-variant self-center border border-outline-variant/40">
-                          {pill}
-                        </span>
-                      </div>
+                        <StatusBadge
+                          status={pillStatus}
+                          label={pillLabel}
+                          className="self-center bg-white/90"
+                        />
+                      </button>
                     )
                   })}
                 </div>
@@ -318,6 +419,197 @@ export default function AgendaPage() {
             ))}
         </div>
       </div>
+
+      {selectedSlot && detailAppt && (
+        <div
+          className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/35 p-4"
+          onClick={() => setSelectedSlot(null)}
+        >
+          <div
+            className="surface-card w-full max-w-md p-5 space-y-4 shadow-xl"
+            role="dialog"
+            aria-label="Detalle de cita"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="label-caps mb-1">Detalle de cita</p>
+                <h3 className="font-display text-xl font-semibold text-on-surface">
+                  {detailName || 'Paciente'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary !px-2 !py-2"
+                aria-label="Cerrar"
+                onClick={() => setSelectedSlot(null)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="label-caps">Teléfono</p>
+                <p className="font-medium tabular-nums">
+                  {detailPatient?.phone || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">Documento</p>
+                <p className="font-medium">
+                  {detailPatient?.documentId ? `DNI ${detailPatient.documentId}` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">Especialidad</p>
+                <p className="font-medium">
+                  {detailAppt.specialty?.name || selected?.specialty?.name || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">Estado</p>
+                <p className="font-medium">
+                  {APPT_STATUS_LABEL[detailAppt.status || ''] ||
+                    detailAppt.status ||
+                    'Reservada'}
+                </p>
+              </div>
+              <div>
+                <p className="label-caps">WhatsApp</p>
+                <p className="font-medium">
+                  {detailAppt.whatsappConversation
+                    ? WA_CHAT_STATUS_LABEL[detailAppt.whatsappConversation.status || ''] ||
+                      detailAppt.whatsappConversation.status
+                    : 'Sin mensaje'}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <p className="label-caps">Fecha y hora</p>
+                <p className="font-medium">
+                  {formatArgentina(selectedSlot.startsAt, {
+                    dateStyle: 'full',
+                    timeStyle: 'short',
+                  })}
+                </p>
+              </div>
+              {selected && (
+                <div className="col-span-2">
+                  <p className="label-caps">Médico</p>
+                  <p className="font-medium">
+                    Dr(a). {selected.firstName} {selected.lastName}
+                  </p>
+                </div>
+              )}
+              {(detailAppt.changes?.[0] || detailAppt.reason) && (
+                <div className="col-span-2">
+                  <p className="label-caps">Último cambio</p>
+                  <p className="font-medium">
+                    {detailAppt.changes?.[0]
+                      ? CHANGE_ORIGIN_LABEL[detailAppt.changes[0].origin || ''] ||
+                        detailAppt.changes[0].origin
+                      : '—'}
+                  </p>
+                  <p className="text-sm text-on-surface-variant mt-0.5">
+                    {detailAppt.changes?.[0]?.reason || detailAppt.reason || '—'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {actionMsg && (
+              <p className="text-sm text-status-success bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                {actionMsg}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {['RESERVED', 'CONFIRMED', 'RESCHEDULED', 'NEEDS_RESCHEDULE'].includes(
+                detailAppt.status || '',
+              ) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    disabled={busy}
+                    onClick={async () => {
+                      const reason =
+                        prompt('Motivo de cancelación del doctor') ||
+                        'Cambio de agenda del doctor'
+                      setBusy(true)
+                      setActionMsg('')
+                      try {
+                        await whatsappApi.doctorCancel({
+                          appointmentId: detailAppt.id,
+                          reason,
+                        })
+                        setActionMsg('Cancelada · aviso WhatsApp enviado')
+                        await reloadAgenda()
+                        setSelectedSlot(null)
+                      } catch (e: any) {
+                        setActionMsg(e?.response?.data?.message || 'No se pudo cancelar')
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Cancelar (doctor)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={async () => {
+                      const reason =
+                        prompt('Motivo del cambio de horario') ||
+                        'El doctor necesita cambiar el horario'
+                      setBusy(true)
+                      setActionMsg('')
+                      try {
+                        await whatsappApi.doctorReschedule({
+                          appointmentId: detailAppt.id,
+                          reason,
+                        })
+                        setActionMsg('Reprogramación pedida · opciones por WhatsApp')
+                        await reloadAgenda()
+                        setSelectedSlot(null)
+                      } catch (e: any) {
+                        setActionMsg(e?.response?.data?.message || 'No se pudo reprogramar')
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Reprogramar (doctor)
+                  </button>
+                </div>
+              )}
+              {detailCall ? (
+                <Link
+                  href={`/llamadas/${detailCall.id}`}
+                  className="btn-primary w-full inline-flex items-center justify-center gap-2"
+                >
+                  <Phone className="w-4 h-4" />
+                  Ver llamada que reservó
+                </Link>
+              ) : (
+                <p className="text-xs text-on-surface-variant">
+                  Esta cita no está vinculada a una llamada del agente.
+                </p>
+              )}
+              {detailAppt.whatsappConversation?.id && (
+                <Link
+                  href={`/whatsapp?chat=${detailAppt.whatsappConversation.id}`}
+                  className="btn-secondary w-full inline-flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Ver chat de confirmación
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   )
 }

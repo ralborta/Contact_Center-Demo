@@ -9,9 +9,29 @@ import {
 } from '@prisma/client';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { AvailabilityService } from '../appointments/availability.service';
+import { RecordingsService } from '../interactions/recordings.service';
 import { PatientsService } from '../patients/patients.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ensureSpanishSummary } from '../voice/summary-es';
+import {
+  extractAppointmentIdFromTranscript,
+  extractExecutedToolNames,
+  inferResultCodeFromTurns,
+  parseConversationTranscript,
+} from '../voice/transcript';
 import { doctorMatchesName, stripDoctorPrefix } from './doctor-name';
+
+/** Extrae conversation_id de body EL (system__conversation_id o aliases). */
+function resolveConversationId(body: any): string | undefined {
+  const raw =
+    body?.conversationId ||
+    body?.conversation_id ||
+    body?.system__conversation_id ||
+    body?.['system__conversation_id'] ||
+    null;
+  const id = raw != null ? String(raw).trim() : '';
+  return id || undefined;
+}
 
 @Injectable()
 export class AgentService {
@@ -20,6 +40,7 @@ export class AgentService {
     private appointments: AppointmentsService,
     private availability: AvailabilityService,
     private prisma: PrismaService,
+    private recordings: RecordingsService,
   ) {}
 
   async identifyPatient(body: {
@@ -28,36 +49,83 @@ export class AgentService {
     nombre?: string;
     apellido?: string;
     seguro?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
   }) {
-    const [firstName, ...rest] = (body.nombre || '').trim().split(/\s+/);
-    const lastName = body.apellido || rest.join(' ') || undefined;
-    const result = await this.patients.identifyOrRegister({
-      phone: body.telefono,
-      documentId: body.ci,
-      firstName: firstName || undefined,
-      lastName,
-      insurance: body.seguro,
-    });
-    if (!result.patient) {
+    // Solo búsqueda: el alta va por registrar-paciente
+    const patient = await this.patients.findByPhoneOrCi(body.telefono, body.ci);
+    if (!patient) {
       return {
         ok: false,
         encontrado: false,
         mensaje:
-          'No encontré al paciente. Necesito nombre completo, carnet de identidad y teléfono para registrarlo.',
-        faltantes: result.missing,
+          'No encontré al paciente. Ofrezca registrarlo: pida nombre, apellido, DNI y teléfono, confirme los datos y use registrar_paciente.',
+        faltantes: ['nombre', 'apellido', 'dni', 'telefono'],
       };
     }
-    const voice = this.patients.formatForVoice(result.patient);
-    const citas = await this.appointments.listPatientAppointments(result.patient.id);
+    const conversationId = resolveConversationId(body);
+    await this.linkConversationToPatient(conversationId, patient.id);
+    const voice = this.patients.formatForVoice(patient);
+    const citas = await this.appointments.listPatientAppointments(patient.id);
     return {
       ok: true,
       encontrado: true,
-      creado: result.created,
+      creado: false,
       paciente: voice,
+      pacienteId: patient.id,
+      conversationId: conversationId || null,
       citasProximas: citas.map((c) => this.appointments.formatForVoice(c)),
+      mensaje: `Hola ${patient.firstName}. ${voice.mensaje}`,
+    };
+  }
+
+  async registerPatient(body: {
+    nombre?: string;
+    apellido?: string;
+    documento?: string;
+    ci?: string;
+    telefono?: string;
+    fechaNacimiento?: string;
+    fecha_nacimiento?: string;
+    seguro?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
+  }) {
+    const documentId = body.documento || body.ci;
+    const dateOfBirth = body.fechaNacimiento || body.fecha_nacimiento || null;
+    const result = await this.patients.registerNew({
+      firstName: (body.nombre || '').trim(),
+      lastName: (body.apellido || '').trim(),
+      documentId: documentId || '',
+      phone: body.telefono || '',
+      insurance: body.seguro,
+      dateOfBirth,
+    });
+    if (!result.patient) {
+      return {
+        ok: false,
+        registrado: false,
+        mensaje:
+          'Faltan datos para registrar. Necesito nombre, apellido, DNI y teléfono.',
+        faltantes: result.missing,
+      };
+    }
+    const conversationId = resolveConversationId(body);
+    await this.linkConversationToPatient(conversationId, result.patient.id);
+    const voice = this.patients.formatForVoice(result.patient);
+    return {
+      ok: true,
+      registrado: true,
+      creado: result.created,
+      yaExistia: !result.created,
+      paciente: voice,
+      pacienteId: result.patient.id,
+      conversationId: conversationId || null,
       mensaje: result.created
         ? `Registré a ${voice.nombre}. ¿En qué especialidad desea su cita?`
-        : `Hola ${result.patient.firstName}. ${voice.mensaje}`,
+        : `Ya teníamos a ${voice.nombre} en el sistema. ¿En qué especialidad desea su cita?`,
     };
   }
 
@@ -170,6 +238,7 @@ export class AgentService {
     desde?: string;
     hasta?: string;
     periodo?: 'manana' | 'tarde' | 'cualquiera';
+    dias?: number;
   }) {
     const nameQuery = body.doctor || body.nombre;
     let specialtyId = body.especialidadId;
@@ -184,6 +253,19 @@ export class AgentService {
       });
       specialtyId = sp?.id;
     }
+
+    // Por defecto buscamos 14 días (próxima semana + margen), no un solo día.
+    const rangeDays = Math.min(Math.max(Number(body.dias) || 14, 7), 21);
+    const from = body.desde ? new Date(body.desde) : new Date();
+    const to = body.hasta
+      ? new Date(body.hasta)
+      : new Date(Date.now() + rangeDays * 24 * 60 * 60 * 1000);
+    const periodMap = {
+      manana: 'morning' as const,
+      tarde: 'afternoon' as const,
+      cualquiera: 'any' as const,
+    };
+    const period = periodMap[body.periodo || 'cualquiera'];
 
     let doctorId = body.doctorId;
     if (!doctorId && nameQuery) {
@@ -201,19 +283,9 @@ export class AgentService {
           mensaje: 'No encontré un médico con ese nombre',
         };
       }
-      // Si hay varios con el mismo apellido, devolvemos slots de todos (límite global abajo)
       if (matched.length === 1) {
         doctorId = matched[0].id;
       } else {
-        const from = body.desde ? new Date(body.desde) : new Date();
-        const to = body.hasta
-          ? new Date(body.hasta)
-          : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-        const periodMap = {
-          manana: 'morning' as const,
-          tarde: 'afternoon' as const,
-          cualquiera: 'any' as const,
-        };
         const allSlots = [];
         for (const d of matched) {
           const slots = await this.availability.findAvailable({
@@ -221,7 +293,7 @@ export class AgentService {
             doctorId: d.id,
             from,
             to,
-            period: periodMap[body.periodo || 'cualquiera'],
+            period,
             limit: 5,
           });
           allSlots.push(...slots);
@@ -229,43 +301,72 @@ export class AgentService {
         }
         const slots = allSlots
           .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-          .slice(0, 5);
-        return {
-          ok: true,
-          disponibles: slots,
-          mensaje:
-            slots.length === 0
-              ? 'No hay horarios libres en ese rango. ¿Quiere que busque en otras fechas?'
-              : `Tengo estas opciones: ${slots.map((s, i) => `${i + 1}) ${s.mensaje}`).join('; ')}.`,
-        };
+          .slice(0, 8);
+        return this.formatAvailabilityResponse(slots, rangeDays);
       }
     }
 
-    const from = body.desde ? new Date(body.desde) : new Date();
-    const to = body.hasta
-      ? new Date(body.hasta)
-      : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-
-    const periodMap = {
-      manana: 'morning' as const,
-      tarde: 'afternoon' as const,
-      cualquiera: 'any' as const,
-    };
     const slots = await this.availability.findAvailable({
       specialtyId,
       doctorId,
       from,
       to,
-      period: periodMap[body.periodo || 'cualquiera'],
-      limit: 5,
+      period,
+      limit: 8,
     });
+    return this.formatAvailabilityResponse(slots, rangeDays);
+  }
+
+  /** Agrupa opciones por hora para que el agente nombre a todos los médicos del mismo horario. */
+  private formatAvailabilityResponse(
+    slots: Array<{
+      slotId: string;
+      doctor: string;
+      fecha: string;
+      hora: string;
+      mensaje: string;
+      startsAt: string;
+    }>,
+    rangeDays: number,
+  ) {
+    if (slots.length === 0) {
+      return {
+        ok: true,
+        rangoDias: rangeDays,
+        disponibles: [],
+        porHora: [],
+        mensaje: `No hay horarios libres en los próximos ${rangeDays} días. ¿Quiere que busque más adelante?`,
+      };
+    }
+    const groups = new Map<
+      string,
+      { fecha: string; hora: string; doctores: string[]; slotIds: string[] }
+    >();
+    for (const s of slots) {
+      const key = `${s.fecha}|${s.hora}`;
+      const g = groups.get(key) || {
+        fecha: s.fecha,
+        hora: s.hora,
+        doctores: [],
+        slotIds: [],
+      };
+      if (!g.doctores.includes(s.doctor)) g.doctores.push(s.doctor);
+      g.slotIds.push(s.slotId);
+      groups.set(key, g);
+    }
+    const porHora = Array.from(groups.values());
+    const resumen = porHora
+      .map((g) => {
+        const docs = g.doctores.join(', ');
+        return `${g.fecha} a las ${g.hora}: ${docs}`;
+      })
+      .join('; ');
     return {
       ok: true,
+      rangoDias: rangeDays,
       disponibles: slots,
-      mensaje:
-        slots.length === 0
-          ? 'No hay horarios libres en ese rango. ¿Quiere que busque en otras fechas?'
-          : `Tengo estas opciones: ${slots.map((s, i) => `${i + 1}) ${s.mensaje}`).join('; ')}.`,
+      porHora,
+      mensaje: `Tengo estas opciones en los próximos ${rangeDays} días: ${resumen}. Nombrá todos los médicos de cada horario.`,
     };
   }
 
@@ -273,7 +374,11 @@ export class AgentService {
     pacienteId: string;
     slotId: string;
     motivo?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
   }) {
+    const conversationId = resolveConversationId(body);
     try {
       const appt = await this.appointments.reserve({
         patientId: body.pacienteId,
@@ -281,11 +386,19 @@ export class AgentService {
         channel: AppointmentChannel.PHONE_IN,
         origin: ChangeOrigin.VOICE_AGENT,
         reason: body.motivo,
+        voiceConversationId: conversationId,
       });
+      await this.linkConversationToAppointment(
+        conversationId,
+        appt.id,
+        'APPOINTMENT_BOOKED',
+      );
       const voice = this.appointments.formatForVoice(appt);
       return {
         ok: true,
         cita: voice,
+        citaId: appt.id,
+        conversationId: conversationId || null,
         mensaje: `Listo. ${voice.mensaje} ¿Algo más en lo que pueda ayudarle?`,
       };
     } catch (e: any) {
@@ -312,18 +425,30 @@ export class AgentService {
     citaId: string;
     nuevoSlotId: string;
     motivo?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
   }) {
+    const conversationId = resolveConversationId(body);
     try {
       const appt = await this.appointments.reschedule({
         appointmentId: body.citaId,
         newSlotId: body.nuevoSlotId,
         origin: ChangeOrigin.VOICE_AGENT,
         reason: body.motivo,
+        voiceConversationId: conversationId,
       });
+      await this.linkConversationToAppointment(
+        conversationId,
+        appt.id,
+        'RESCHEDULED',
+      );
       const voice = this.appointments.formatForVoice(appt);
       return {
         ok: true,
         cita: voice,
+        citaId: appt.id,
+        conversationId: conversationId || null,
         mensaje: `Reprogramé su cita. ${voice.mensaje}`,
       };
     } catch (e: any) {
@@ -331,21 +456,133 @@ export class AgentService {
     }
   }
 
-  async cancel(body: { citaId: string; motivo?: string }) {
+  async cancel(body: {
+    citaId: string;
+    motivo?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
+  }) {
+    const conversationId = resolveConversationId(body);
     try {
       const appt = await this.appointments.cancelByPatient({
         appointmentId: body.citaId,
         origin: ChangeOrigin.VOICE_AGENT,
         reason: body.motivo || 'Cancelada por el paciente vía teléfono',
+        voiceConversationId: conversationId,
       });
+      await this.linkConversationToAppointment(
+        conversationId,
+        appt.id,
+        'CANCELLED',
+      );
       return {
         ok: true,
         citaId: appt.id,
+        conversationId: conversationId || null,
         mensaje: 'Su cita quedó cancelada. Si desea otra fecha, puedo ayudarle a reservar.',
       };
     } catch (e: any) {
       return { ok: false, mensaje: e.message || 'No pude cancelar la cita.' };
     }
+  }
+
+  /** Vincula la conversación del agente con la cita (y viceversa). */
+  private async linkConversationToAppointment(
+    conversationId: string | undefined,
+    appointmentId: string,
+    resultCode: string,
+  ) {
+    if (!conversationId) return;
+    const appt = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { patientId: true },
+    });
+    const existing = await this.prisma.interaction.findUnique({
+      where: {
+        provider_providerConversationId: {
+          provider: Provider.VOICE_AGENT,
+          providerConversationId: conversationId,
+        },
+      },
+    });
+    if (existing) {
+      await this.prisma.interaction.update({
+        where: { id: existing.id },
+        data: {
+          appointmentId,
+          resultCode,
+          ...(appt?.patientId ? { patientId: appt.patientId } : {}),
+        },
+      });
+      return;
+    }
+    await this.prisma.interaction.create({
+      data: {
+        channel: 'CALL',
+        direction: Direction.INBOUND,
+        status: InteractionStatus.IN_PROGRESS,
+        startedAt: new Date(),
+        from: 'pending',
+        to: 'Hospital Santa María',
+        aiHandled: true,
+        resultCode,
+        provider: Provider.VOICE_AGENT,
+        providerConversationId: conversationId,
+        appointmentId,
+        ...(appt?.patientId ? { patientId: appt.patientId } : {}),
+      },
+    });
+  }
+
+  /** Vincula la conversación en curso con el paciente recién registrado/encontrado. */
+  private async linkConversationToPatient(
+    conversationId: string | undefined,
+    patientId: string,
+  ) {
+    if (!conversationId) return;
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { phone: true, normalizedPhone: true },
+    });
+    const from = patient?.normalizedPhone || patient?.phone || 'pending';
+    const existing = await this.prisma.interaction.findUnique({
+      where: {
+        provider_providerConversationId: {
+          provider: Provider.VOICE_AGENT,
+          providerConversationId: conversationId,
+        },
+      },
+    });
+    if (existing) {
+      await this.prisma.interaction.update({
+        where: { id: existing.id },
+        data: {
+          patientId,
+          // Actualizar from solo si aún es placeholder; no pisar con el teléfono del emulador.
+          from:
+            !existing.from || existing.from === 'pending' || existing.from === 'unknown'
+              ? from
+              : existing.from,
+        },
+      });
+      return;
+    }
+    await this.prisma.interaction.create({
+      data: {
+        channel: 'CALL',
+        direction: Direction.INBOUND,
+        status: InteractionStatus.IN_PROGRESS,
+        startedAt: new Date(),
+        from,
+        to: 'Hospital Santa María',
+        aiHandled: true,
+        intent: 'consulta',
+        provider: Provider.VOICE_AGENT,
+        providerConversationId: conversationId,
+        patientId,
+      },
+    });
   }
 
   async handleCallInit(payload: any) {
@@ -357,20 +594,29 @@ export class AgentService {
       payload?.metadata?.phone ||
       dyn?.caller_phone ||
       dyn?.telefono ||
+      // system__caller_id solo lo setea ElevenLabs en canales telefónicos reales
       dyn?.system__caller_id ||
       '';
     const patient = phone
       ? await this.patients.findByPhoneOrCi(String(phone))
       : null;
     const config = await this.prisma.agentConfig.findUnique({ where: { id: 'default' } });
+    const hospital = config?.hospitalName || 'Hospital Santa María';
+    const saludo =
+      config?.greeting ||
+      'Buenos días, habla el asistente de turnos del Hospital Santa María. ¿En qué te puedo ayudar?';
 
+    // Respuesta estricta: type + dynamic_variables (strings). HTTP 200.
+    // No incluir claves system__* (las pone ElevenLabs).
     if (!patient) {
       return {
         type: 'conversation_initiation_client_data',
         dynamic_variables: {
+          caller_phone: String(phone || ''),
+          telefono: String(phone || ''),
           paciente_conocido: 'false',
-          hospital_nombre: config?.hospitalName || 'Hospital Central La Paz',
-          saludo: config?.greeting || '',
+          hospital_nombre: hospital,
+          saludo,
         },
       };
     }
@@ -378,99 +624,218 @@ export class AgentService {
     return {
       type: 'conversation_initiation_client_data',
       dynamic_variables: {
+        caller_phone: String(phone || patient.phone || ''),
+        telefono: String(phone || patient.phone || ''),
         paciente_conocido: 'true',
-        paciente_id: patient.id,
-        paciente_nombre: patient.firstName,
-        paciente_nombre_completo: `${patient.firstName} ${patient.lastName}`,
-        paciente_ci_mask: patient.documentId.slice(-3),
+        paciente_id: String(patient.id),
+        paciente_nombre: String(patient.firstName || ''),
+        paciente_nombre_completo: `${patient.firstName} ${patient.lastName}`.trim(),
+        paciente_ci_mask: String(patient.documentId || '').slice(-3),
         citas_proximas_count: String(citas.length),
         citas_resumen:
           citas.length === 0
-            ? 'sin citas próximas'
+            ? 'sin turnos próximos'
             : citas
                 .slice(0, 3)
                 .map((c) => this.appointments.formatForVoice(c).mensaje)
                 .join('; '),
-        hospital_nombre: config?.hospitalName || 'Hospital Central La Paz',
-        saludo: config?.greeting || '',
+        hospital_nombre: hospital,
+        saludo,
       },
     };
   }
 
+  /**
+   * Payload real ElevenLabs: { type: 'post_call_transcription', event_timestamp, data: {
+   *   agent_id, conversation_id, status, transcript[], analysis{}, metadata{}, ... } }
+   */
   async handlePostCall(payload: any) {
+    const type = payload?.type || payload?.event || null;
+    const data =
+      payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+
     const conversationId =
-      payload?.data?.conversation_id ||
+      data?.conversation_id ||
       payload?.conversation_id ||
       payload?.cid ||
       null;
+
+    const dyn =
+      data?.conversation_initiation_client_data?.dynamic_variables ||
+      data?.dynamic_variables ||
+      payload?.dynamic_variables ||
+      {};
+
     const from =
-      payload?.data?.metadata?.phone_call?.external_number ||
-      payload?.data?.metadata?.caller_id ||
+      data?.metadata?.phone_call?.external_number ||
+      data?.metadata?.caller_id ||
+      dyn?.caller_phone ||
+      dyn?.telefono ||
+      dyn?.system__caller_id ||
       payload?.caller_id ||
       'unknown';
     const to =
-      payload?.data?.metadata?.phone_call?.agent_number ||
+      data?.metadata?.phone_call?.agent_number ||
       payload?.to ||
-      'hospital';
-    const transcript =
-      payload?.data?.transcript ||
-      payload?.transcript ||
-      (Array.isArray(payload?.data?.transcript)
-        ? payload.data.transcript.map((t: any) => `${t.role}: ${t.message}`).join('\n')
-        : null);
-    const summary =
-      payload?.data?.analysis?.transcript_summary ||
-      payload?.data?.analysis?.call_summary_title ||
+      'Hospital Santa María';
+
+    const transcript = data?.transcript ?? payload?.transcript ?? null;
+    const analysis = data?.analysis || payload?.analysis || {};
+    const rawSummary =
+      analysis?.transcript_summary ||
+      analysis?.call_summary_title ||
       payload?.summary ||
       null;
+
     const durationSec =
-      payload?.data?.metadata?.call_duration_secs ||
+      data?.metadata?.call_duration_secs ||
       payload?.duration_secs ||
       null;
     const recordingUrl =
-      payload?.data?.metadata?.recording_url ||
+      data?.metadata?.recording_url ||
+      data?.metadata?.feedback?.recording_url ||
       payload?.recording_url ||
       null;
     const direction =
-      (payload?.data?.metadata?.phone_call?.direction || '').toLowerCase() === 'outbound'
+      (data?.metadata?.phone_call?.direction || '').toLowerCase() === 'outbound'
         ? Direction.OUTBOUND
         : Direction.INBOUND;
 
-    let transcriptText = '';
-    if (typeof transcript === 'string') transcriptText = transcript;
-    else if (Array.isArray(transcript)) {
-      transcriptText = transcript
-        .map((t: any) => `${t.role || t.speaker || '?'}: ${t.message || t.text || ''}`)
-        .join('\n');
+    // Turns normalizados (chat + tools legibles) para el detalle de Llamadas
+    const turns = parseConversationTranscript({ transcript });
+    const transcriptText =
+      turns.length > 0
+        ? JSON.stringify(turns)
+        : typeof transcript === 'string'
+          ? transcript
+          : '';
+
+    const executedTools = extractExecutedToolNames(transcript);
+    let appointmentIdFromTools = extractAppointmentIdFromTranscript(transcript);
+    // resultCode SOLO desde tools reales (nunca del summary)
+    let resultCode = inferResultCodeFromTurns(turns);
+    if (
+      executedTools.some((n) => /reservar_cita/i.test(n)) &&
+      resultCode === 'RESOLVED'
+    ) {
+      resultCode = 'APPOINTMENT_BOOKED';
+    } else if (
+      executedTools.some((n) => /reprogramar_cita/i.test(n)) &&
+      resultCode === 'RESOLVED'
+    ) {
+      resultCode = 'RESCHEDULED';
+    } else if (
+      executedTools.some((n) => /cancelar_cita/i.test(n)) &&
+      resultCode === 'RESOLVED'
+    ) {
+      resultCode = 'CANCELLED';
+    }
+    // Si no hubo tool de reserva/reprog/cancel → no marcar booked
+    if (
+      resultCode === 'APPOINTMENT_BOOKED' &&
+      !executedTools.some((n) => /reservar_cita/i.test(n)) &&
+      !turns.some((t) => t.toolName && /reservar/i.test(t.toolName))
+    ) {
+      resultCode = 'RESOLVED';
+      appointmentIdFromTools = null;
     }
 
-    const patient = await this.patients.findByPhoneOrCi(String(from));
+    const startedAt = new Date(Date.now() - (durationSec || 0) * 1000);
+    const endedAt = new Date();
+    const providerConversationId = conversationId || `anon-${Date.now()}`;
+
+    // Cita exacta de ESTA conversación (guardada en reservar_cita)
+    let linkedAppointment: { id: string; patientId: string } | null = null;
+    if (providerConversationId) {
+      const byConv = await this.prisma.appointment.findFirst({
+        where: { voiceConversationId: providerConversationId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, patientId: true },
+      });
+      if (byConv) {
+        linkedAppointment = byConv;
+        if (!appointmentIdFromTools) appointmentIdFromTools = byConv.id;
+      }
+    }
+    if (appointmentIdFromTools && !linkedAppointment) {
+      linkedAppointment = await this.prisma.appointment.findUnique({
+        where: { id: appointmentIdFromTools },
+        select: { id: true, patientId: true },
+      });
+    }
+
+    const existingInteraction = providerConversationId
+      ? await this.prisma.interaction.findUnique({
+          where: {
+            provider_providerConversationId: {
+              provider: Provider.VOICE_AGENT,
+              providerConversationId,
+            },
+          },
+          select: { id: true, patientId: true },
+        })
+      : null;
+
+    // Preferir paciente de la cita vinculada o el ya asociado en la llamada;
+    // el teléfono del emulador no debe pisar al paciente identificado/registrado.
+    const phonePatient = await this.patients.findByPhoneOrCi(String(from));
+    const resolvedPatientId =
+      linkedAppointment?.patientId ||
+      existingInteraction?.patientId ||
+      phonePatient?.id ||
+      undefined;
+    const patient = resolvedPatientId
+      ? await this.prisma.patient.findUnique({ where: { id: resolvedPatientId } })
+      : null;
+
+    const intent =
+      resultCode === 'APPOINTMENT_BOOKED'
+        ? 'cita'
+        : resultCode === 'CANCELLED'
+          ? 'cancelar'
+          : resultCode === 'RESCHEDULED'
+            ? 'reprogramar'
+            : 'consulta';
+
+    const patientName = patient
+      ? `${patient.firstName} ${patient.lastName}`.trim()
+      : null;
+    const summary = ensureSpanishSummary({
+      summary: typeof rawSummary === 'string' ? rawSummary : null,
+      turns,
+      toolNames: executedTools,
+      resultCode,
+      patientName,
+    });
 
     const interaction = await this.prisma.interaction.upsert({
       where: {
         provider_providerConversationId: {
           provider: Provider.VOICE_AGENT,
-          providerConversationId: conversationId || `anon-${Date.now()}`,
+          providerConversationId,
         },
       },
       create: {
         channel: 'CALL',
         direction,
         status: InteractionStatus.COMPLETED,
-        startedAt: new Date(Date.now() - (durationSec || 0) * 1000),
-        endedAt: new Date(),
+        startedAt,
+        endedAt,
         from: String(from),
         to: String(to),
-        patientId: patient?.id,
+        patientId: resolvedPatientId,
         aiHandled: true,
         outcome: Outcome.RESOLVED,
+        intent,
+        resultCode: resultCode || undefined,
         provider: Provider.VOICE_AGENT,
-        providerConversationId: conversationId || `anon-${Date.now()}`,
+        providerConversationId,
+        appointmentId: appointmentIdFromTools || undefined,
         callDetail: {
           create: {
             externalCallId: conversationId,
             transcriptText,
-            summary: typeof summary === 'string' ? summary : JSON.stringify(summary),
+            summary,
             durationSec: durationSec ? Number(durationSec) : null,
             recordingUrl,
           },
@@ -478,20 +843,28 @@ export class AgentService {
       },
       update: {
         status: InteractionStatus.COMPLETED,
-        endedAt: new Date(),
-        patientId: patient?.id || undefined,
+        endedAt,
+        from: String(from),
+        patientId: resolvedPatientId,
+        intent,
+        resultCode: resultCode || undefined,
+        // Solo setear cita si la resolvimos de tools/conversationId (nunca “última del paciente”)
+        appointmentId: appointmentIdFromTools,
         callDetail: {
           upsert: {
             create: {
               externalCallId: conversationId,
               transcriptText,
-              summary: typeof summary === 'string' ? summary : null,
+              summary,
               durationSec: durationSec ? Number(durationSec) : null,
               recordingUrl,
             },
             update: {
-              transcriptText: transcriptText || undefined,
-              summary: typeof summary === 'string' ? summary : undefined,
+              transcriptText:
+                transcriptText && transcriptText !== '[]'
+                  ? transcriptText
+                  : undefined,
+              summary,
               durationSec: durationSec ? Number(durationSec) : undefined,
               recordingUrl: recordingUrl || undefined,
             },
@@ -500,6 +873,41 @@ export class AgentService {
       },
     });
 
-    return { ok: true, interactionId: interaction.id };
+    // Eventos de tools legibles en el timeline
+    await this.prisma.interactionEvent.deleteMany({
+      where: { interactionId: interaction.id, type: 'TOOL' },
+    });
+    for (const turn of turns.filter((t) => t.role === 'tool')) {
+      await this.prisma.interactionEvent.create({
+        data: {
+          interactionId: interaction.id,
+          type: 'TOOL',
+          provider: Provider.VOICE_AGENT,
+          ts: new Date(startedAt.getTime() + (turn.t || 0) * 1000),
+          payload: {
+            label: turn.text,
+            toolName: turn.toolName,
+            appointmentId: turn.appointmentId,
+          },
+          idempotencyKey: `${providerConversationId}:tool:${turn.t}:${turn.text.slice(0, 40)}`,
+        },
+      });
+    }
+
+    // Bajar audio de ElevenLabs en background (el webhook de transcription no trae URL).
+    if (providerConversationId?.startsWith('conv_')) {
+      this.recordings.scheduleFetch(interaction.id, providerConversationId);
+    }
+
+    // Nunca vincular por “última cita del paciente” / ventana temporal ambigua.
+    return {
+      ok: true,
+      type: type || 'post_call_transcription',
+      interactionId: interaction.id,
+      appointmentId: appointmentIdFromTools || null,
+      conversationId: providerConversationId,
+      resultCode,
+      tools: executedTools,
+    };
   }
 }

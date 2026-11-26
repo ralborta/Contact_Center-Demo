@@ -7,8 +7,14 @@ export class PatientsService {
 
   normalizePhone(phone: string): string {
     const digits = (phone || '').replace(/\D/g, '');
+    // Argentina: 54… / 549…; también acepta 10 dígitos locales (11…)
+    if (digits.startsWith('54') && digits.length >= 11) return digits;
+    if (digits.length === 10 && digits.startsWith('15')) {
+      return `54911${digits.slice(2)}`;
+    }
+    if (digits.length === 10) return `54${digits}`;
+    // Compatibilidad con datos viejos (sin preferirlos)
     if (digits.startsWith('591') && digits.length >= 11) return digits;
-    if (digits.length === 8) return `591${digits}`;
     return digits;
   }
 
@@ -51,18 +57,77 @@ export class PatientsService {
         ),
       };
     }
-    const normalizedPhone = this.normalizePhone(params.phone);
-    const patient = await this.prisma.patient.create({
-      data: {
-        firstName: params.firstName.trim(),
-        lastName: params.lastName.trim(),
-        documentId: params.documentId.replace(/\D/g, ''),
-        phone: params.phone,
-        normalizedPhone,
-        insurance: params.insurance,
+    return this.registerNew({
+      phone: params.phone,
+      documentId: params.documentId,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      insurance: params.insurance,
+    });
+  }
+
+  /**
+   * Alta idempotente: si ya existe por DNI o por teléfono, reutiliza (sin duplicar).
+   */
+  async registerNew(params: {
+    phone: string;
+    documentId: string;
+    firstName: string;
+    lastName: string;
+    insurance?: string;
+    dateOfBirth?: string | Date | null;
+  }) {
+    const documentId = String(params.documentId || '').replace(/\D/g, '');
+    const phone = String(params.phone || '').trim();
+    const firstName = String(params.firstName || '').trim();
+    const lastName = String(params.lastName || '').trim();
+    if (!documentId || !phone || !firstName || !lastName) {
+      return {
+        patient: null as null,
+        created: false,
+        missing: [
+          !firstName && 'firstName',
+          !lastName && 'lastName',
+          !documentId && 'documentId',
+          !phone && 'phone',
+        ].filter(Boolean) as string[],
+      };
+    }
+
+    const byCi = await this.prisma.patient.findUnique({ where: { documentId } });
+    if (byCi) {
+      return { patient: byCi, created: false, missing: [] as string[] };
+    }
+    const normalizedPhone = this.normalizePhone(phone);
+    const byPhone = await this.prisma.patient.findFirst({
+      where: {
+        OR: [{ phone }, { normalizedPhone }, { phone: normalizedPhone }],
       },
     });
-    return { patient, created: true };
+    if (byPhone) {
+      return { patient: byPhone, created: false, missing: [] as string[] };
+    }
+
+    let dateOfBirth: Date | undefined;
+    if (params.dateOfBirth) {
+      const d = params.dateOfBirth instanceof Date
+        ? params.dateOfBirth
+        : new Date(String(params.dateOfBirth));
+      if (!Number.isNaN(d.getTime())) dateOfBirth = d;
+    }
+
+    const patient = await this.prisma.patient.create({
+      data: {
+        firstName,
+        lastName,
+        documentId,
+        phone,
+        normalizedPhone,
+        insurance: params.insurance,
+        dateOfBirth,
+      },
+    });
+    return { patient, created: true, missing: [] as string[] };
   }
 
   async list(q?: string) {
@@ -91,6 +156,11 @@ export class PatientsService {
             doctor: { include: { specialty: true } },
             specialty: true,
             slot: true,
+            interactions: {
+              select: { id: true, startedAt: true, resultCode: true },
+              take: 1,
+              orderBy: { startedAt: 'desc' },
+            },
           },
           orderBy: { createdAt: 'desc' },
           take: 50,
@@ -167,7 +237,7 @@ export class PatientsService {
       ciEnmascarado: ciMasked,
       telefono: p.phone,
       seguro: p.insurance || 'sin seguro registrado',
-      mensaje: `Paciente ${p.firstName} ${p.lastName}, carnet terminado en ${p.documentId.slice(-3)}.`,
+      mensaje: `Paciente ${p.firstName} ${p.lastName}, DNI terminado en ${p.documentId.slice(-3)}.`,
     };
   }
 }
