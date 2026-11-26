@@ -75,10 +75,25 @@ export class VoiceService {
       signedUrl: data.signed_url,
       conversationId: data.conversation_id || null,
       agentId,
-      defaultCallerPhone:
-        this.config.get<string>('SIMULATOR_CALLER_PHONE') || '5491155551234',
+      defaultCallerPhone: this.neutralCallerPhone(),
       hospitalName: 'Hospital Santa María',
     };
+  }
+
+  /**
+   * Número de emulador que NO debe coincidir con pacientes demo.
+   * Env SIMULATOR_CALLER_PHONE solo se usa si no es el viejo de Juan Pérez.
+   */
+  private neutralCallerPhone(): string {
+    const configured = (this.config.get<string>('SIMULATOR_CALLER_PHONE') || '').trim();
+    const blocked = new Set(['5491155551234', '59170111222', '70111222']);
+    if (configured && !blocked.has(configured.replace(/\D/g, '')) && !blocked.has(configured)) {
+      const digits = configured.replace(/\D/g, '');
+      if (!blocked.has(digits)) return configured;
+    }
+    // Por sesión: 54911 + 8 dígitos (Argentina), sin colisionar con demos fijos.
+    const suffix = String(Date.now()).slice(-8);
+    return `54911${suffix}`;
   }
 
   /** Sesión pública para la webapp del teléfono (sin JWT). */
@@ -99,8 +114,7 @@ export class VoiceService {
         signedUrl: null,
         conversationId: null,
         hospitalName: 'Hospital Santa María',
-        defaultCallerPhone:
-          this.config.get<string>('SIMULATOR_CALLER_PHONE') || '5491155551234',
+        defaultCallerPhone: this.neutralCallerPhone(),
       };
     }
   }
@@ -148,7 +162,6 @@ export class VoiceService {
       data?.conversation_initiation_client_data?.dynamic_variables?.telefono ||
       null;
     const from = String(params.callerPhone || phoneFromMeta || 'unknown');
-    const patient = await this.patients.findByPhoneOrCi(from);
 
     const executedTools = extractExecutedToolNames(data);
     let resultCode = inferResultCodeFromTurns(turns);
@@ -199,6 +212,33 @@ export class VoiceService {
       }
     }
 
+    const existingInteraction = await this.prisma.interaction.findUnique({
+      where: {
+        provider_providerConversationId: {
+          provider: Provider.VOICE_AGENT,
+          providerConversationId: conversationId,
+        },
+      },
+      select: { patientId: true },
+    });
+    const phonePatient = await this.patients.findByPhoneOrCi(from);
+    const resolvedPatientId =
+      linkedByVoice?.patientId ||
+      (appointmentId
+        ? (
+            await this.prisma.appointment.findUnique({
+              where: { id: appointmentId },
+              select: { patientId: true },
+            })
+          )?.patientId
+        : undefined) ||
+      existingInteraction?.patientId ||
+      phonePatient?.id ||
+      undefined;
+    const patient = resolvedPatientId
+      ? await this.prisma.patient.findUnique({ where: { id: resolvedPatientId } })
+      : null;
+
     const outcome = Outcome.RESOLVED;
     const intent =
       resultCode === 'APPOINTMENT_BOOKED'
@@ -238,7 +278,7 @@ export class VoiceService {
         endedAt,
         from,
         to: 'Hospital Santa María',
-        patientId: patient?.id,
+        patientId: resolvedPatientId,
         aiHandled: true,
         outcome,
         intent,
@@ -259,7 +299,7 @@ export class VoiceService {
         status: InteractionStatus.COMPLETED,
         endedAt,
         from,
-        patientId: patient?.id || undefined,
+        patientId: resolvedPatientId,
         outcome,
         intent,
         resultCode: resultCode || undefined,

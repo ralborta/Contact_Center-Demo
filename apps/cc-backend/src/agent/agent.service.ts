@@ -47,6 +47,9 @@ export class AgentService {
     nombre?: string;
     apellido?: string;
     seguro?: string;
+    conversationId?: string;
+    conversation_id?: string;
+    system__conversation_id?: string;
   }) {
     // Solo búsqueda: el alta va por registrar-paciente
     const patient = await this.patients.findByPhoneOrCi(body.telefono, body.ci);
@@ -59,6 +62,8 @@ export class AgentService {
         faltantes: ['nombre', 'apellido', 'dni', 'telefono'],
       };
     }
+    const conversationId = resolveConversationId(body);
+    await this.linkConversationToPatient(conversationId, patient.id);
     const voice = this.patients.formatForVoice(patient);
     const citas = await this.appointments.listPatientAppointments(patient.id);
     return {
@@ -66,6 +71,8 @@ export class AgentService {
       encontrado: true,
       creado: false,
       paciente: voice,
+      pacienteId: patient.id,
+      conversationId: conversationId || null,
       citasProximas: citas.map((c) => this.appointments.formatForVoice(c)),
       mensaje: `Hola ${patient.firstName}. ${voice.mensaje}`,
     };
@@ -292,16 +299,8 @@ export class AgentService {
         }
         const slots = allSlots
           .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-          .slice(0, 5);
-        return {
-          ok: true,
-          rangoDias: rangeDays,
-          disponibles: slots,
-          mensaje:
-            slots.length === 0
-              ? `No hay horarios libres en los próximos ${rangeDays} días. ¿Quiere que busque más adelante?`
-              : `Tengo estas opciones en los próximos ${rangeDays} días: ${slots.map((s, i) => `${i + 1}) ${s.mensaje}`).join('; ')}.`,
-        };
+          .slice(0, 8);
+        return this.formatAvailabilityResponse(slots, rangeDays);
       }
     }
 
@@ -311,16 +310,61 @@ export class AgentService {
       from,
       to,
       period,
-      limit: 5,
+      limit: 8,
     });
+    return this.formatAvailabilityResponse(slots, rangeDays);
+  }
+
+  /** Agrupa opciones por hora para que el agente nombre a todos los médicos del mismo horario. */
+  private formatAvailabilityResponse(
+    slots: Array<{
+      slotId: string;
+      doctor: string;
+      fecha: string;
+      hora: string;
+      mensaje: string;
+      startsAt: string;
+    }>,
+    rangeDays: number,
+  ) {
+    if (slots.length === 0) {
+      return {
+        ok: true,
+        rangoDias: rangeDays,
+        disponibles: [],
+        porHora: [],
+        mensaje: `No hay horarios libres en los próximos ${rangeDays} días. ¿Quiere que busque más adelante?`,
+      };
+    }
+    const groups = new Map<
+      string,
+      { fecha: string; hora: string; doctores: string[]; slotIds: string[] }
+    >();
+    for (const s of slots) {
+      const key = `${s.fecha}|${s.hora}`;
+      const g = groups.get(key) || {
+        fecha: s.fecha,
+        hora: s.hora,
+        doctores: [],
+        slotIds: [],
+      };
+      if (!g.doctores.includes(s.doctor)) g.doctores.push(s.doctor);
+      g.slotIds.push(s.slotId);
+      groups.set(key, g);
+    }
+    const porHora = Array.from(groups.values());
+    const resumen = porHora
+      .map((g) => {
+        const docs = g.doctores.join(', ');
+        return `${g.fecha} a las ${g.hora}: ${docs}`;
+      })
+      .join('; ');
     return {
       ok: true,
       rangoDias: rangeDays,
       disponibles: slots,
-      mensaje:
-        slots.length === 0
-          ? `No hay horarios libres en los próximos ${rangeDays} días. ¿Quiere que busque más adelante?`
-          : `Tengo estas opciones en los próximos ${rangeDays} días: ${slots.map((s, i) => `${i + 1}) ${s.mensaje}`).join('; ')}.`,
+      porHora,
+      mensaje: `Tengo estas opciones en los próximos ${rangeDays} días: ${resumen}. Nombrá todos los médicos de cada horario.`,
     };
   }
 
@@ -511,7 +555,14 @@ export class AgentService {
     if (existing) {
       await this.prisma.interaction.update({
         where: { id: existing.id },
-        data: { patientId, from: existing.from === 'pending' ? from : existing.from },
+        data: {
+          patientId,
+          // Actualizar from solo si aún es placeholder; no pisar con el teléfono del emulador.
+          from:
+            !existing.from || existing.from === 'pending' || existing.from === 'unknown'
+              ? from
+              : existing.from,
+        },
       });
       return;
     }
@@ -687,19 +738,53 @@ export class AgentService {
       appointmentIdFromTools = null;
     }
 
-    const patient = await this.patients.findByPhoneOrCi(String(from));
     const startedAt = new Date(Date.now() - (durationSec || 0) * 1000);
     const endedAt = new Date();
     const providerConversationId = conversationId || `anon-${Date.now()}`;
 
     // Cita exacta de ESTA conversación (guardada en reservar_cita)
-    if (!appointmentIdFromTools && providerConversationId) {
+    let linkedAppointment: { id: string; patientId: string } | null = null;
+    if (providerConversationId) {
       const byConv = await this.prisma.appointment.findFirst({
         where: { voiceConversationId: providerConversationId },
         orderBy: { createdAt: 'desc' },
+        select: { id: true, patientId: true },
       });
-      if (byConv) appointmentIdFromTools = byConv.id;
+      if (byConv) {
+        linkedAppointment = byConv;
+        if (!appointmentIdFromTools) appointmentIdFromTools = byConv.id;
+      }
     }
+    if (appointmentIdFromTools && !linkedAppointment) {
+      linkedAppointment = await this.prisma.appointment.findUnique({
+        where: { id: appointmentIdFromTools },
+        select: { id: true, patientId: true },
+      });
+    }
+
+    const existingInteraction = providerConversationId
+      ? await this.prisma.interaction.findUnique({
+          where: {
+            provider_providerConversationId: {
+              provider: Provider.VOICE_AGENT,
+              providerConversationId,
+            },
+          },
+          select: { id: true, patientId: true },
+        })
+      : null;
+
+    // Preferir paciente de la cita vinculada o el ya asociado en la llamada;
+    // el teléfono del emulador no debe pisar al paciente identificado/registrado.
+    const phonePatient = await this.patients.findByPhoneOrCi(String(from));
+    const resolvedPatientId =
+      linkedAppointment?.patientId ||
+      existingInteraction?.patientId ||
+      phonePatient?.id ||
+      undefined;
+    const patient = resolvedPatientId
+      ? await this.prisma.patient.findUnique({ where: { id: resolvedPatientId } })
+      : null;
 
     const intent =
       resultCode === 'APPOINTMENT_BOOKED'
@@ -736,7 +821,7 @@ export class AgentService {
         endedAt,
         from: String(from),
         to: String(to),
-        patientId: patient?.id,
+        patientId: resolvedPatientId,
         aiHandled: true,
         outcome: Outcome.RESOLVED,
         intent,
@@ -758,7 +843,7 @@ export class AgentService {
         status: InteractionStatus.COMPLETED,
         endedAt,
         from: String(from),
-        patientId: patient?.id || undefined,
+        patientId: resolvedPatientId,
         intent,
         resultCode: resultCode || undefined,
         // Solo setear cita si la resolvimos de tools/conversationId (nunca “última del paciente”)

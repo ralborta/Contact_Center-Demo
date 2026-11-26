@@ -3,7 +3,8 @@
 import { Conversation } from '@elevenlabs/client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const DEFAULT_PHONE = '5491155551234'
+/** Número neutro (no coincide con pacientes demo). Se reemplaza por sesión al cargar. */
+const DEFAULT_PHONE = '5491100009999'
 const HOSPITAL = 'Hospital Santa María'
 
 type CallPhase = 'idle' | 'connecting' | 'active' | 'ended' | 'error'
