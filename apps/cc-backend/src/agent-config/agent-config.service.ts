@@ -21,6 +21,9 @@ export class AgentConfigService {
     transferMessage?: string;
     closedMessage?: string;
     transferEnabled?: boolean;
+    timezone?: string;
+    currency?: string;
+    locale?: string;
   }) {
     return this.prisma.agentConfig.upsert({
       where: { id: 'default' },

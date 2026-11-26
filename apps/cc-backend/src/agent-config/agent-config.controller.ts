@@ -29,6 +29,9 @@ export class AgentConfigController {
       transferMessage,
       closedMessage,
       transferEnabled,
+      timezone,
+      currency,
+      locale,
     } = body;
     return this.config.update({
       hospitalName,
@@ -38,6 +41,9 @@ export class AgentConfigController {
       transferMessage,
       closedMessage,
       transferEnabled,
+      timezone,
+      currency,
+      locale,
     });
   }
 }
