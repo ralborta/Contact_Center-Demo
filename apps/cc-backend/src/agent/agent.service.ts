@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { AvailabilityService } from '../appointments/availability.service';
+import { RecordingsService } from '../interactions/recordings.service';
 import { PatientsService } from '../patients/patients.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ensureSpanishSummary } from '../voice/summary-es';
@@ -39,6 +40,7 @@ export class AgentService {
     private appointments: AppointmentsService,
     private availability: AvailabilityService,
     private prisma: PrismaService,
+    private recordings: RecordingsService,
   ) {}
 
   async identifyPatient(body: {
@@ -890,6 +892,11 @@ export class AgentService {
           idempotencyKey: `${providerConversationId}:tool:${turn.t}:${turn.text.slice(0, 40)}`,
         },
       });
+    }
+
+    // Bajar audio de ElevenLabs en background (el webhook de transcription no trae URL).
+    if (providerConversationId?.startsWith('conv_')) {
+      this.recordings.scheduleFetch(interaction.id, providerConversationId);
     }
 
     // Nunca vincular por “última cita del paciente” / ventana temporal ambigua.

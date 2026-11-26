@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, CalendarDays, Clock3, Phone, UserRound, Wrench } from 'lucide-react'
+import CallRecordingPlayer from '@/components/CallRecordingPlayer'
 import PageShell from '@/components/PageShell'
 import { APPT_STATUS_LABEL, callsApi, formatArgentina } from '@/lib/api'
 import { Avatar, StatusBadge } from '@/components/ui'
@@ -358,12 +359,10 @@ export default function LlamadaDetallePage() {
             </div>
           </section>
 
-          {call.callDetail?.recordingUrl && (
-            <section className="surface-card p-4">
-              <p className="label-caps mb-2">Grabación</p>
-              <audio controls className="w-full" src={call.callDetail.recordingUrl} />
-            </section>
-          )}
+          <CallRecordingPlayer
+            interactionId={call.id}
+            hasRecording={Boolean(call.callDetail?.recordingUrl)}
+          />
         </div>
       )}
     </PageShell>

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Direction, InteractionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isTestConversationId } from '../voice/transcript';
+import { RecordingsService } from './recordings.service';
 
 /** Filtro panel: oculta stubs de prueba / técnicos sin borrar de la DB. */
 function panelVisibilityWhere(): Prisma.InteractionWhereInput {
@@ -31,7 +32,10 @@ function panelVisibilityWhere(): Prisma.InteractionWhereInput {
 
 @Injectable()
 export class InteractionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private recordings: RecordingsService,
+  ) {}
 
   async findAll(filters: {
     direction?: Direction;
@@ -109,6 +113,20 @@ export class InteractionsService {
       },
     });
     if (!item) throw new NotFoundException('Llamada no encontrada');
+
+    // Si el audio ya está en disco, asegurar recordingUrl del panel
+    const convId = item.callDetail?.externalCallId;
+    if (convId && this.recordings.hasLocalFile(convId)) {
+      const url = this.recordings.publicUrlFor(item.id);
+      if (item.callDetail && item.callDetail.recordingUrl !== url) {
+        await this.prisma.callDetail.update({
+          where: { interactionId: item.id },
+          data: { recordingUrl: url },
+        });
+        item.callDetail.recordingUrl = url;
+      }
+    }
+
     return item;
   }
 

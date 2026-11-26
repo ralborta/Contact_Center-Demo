@@ -10,6 +10,7 @@ import {
   Outcome,
   Provider,
 } from '@prisma/client';
+import { RecordingsService } from '../interactions/recordings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PatientsService } from '../patients/patients.service';
 import { ensureSpanishSummary } from './summary-es';
@@ -31,6 +32,7 @@ export class VoiceService {
     private config: ConfigService,
     private prisma: PrismaService,
     private patients: PatientsService,
+    private recordings: RecordingsService,
   ) {}
 
   private apiKey() {
@@ -344,6 +346,10 @@ export class VoiceService {
           idempotencyKey: `${conversationId}:tool:${turn.t}:${turn.text.slice(0, 40)}`,
         },
       });
+    }
+
+    if (conversationId?.startsWith('conv_')) {
+      this.recordings.scheduleFetch(interaction.id, conversationId);
     }
 
     return {

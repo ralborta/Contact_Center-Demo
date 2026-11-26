@@ -62,6 +62,9 @@ export const callsApi = {
   list: async (params?: Record<string, string>) =>
     (await getApi().get('/api/interactions', { params })).data,
   get: async (id: string) => (await getApi().get(`/api/interactions/${id}`)).data,
+  backfillRecordings: async (limit = 200) =>
+    (await getApi().post(`/api/interactions/recordings/backfill`, null, { params: { limit } }))
+      .data,
 }
 
 export const specialtiesApi = {

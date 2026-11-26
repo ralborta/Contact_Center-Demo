@@ -128,7 +128,17 @@ describe('AgentService patient ↔ call linking', () => {
   } as any;
 
   const availability = {} as any;
-  const svc = new AgentService(patients, appointments, availability, prisma);
+  const recordings = {
+    scheduleFetch: jest.fn(),
+    ensureRecording: jest.fn(),
+  } as any;
+  const svc = new AgentService(
+    patients,
+    appointments,
+    availability,
+    prisma,
+    recordings,
+  );
 
   beforeEach(() => {
     interactions.length = 0;
