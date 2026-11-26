@@ -58,7 +58,7 @@ export default function Header() {
               Hospital Santa María
             </h1>
             <p className="text-[10px] text-on-primary/75 uppercase tracking-wider font-semibold">
-              Centro de Citas
+              Centro de Turnos
             </p>
           </div>
         </Link>
