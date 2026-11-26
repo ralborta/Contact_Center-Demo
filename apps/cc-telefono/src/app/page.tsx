@@ -32,7 +32,7 @@ function formatClock(date: Date) {
 
 export default function TelefonoPage() {
   const [callerPhone, setCallerPhone] = useState(DEFAULT_PHONE)
-  const [callerName, setCallerName] = useState('Juan Pérez')
+  const [callerName, setCallerName] = useState('Llamante demo')
   const [showSettings, setShowSettings] = useState(false)
   const [phase, setPhase] = useState<CallPhase>('idle')
   const [mode, setMode] = useState<'listening' | 'speaking' | 'idle'>('idle')
