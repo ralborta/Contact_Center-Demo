@@ -1,5 +1,5 @@
 export const DEFAULT_CONFIRM_TEMPLATE =
-  'Hola {{paciente}}, te escribimos del Hospital Santa María para confirmar tu cita de {{especialidad}} con el/la Dr(a). {{doctor}} el {{fecha}} a las {{hora}}. ¿Confirmás tu asistencia? Respondé CONFIRMAR, CANCELAR o CAMBIAR.';
+  'Hola {{paciente}}, te escribimos del Hospital Santa María para confirmar tu turno de {{especialidad}} con el/la Dr(a). {{doctor}} el {{fecha}} a las {{hora}}. ¿Confirmás tu asistencia? Respondé CONFIRMAR, CANCELAR o CAMBIAR.';
 
 export function renderTemplate(
   template: string,
@@ -12,7 +12,7 @@ export function renderTemplate(
   return out;
 }
 
-export function formatLaPazParts(date: Date): { fecha: string; hora: string } {
+export function formatArgentinaParts(date: Date): { fecha: string; hora: string } {
   const fecha = date.toLocaleDateString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'long',
@@ -28,7 +28,7 @@ export function formatLaPazParts(date: Date): { fecha: string; hora: string } {
 }
 
 /** HH:mm en America/Argentina/Buenos_Aires */
-export function laPazHm(now = new Date()): string {
+export function argentinaHm(now = new Date()): string {
   return now.toLocaleTimeString('en-GB', {
     timeZone: 'America/Argentina/Buenos_Aires',
     hour: '2-digit',
@@ -37,7 +37,7 @@ export function laPazHm(now = new Date()): string {
   });
 }
 
-export function laPazYmd(date = new Date()): string {
+export function argentinaYmd(date = new Date()): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
 }
 
@@ -46,6 +46,6 @@ export function isWithinSendWindow(
   startHm: string,
   endHm: string,
 ): boolean {
-  const hm = laPazHm(now);
+  const hm = argentinaHm(now);
   return hm >= startHm && hm <= endHm;
 }

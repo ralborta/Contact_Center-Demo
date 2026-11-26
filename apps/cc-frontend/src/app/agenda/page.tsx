@@ -10,7 +10,7 @@ import {
   CHANGE_ORIGIN_LABEL,
   WA_CHAT_STATUS_LABEL,
   doctorsApi,
-  formatLaPaz,
+  formatArgentina,
   specialtiesApi,
   whatsappApi,
 } from '@/lib/api'
@@ -59,7 +59,7 @@ function isCancelledAppt(status?: string) {
 }
 
 function dayKey(iso: string) {
-  return formatLaPaz(iso, {
+  return formatArgentina(iso, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -67,7 +67,7 @@ function dayKey(iso: string) {
 }
 
 function dayLabel(iso: string) {
-  return formatLaPaz(iso, {
+  return formatArgentina(iso, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -386,9 +386,9 @@ export default function AgendaPage() {
                           )}
                           <div className="min-w-0">
                             <p className="font-semibold text-sm text-on-surface tabular-nums">
-                              {formatLaPaz(s.startsAt, { hour: '2-digit', minute: '2-digit' })}
+                              {formatArgentina(s.startsAt, { hour: '2-digit', minute: '2-digit' })}
                               {' – '}
-                              {formatLaPaz(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
+                              {formatArgentina(s.endsAt, { hour: '2-digit', minute: '2-digit' })}
                             </p>
                             <p className="text-xs text-on-surface-variant mt-0.5 truncate">
                               {cancelled && (
@@ -487,7 +487,7 @@ export default function AgendaPage() {
               <div className="col-span-2">
                 <p className="label-caps">Fecha y hora</p>
                 <p className="font-medium">
-                  {formatLaPaz(selectedSlot.startsAt, {
+                  {formatArgentina(selectedSlot.startsAt, {
                     dateStyle: 'full',
                     timeStyle: 'short',
                   })}

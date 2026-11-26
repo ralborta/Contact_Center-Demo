@@ -7,8 +7,14 @@ export class PatientsService {
 
   normalizePhone(phone: string): string {
     const digits = (phone || '').replace(/\D/g, '');
+    // Argentina: 54… / 549…; también acepta 10 dígitos locales (11…)
+    if (digits.startsWith('54') && digits.length >= 11) return digits;
+    if (digits.length === 10 && digits.startsWith('15')) {
+      return `54911${digits.slice(2)}`;
+    }
+    if (digits.length === 10) return `54${digits}`;
+    // Compatibilidad con datos viejos (sin preferirlos)
     if (digits.startsWith('591') && digits.length >= 11) return digits;
-    if (digits.length === 8) return `591${digits}`;
     return digits;
   }
 

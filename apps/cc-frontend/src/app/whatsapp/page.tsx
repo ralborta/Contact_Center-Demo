@@ -17,7 +17,7 @@ import { Avatar, KpiCard, StatusBadge, WaTicks } from '@/components/ui'
 import {
   APPT_STATUS_LABEL,
   WA_CHAT_STATUS_LABEL,
-  formatLaPaz,
+  formatArgentina,
   whatsappApi,
 } from '@/lib/api'
 
@@ -283,7 +283,7 @@ export default function WhatsappPage() {
                         </p>
                         <p className="text-[11px] text-outline mt-1">
                           {c.lastMessageAt
-                            ? formatLaPaz(c.lastMessageAt, {
+                            ? formatArgentina(c.lastMessageAt, {
                                 dateStyle: 'short',
                                 timeStyle: 'short',
                               })
@@ -320,7 +320,7 @@ export default function WhatsappPage() {
                               ? ` · Dr(a). ${detail.appointment.doctor.lastName}`
                               : ''}
                             {detail.appointment?.slot
-                              ? ` · ${formatLaPaz(detail.appointment.slot.startsAt, {
+                              ? ` · ${formatArgentina(detail.appointment.slot.startsAt, {
                                   dateStyle: 'medium',
                                   timeStyle: 'short',
                                 })}`
@@ -370,7 +370,7 @@ export default function WhatsappPage() {
                             </p>
                             {m.body}
                             <p className="text-[10px] text-right text-on-surface-variant/80 mt-1 tabular-nums">
-                              {formatLaPaz(m.createdAt, { timeStyle: 'short' })}
+                              {formatArgentina(m.createdAt, { timeStyle: 'short' })}
                               {!inbound && <WaTicks read={detail.status !== 'PENDING'} />}
                             </p>
                           </div>

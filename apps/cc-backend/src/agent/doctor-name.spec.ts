@@ -20,7 +20,7 @@ describe('doctorMatchesName', () => {
   });
 
   it('no coincide con otro médico', () => {
-    expect(doctorMatchesName(miranda, 'Mamani')).toBe(false);
+    expect(doctorMatchesName(miranda, 'Giménez')).toBe(false);
     expect(doctorMatchesName(vargas, 'inexistente')).toBe(false);
   });
 });

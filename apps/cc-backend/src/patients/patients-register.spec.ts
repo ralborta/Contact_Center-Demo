@@ -26,7 +26,7 @@ describe('PatientsService.registerNew', () => {
     patients.findFirst.mockResolvedValue(null);
     const r = await svc.registerNew({
       firstName: 'Ana',
-      lastName: 'Quispe',
+      lastName: 'Benítez',
       documentId: '99887766',
       phone: '70199887',
     });
@@ -39,12 +39,12 @@ describe('PatientsService.registerNew', () => {
     patients.findUnique.mockResolvedValue({
       id: 'p1',
       firstName: 'Ana',
-      lastName: 'Quispe',
+      lastName: 'Benítez',
       documentId: '99887766',
     });
     const r = await svc.registerNew({
       firstName: 'Ana',
-      lastName: 'Quispe',
+      lastName: 'Benítez',
       documentId: '99887766',
       phone: '70199887',
     });
@@ -58,9 +58,9 @@ describe('PatientsService.registerNew', () => {
     patients.findFirst.mockResolvedValue({
       id: 'p2',
       firstName: 'Luis',
-      lastName: 'Mamani',
+      lastName: 'Giménez',
       documentId: '111',
-      phone: '59170199887',
+      phone: '5491155599887',
     });
     const r = await svc.registerNew({
       firstName: 'Otro',

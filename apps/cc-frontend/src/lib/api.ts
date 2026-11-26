@@ -170,7 +170,7 @@ export const usersApi = {
   profiles: async () => (await getApi().get('/api/profiles')).data,
 }
 
-export function formatLaPaz(iso: string | Date, opts?: Intl.DateTimeFormatOptions) {
+export function formatArgentina(iso: string | Date, opts?: Intl.DateTimeFormatOptions) {
   const d = typeof iso === 'string' ? new Date(iso) : iso
   return d.toLocaleString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',

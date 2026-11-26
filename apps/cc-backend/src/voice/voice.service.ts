@@ -76,7 +76,7 @@ export class VoiceService {
       conversationId: data.conversation_id || null,
       agentId,
       defaultCallerPhone:
-        this.config.get<string>('SIMULATOR_CALLER_PHONE') || '59170111222',
+        this.config.get<string>('SIMULATOR_CALLER_PHONE') || '5491155551234',
       hospitalName: 'Hospital Santa María',
     };
   }
@@ -100,7 +100,7 @@ export class VoiceService {
         conversationId: null,
         hospitalName: 'Hospital Santa María',
         defaultCallerPhone:
-          this.config.get<string>('SIMULATOR_CALLER_PHONE') || '59170111222',
+          this.config.get<string>('SIMULATOR_CALLER_PHONE') || '5491155551234',
       };
     }
   }

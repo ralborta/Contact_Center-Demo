@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Eye, Phone } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { Avatar, IconAction, StatusBadge } from '@/components/ui'
-import { callsApi, formatLaPaz } from '@/lib/api'
+import { callsApi, formatArgentina } from '@/lib/api'
 
 export default function LlamadasPage() {
   const [items, setItems] = useState<any[]>([])
@@ -54,7 +54,7 @@ export default function LlamadasPage() {
               {items.map((c) => (
                 <tr key={c.id}>
                   <td className="whitespace-nowrap">
-                    {c.startedAt ? formatLaPaz(c.startedAt, { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                    {c.startedAt ? formatArgentina(c.startedAt, { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                   </td>
                   <td>
                     <StatusBadge

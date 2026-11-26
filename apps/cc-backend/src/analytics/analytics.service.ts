@@ -11,7 +11,7 @@ export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
   async dashboard() {
-    const startOfDay = this.startOfLaPazDay();
+    const startOfDay = this.startOfArgentinaDay();
     const endOfDay = new Date(startOfDay.getTime() + 24 * 3600_000);
 
     const [
@@ -195,7 +195,7 @@ export class AnalyticsService {
   }
 
   /** Inicio del día en America/Argentina/Buenos_Aires (UTC-3). */
-  private startOfLaPazDay(): Date {
+  private startOfArgentinaDay(): Date {
     const now = new Date();
     const local = new Date(now.getTime() - 3 * 3600_000);
     return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 3, 0, 0));

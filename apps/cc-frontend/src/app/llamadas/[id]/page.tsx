@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, CalendarDays, Clock3, Phone, UserRound, Wrench } from 'lucide-react'
 import PageShell from '@/components/PageShell'
-import { APPT_STATUS_LABEL, callsApi, formatLaPaz } from '@/lib/api'
+import { APPT_STATUS_LABEL, callsApi, formatArgentina } from '@/lib/api'
 import { Avatar, StatusBadge } from '@/components/ui'
 
 type Turn = { role: 'agent' | 'user' | 'tool'; text: string; t?: number }
@@ -140,7 +140,7 @@ export default function LlamadaDetallePage() {
     <PageShell
       icon={Phone}
       title="Detalle de llamada"
-      subtitle={call?.startedAt ? formatLaPaz(call.startedAt) : '…'}
+      subtitle={call?.startedAt ? formatArgentina(call.startedAt) : '…'}
       actions={
         <Link href="/llamadas" className="btn-secondary">
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -167,7 +167,7 @@ export default function LlamadaDetallePage() {
                   <p className="text-xs text-on-primary/80 mt-0.5 flex items-center gap-2">
                     <Clock3 className="w-3.5 h-3.5" />
                     {call.startedAt
-                      ? formatLaPaz(call.startedAt, { dateStyle: 'medium', timeStyle: 'short' })
+                      ? formatArgentina(call.startedAt, { dateStyle: 'medium', timeStyle: 'short' })
                       : '—'}
                     {call.callDetail?.durationSec != null && (
                       <span>· {formatRel(call.callDetail.durationSec)}</span>
@@ -232,7 +232,7 @@ export default function LlamadaDetallePage() {
                   <p className="label-caps">Fecha</p>
                   <p className="font-medium">
                     {call.startedAt
-                      ? formatLaPaz(call.startedAt, {
+                      ? formatArgentina(call.startedAt, {
                           dateStyle: 'medium',
                           timeStyle: 'short',
                         })
@@ -263,7 +263,7 @@ export default function LlamadaDetallePage() {
                       ? `${call.appointment.patient.firstName} ${call.appointment.patient.lastName}`
                       : ''}
                     {call.appointment.slot
-                      ? ` · ${formatLaPaz(call.appointment.slot.startsAt, {
+                      ? ` · ${formatArgentina(call.appointment.slot.startsAt, {
                           dateStyle: 'medium',
                           timeStyle: 'short',
                         })}`

@@ -156,7 +156,7 @@ export class AvailabilityService {
           const endMins = eh * 60 + em;
 
           while (mins + slotDur <= endMins) {
-            const startsAt = this.laPazLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
+            const startsAt = this.argentinaLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
             const endsAt = new Date(startsAt.getTime() + slotDur * 60_000);
 
             const blockedRange = exceptions.some((e) => {
@@ -195,7 +195,7 @@ export class AvailabilityService {
   }
 
   /** Interpreta hora local America/Argentina/Buenos_Aires como UTC (offset fijo -3). */
-  private laPazLocalToUtc(day: Date, hour: number, minute: number): Date {
+  private argentinaLocalToUtc(day: Date, hour: number, minute: number): Date {
     const y = day.getFullYear();
     const m = day.getMonth();
     const d = day.getDate();

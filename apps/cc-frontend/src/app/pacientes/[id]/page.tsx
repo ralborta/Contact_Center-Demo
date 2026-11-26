@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import PageShell from '@/components/PageShell'
-import { APPT_STATUS_LABEL, formatLaPaz, patientsApi } from '@/lib/api'
+import { APPT_STATUS_LABEL, formatArgentina, patientsApi } from '@/lib/api'
 
 export default function PacienteFichaPage() {
   const id = String(useParams()?.id || '')
@@ -42,7 +42,7 @@ export default function PacienteFichaPage() {
                 <div>
                   <p className="font-medium">{a.specialty?.name} · Dr(a). {a.doctor?.lastName}</p>
                   <p className="text-xs text-on-surface-variant">
-                    {a.slot ? formatLaPaz(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+                    {a.slot ? formatArgentina(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                   </p>
                   {a.interactions?.[0] && (
                     <Link
@@ -63,7 +63,7 @@ export default function PacienteFichaPage() {
           <div className="space-y-2">
             {(p.interactions || []).map((i: any) => (
               <Link key={i.id} href={`/llamadas/${i.id}`} className="block border border-outline-variant/50 rounded-lg px-3 py-2 text-sm hover:bg-primary-50/50">
-                {i.startedAt ? formatLaPaz(i.startedAt) : '—'} · {i.direction} · {i.outcome || '—'}
+                {i.startedAt ? formatArgentina(i.startedAt) : '—'} · {i.direction} · {i.outcome || '—'}
               </Link>
             ))}
           </div>

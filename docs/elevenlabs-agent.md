@@ -230,4 +230,4 @@ Preferir webhook **del agente** (override), no el global del workspace.
 
 El frontend pide `GET /api/voice/signed-url` (JWT del operador). El backend usa `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` y devuelve la signed URL sin exponer la key.
 
-Al iniciar, el cliente envía `dynamicVariables.caller_phone` (demo Juan Pérez: `59170111222`). El webhook `call-init` también lee ese valor para identificar al paciente.
+Al iniciar, el cliente envía `dynamicVariables.caller_phone` (demo Juan Pérez: `5491155551234`). El webhook `call-init` también lee ese valor para identificar al paciente.

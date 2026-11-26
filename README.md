@@ -1,6 +1,6 @@
 # Centro de Turnos — Hospital Santa María
 
-Producto de demos en la rama **`citas-hospital`**: call center de citas por teléfono con agente de voz y consola de gestión hospitalaria (Bolivia, español, Bs, `America/Argentina/Buenos_Aires`).
+Producto de demos en la rama **`citas-hospital`**: call center de turnos por teléfono con agente de voz y consola de gestión hospitalaria (Argentina, español, ARS, `America/Argentina/Buenos_Aires`).
 
 > Esta rama **no** es el contact center bancario. No mergear a `master` sin revisión explícita.
 

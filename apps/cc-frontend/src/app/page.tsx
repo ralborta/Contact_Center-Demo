@@ -53,7 +53,7 @@ export default function DashboardPage() {
     [now],
   )
 
-  const hourLaPaz = useMemo(() => {
+  const hourArgentina = useMemo(() => {
     const parts = new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       hour12: false,
@@ -118,7 +118,7 @@ export default function DashboardPage() {
   return (
     <PageShell
       icon={LayoutDashboard}
-      title={`${greetingForHour(hourLaPaz)}`}
+      title={`${greetingForHour(hourArgentina)}`}
       subtitle={`${dateLabel} · Centro de turnos · Argentina`}
       actions={
         <Link href="/citas?needsReschedule=true" className="btn-secondary">

@@ -43,7 +43,7 @@ describe('Citas hospitalarias', () => {
     const future = new Date(Date.now() + 3 * 86400000);
     future.setMinutes(0, 0, 0);
     const startsA = new Date(future);
-    startsA.setUTCHours(12 + 4, 0, 0, 0); // 12:00 La Paz
+    startsA.setUTCHours(12 + 3, 0, 0, 0); // 12:00 Argentina (UTC-3)
     const endsA = new Date(startsA.getTime() + 30 * 60000);
     const startsB = new Date(startsA.getTime() + 60 * 60000);
     const endsB = new Date(startsB.getTime() + 30 * 60000);

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { Avatar, IconAction, KpiCard, StatusBadge } from '@/components/ui'
-import { campaignsApi, formatLaPaz } from '@/lib/api'
+import { campaignsApi, formatArgentina } from '@/lib/api'
 
 const TYPE_LABEL: Record<string, string> = {
   REMINDER: 'Recordatorio',
@@ -132,7 +132,7 @@ export default function CampanasPage() {
                         {TYPE_LABEL[c.type] || c.type} · {c._count?.jobs ?? c.jobs?.length ?? 0}{' '}
                         llamadas
                         {c.scheduledAt
-                          ? ` · ${formatLaPaz(c.scheduledAt, {
+                          ? ` · ${formatArgentina(c.scheduledAt, {
                               dateStyle: 'short',
                               timeStyle: 'short',
                             })}`

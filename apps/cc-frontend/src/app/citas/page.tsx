@@ -15,7 +15,7 @@ import {
   WA_CHAT_STATUS_LABEL,
   appointmentsApi,
   doctorsApi,
-  formatLaPaz,
+  formatArgentina,
   patientsApi,
   whatsappApi,
 } from '@/lib/api'
@@ -163,7 +163,7 @@ export default function CitasPage() {
                 className={highlightId === a.id ? 'bg-primary-50/80 ring-2 ring-inset ring-primary/30' : ''}
               >
                 <td className="whitespace-nowrap">
-                  {a.slot ? formatLaPaz(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+                  {a.slot ? formatArgentina(a.slot.startsAt, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                 </td>
                 <td>
                   <div className="flex items-center gap-2.5 min-w-0">

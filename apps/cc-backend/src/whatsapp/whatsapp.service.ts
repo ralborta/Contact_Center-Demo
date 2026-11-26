@@ -18,10 +18,10 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { resolveWhatsappProvider } from './whatsapp-provider';
 import {
   DEFAULT_CONFIRM_TEMPLATE,
-  formatLaPazParts,
+  formatArgentinaParts,
   isWithinSendWindow,
-  laPazHm,
-  laPazYmd,
+  argentinaHm,
+  argentinaYmd,
   renderTemplate,
 } from './whatsapp.templates';
 
@@ -194,7 +194,7 @@ export class WhatsappService {
 
   private formatOptionsMessage(options: Array<{ id: string; startsAt: Date; doctor?: { lastName: string } }>) {
     const lines = options.map((s, i) => {
-      const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
+      const { fecha, hora } = formatArgentinaParts(new Date(s.startsAt));
       const doc = s.doctor?.lastName ? ` · Dr(a). ${s.doctor.lastName}` : '';
       return `${i + 1}) ${fecha} a las ${hora}${doc}`;
     });
@@ -244,7 +244,7 @@ export class WhatsappService {
       patient: cancelled.patient,
     });
 
-    const { fecha, hora } = formatLaPazParts(new Date(before.slot.startsAt));
+    const { fecha, hora } = formatArgentinaParts(new Date(before.slot.startsAt));
     const intro =
       `Hola ${cancelled.patient.firstName}, te escribimos del Hospital Santa María. ` +
       `Lamentablemente el/la Dr(a). ${before.doctor.lastName} tuvo que cancelar tu cita de ${before.specialty.name} ` +
@@ -340,7 +340,7 @@ export class WhatsappService {
       patient: updated.patient,
     });
 
-    const { fecha, hora } = formatLaPazParts(new Date(before.slot.startsAt));
+    const { fecha, hora } = formatArgentinaParts(new Date(before.slot.startsAt));
     const fmt = this.formatOptionsMessage(options);
     const body =
       `Hola ${updated.patient.firstName}, te escribimos del Hospital Santa María. ` +
@@ -495,7 +495,7 @@ export class WhatsappService {
     specialty: { name: string };
     slot: { startsAt: Date };
   }) {
-    const { fecha, hora } = formatLaPazParts(new Date(appt.slot.startsAt));
+    const { fecha, hora } = formatArgentinaParts(new Date(appt.slot.startsAt));
     return renderTemplate(template, {
       paciente: `${appt.patient.firstName} ${appt.patient.lastName}`.trim(),
       doctor: appt.doctor.lastName,
@@ -640,14 +640,14 @@ export class WhatsappService {
       take: 40,
     });
 
-    const today = laPazYmd(now);
+    const today = argentinaYmd(now);
     const tomorrowDate = new Date(now.getTime() + 24 * 3600_000);
-    const tomorrow = laPazYmd(tomorrowDate);
-    const hm = laPazHm(now);
+    const tomorrow = argentinaYmd(tomorrowDate);
+    const hm = argentinaHm(now);
 
     return rows.filter((a) => {
       const start = new Date(a.slot.startsAt);
-      const day = laPazYmd(start);
+      const day = argentinaYmd(start);
       const hoursUntil = (start.getTime() - now.getTime()) / 3600_000;
 
       const sameDay =
@@ -724,7 +724,7 @@ export class WhatsappService {
         include: { doctor: true },
       });
       if (!slot) throw new NotFoundException('Horario no encontrado');
-      const { fecha, hora } = formatLaPazParts(new Date(slot.startsAt));
+      const { fecha, hora } = formatArgentinaParts(new Date(slot.startsAt));
       await this.appendMessage({
         conversationId: conv.id,
         direction: WhatsappMessageDirection.INBOUND,
@@ -857,7 +857,7 @@ export class WhatsappService {
 
     const slot = await this.prisma.slot.findUnique({ where: { id: params.newSlotId } });
     if (!slot) throw new NotFoundException('Horario no encontrado');
-    const { fecha, hora } = formatLaPazParts(new Date(slot.startsAt));
+    const { fecha, hora } = formatArgentinaParts(new Date(slot.startsAt));
     await this.appendMessage({
       conversationId: conv.id,
       direction: WhatsappMessageDirection.INBOUND,
@@ -909,7 +909,7 @@ export class WhatsappService {
           .map((id) => byId.get(id))
           .filter(Boolean)
           .map((s: any) => {
-            const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
+            const { fecha, hora } = formatArgentinaParts(new Date(s.startsAt));
             return {
               slotId: s.id,
               label: `${fecha} · ${hora}${s.doctor ? ` · Dr(a). ${s.doctor.lastName}` : ''}`,
@@ -926,7 +926,7 @@ export class WhatsappService {
       take: 5,
     });
     return options.map((s) => {
-      const { fecha, hora } = formatLaPazParts(new Date(s.startsAt));
+      const { fecha, hora } = formatArgentinaParts(new Date(s.startsAt));
       return {
         slotId: s.id,
         label: `${fecha} · ${hora}${s.doctor ? ` · Dr(a). ${s.doctor.lastName}` : ''}`,

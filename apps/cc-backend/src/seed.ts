@@ -33,16 +33,16 @@ const SPECIALTIES = [
 
 /** 30 médicos: 3 por especialidad (orden = specialty index). */
 const DOCTORS_BY_SPECIALTY: Array<[string, string][]> = [
-  [['Ana', 'Quispe'], ['Patricia', 'López'], ['Ricardo', 'Mendoza']], // MG
-  [['Carlos', 'Mamani'], ['Bruno', 'Arias'], ['Jimena', 'Suárez']], // PED
-  [['María', 'Condori'], ['Lucía', 'Flores'], ['Camila', 'Aguilar']], // GIN
+  [['Ana', 'Benítez'], ['Patricia', 'López'], ['Ricardo', 'Mendoza']], // MG
+  [['Carlos', 'Giménez'], ['Bruno', 'Arias'], ['Jimena', 'Suárez']], // PED
+  [['María', 'Fernández'], ['Lucía', 'Flores'], ['Camila', 'Aguilar']], // GIN
   [['José', 'Vargas'], ['Diego', 'Salazar'], ['Héctor', 'Navarro']], // CARD
-  [['Pedro', 'Rojas'], ['Valeria', 'Torrez'], ['Óscar', 'Rivera']], // TRA
-  [['Elena', 'Choque'], ['Sofía', 'Gutierrez'], ['Natalia', 'Paz']], // DER
+  [['Pedro', 'Rojas'], ['Valeria', 'Torres'], ['Óscar', 'Rivera']], // TRA
+  [['Elena', 'Acosta'], ['Sofía', 'Gutierrez'], ['Natalia', 'Paz']], // DER
   [['Miguel', 'Paredes'], ['Fernando', 'Miranda'], ['Adriana', 'Mejía']], // OFT
-  [['Andrés', 'Cruz'], ['Gabriela', 'Silva'], ['Esteban', 'Villca']], // NEU
+  [['Andrés', 'Cruz'], ['Gabriela', 'Silva'], ['Esteban', 'Villalba']], // NEU
   [['Daniela', 'Castro'], ['Roberto', 'Calle'], ['Paola', 'Núñez']], // ODO
-  [['Iván', 'Barrientos'], ['Claudia', 'Zambrana'], ['Mauricio', 'Pinto']], // PSI
+  [['Iván', 'Barrientos'], ['Claudia', 'Romero'], ['Mauricio', 'Pinto']], // PSI
 ];
 
 const CONSULTORIOS = ['101', '102', '103', '201', '202', '203', '301', '302', 'A-1', 'A-2', 'B-1', 'B-2'];
@@ -73,7 +73,7 @@ const SCHEDULE_VARIANTS = [
   ],
 ];
 
-function laPazLocalToUtc(day: Date, hour: number, minute: number): Date {
+function argentinaLocalToUtc(day: Date, hour: number, minute: number): Date {
   // Argentina (sin DST) = UTC-3
   return new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), hour + 3, minute, 0, 0));
 }
@@ -312,7 +312,7 @@ async function main() {
         let mins = sh * 60 + sm;
         const endMins = eh * 60 + em;
         while (mins + slotDur <= endMins) {
-          const startsAt = laPazLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
+          const startsAt = argentinaLocalToUtc(cursor, Math.floor(mins / 60), mins % 60);
           const endsAt = new Date(startsAt.getTime() + slotDur * 60_000);
           if (startsAt > now) {
             try {
@@ -339,8 +339,8 @@ async function main() {
     { firstName: 'Luis', lastName: 'Fernández', documentId: '3456789', phone: '5491155553344', insurance: null as string | null },
     { firstName: 'Carmen', lastName: 'Rojas', documentId: '4567890', phone: '5491155554455', insurance: 'PAMI' },
     { firstName: 'Roberto', lastName: 'Mendoza', documentId: '5678901', phone: '5491155555566', insurance: null },
-    { firstName: 'Patricia', lastName: 'Aliaga', documentId: '6789012', phone: '5491155556677', insurance: 'Galeno' },
-    { firstName: 'Andrés', lastName: 'Choque', documentId: '7890123', phone: '5491155557788', insurance: null },
+    { firstName: 'Patricia', lastName: 'Ibarra', documentId: '6789012', phone: '5491155556677', insurance: 'Galeno' },
+    { firstName: 'Andrés', lastName: 'Acosta', documentId: '7890123', phone: '5491155557788', insurance: null },
     { firstName: 'Elena', lastName: 'Vargas', documentId: '8901234', phone: '5491155558899', insurance: 'Medicus' },
     { firstName: 'Hugo', lastName: 'Soria', documentId: '9012345', phone: '5491155559001', insurance: null },
     { firstName: 'Isabel', lastName: 'Calle', documentId: '9123456', phone: '5491155559002', insurance: 'OSDE' },
@@ -351,6 +351,8 @@ async function main() {
     const patient = await prisma.patient.upsert({
       where: { documentId: p.documentId },
       update: {
+        firstName: p.firstName,
+        lastName: p.lastName,
         phone: p.phone,
         normalizedPhone: p.phone,
         insurance: p.insurance || null,
